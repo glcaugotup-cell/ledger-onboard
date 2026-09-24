@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Env files (never commit real secrets)
+.env
+.env.local
+.env.*.local
+
+# Build output
+frontend/dist/
+backend/dist/
+
+# Uploads (user-submitted files; not part of source)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+
+# Test coverage / temporary test uploads
+coverage/
+backend/tests/.tmp-uploads/
+
+# Local AI-assistant tool state
+.claude/
