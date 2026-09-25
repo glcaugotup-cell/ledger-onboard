@@ -19,6 +19,9 @@ const authRateLimiter = rateLimit({
   // Only failed requests count toward the limit; AuthController also resets
   // the count after a successful login.
   skipSuccessfulRequests: true,
+  // Login has its own per-account failed-attempt lockout (AuthService),
+  // which replaces this IP-wide window for that one endpoint.
+  skip: (req) => req.path === '/login',
 });
 
 const paymentVerificationRateLimiter = rateLimit({

@@ -17,6 +17,14 @@ const OTP_MAX_ATTEMPTS = 5;
 const OTP_RESEND_COOLDOWN_SECONDS = 45;
 const PUBLIC_REGISTRATION_ROLES = new Set([ROLES.TENANT, ROLES.LANDLORD]);
 
+// Per-account (by email) failed-login lockout: 10 wrong email/password
+// attempts in a row locks that account out for 30s, regardless of IP. This
+// is separate from — and, for /login specifically, replaces — the IP-wide
+// authRateLimiter window (see middleware/rateLimit.js).
+const LOGIN_LOCKOUT_MAX_ATTEMPTS = 10;
+const LOGIN_LOCKOUT_SECONDS = 30;
+const loginAttemptsByEmail = new Map();
+
 /**
  * Registration, login (with optional email-OTP MFA), logout, password reset,
  * token refresh, and landlord-initiated caretaker creation/activation.
@@ -121,14 +129,23 @@ class AuthService {
   }
 
   async login({ email, password }) {
+    this._checkLoginLockout(email);
+
     // Intentionally distinguishes "email not registered" from "wrong password"
     // for clearer login feedback.
     const user = await UserRepository.findByEmail(email, { withSecrets: true });
-    if (!user) throw ApiError.unauthorized('This email is not registered.', 'EMAIL_NOT_REGISTERED');
+    if (!user) {
+      this._recordFailedLogin(email);
+      throw ApiError.unauthorized('This email is not registered.', 'EMAIL_NOT_REGISTERED');
+    }
 
     const valid = await comparePassword(password, user.passwordHash);
-    if (!valid) throw ApiError.unauthorized('Incorrect password.', 'INCORRECT_PASSWORD');
+    if (!valid) {
+      this._recordFailedLogin(email);
+      throw ApiError.unauthorized('Incorrect password.', 'INCORRECT_PASSWORD');
+    }
 
+    this._clearLoginAttempts(email);
     this._assertLoginableStatus(user);
 
     if (!user.emailVerified) {
@@ -168,6 +185,33 @@ class AuthService {
     });
 
     return { user: sanitizeUser(user), accessToken, refreshToken };
+  }
+
+  _checkLoginLockout(email) {
+    const entry = loginAttemptsByEmail.get(email.toLowerCase());
+    if (!entry?.lockedUntil || entry.lockedUntil <= Date.now()) return;
+
+    const retryAfterSeconds = Math.ceil((entry.lockedUntil - Date.now()) / 1000);
+    throw ApiError.tooManyRequests(
+      `Too many failed login attempts. Try again in ${retryAfterSeconds}s.`,
+      'LOGIN_LOCKED',
+      { retryAfterSeconds },
+    );
+  }
+
+  _recordFailedLogin(email) {
+    const key = email.toLowerCase();
+    const entry = loginAttemptsByEmail.get(key) || { count: 0, lockedUntil: null };
+    entry.count += 1;
+    if (entry.count >= LOGIN_LOCKOUT_MAX_ATTEMPTS) {
+      entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_SECONDS * 1000;
+      entry.count = 0;
+    }
+    loginAttemptsByEmail.set(key, entry);
+  }
+
+  _clearLoginAttempts(email) {
+    loginAttemptsByEmail.delete(email.toLowerCase());
   }
 
   _assertLoginableStatus(user) {

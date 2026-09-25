@@ -444,9 +444,9 @@ describe('Security — rate limiting', () => {
     expect(failures[3].status).toBe(429);
   });
 
-  test('a successful login resets the caller\'s prior failed-attempt count on the real authRateLimiter', async () => {
+  test('a successful login still resets the caller\'s shared IP auth rate-limit count (used by /register, etc.)', async () => {
     await registerAndVerify({
-      firstName: 'Reset', lastName: 'Count', email: 'reset.count@gmail.com', phone: '09171234502', password: 'Str0ng!Pass', role: 'tenant',
+      firstName: 'Exempt', lastName: 'Login', email: 'exempt.login@gmail.com', phone: '09171234502', password: 'Str0ng!Pass', role: 'tenant',
       privacyConsent: true, emergencyContact: { name: 'Gigi Tenant', phone: '09171234594' },
     });
 
@@ -454,17 +454,62 @@ describe('Security — rate limiting', () => {
     const { authRateLimiter } = require('../../middleware/rateLimit');
     const resetSpy = jest.spyOn(authRateLimiter, 'resetKey');
 
-    // A wrong-password attempt is a failure — no reset should happen.
-    await request(app).post('/api/auth/login').send({ email: 'reset.count@gmail.com', password: 'WrongPassword1!' });
+    // A wrong-password attempt is a failure on the new per-account lockout,
+    // not on authRateLimiter (which now skips /login entirely) — no reset call.
+    await request(app).post('/api/auth/login').send({ email: 'exempt.login@gmail.com', password: 'WrongPassword1!' });
     expect(resetSpy).not.toHaveBeenCalled();
 
-    // The real login, through the real app/route, completing successfully —
-    // this is the same code path AuthController.login takes for every
-    // non-MFA login and must reset the caller's count.
-    const ok = await request(app).post('/api/auth/login').send({ email: 'reset.count@gmail.com', password: 'Str0ng!Pass' });
+    // A successful login still clears the IP's shared authRateLimiter bucket,
+    // since /register, /forgot-password, etc. still rely on that limiter.
+    const ok = await request(app).post('/api/auth/login').send({ email: 'exempt.login@gmail.com', password: 'Str0ng!Pass' });
     expect(ok.status).toBe(200);
     expect(resetSpy).toHaveBeenCalledTimes(1);
 
     resetSpy.mockRestore();
   });
+
+  test('10 failed login attempts in a row lock that account out for a fixed cooldown, independent of the IP limiter', async () => {
+    await registerAndVerify({
+      firstName: 'Locked', lastName: 'Out', email: 'locked.out@gmail.com', phone: '09171234503', password: 'Str0ng!Pass', role: 'tenant',
+      privacyConsent: true, emergencyContact: { name: 'Gigi Tenant', phone: '09171234595' },
+    });
+
+    const failures = [];
+    for (let i = 0; i < 10; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      failures.push(await request(app).post('/api/auth/login').send({ email: 'locked.out@gmail.com', password: 'WrongPassword1!' }));
+    }
+    expect(failures.every((r) => r.status === 401 && r.body.error.code === 'INCORRECT_PASSWORD')).toBe(true);
+
+    // The 11th attempt trips the lockout even with the CORRECT password.
+    const locked = await request(app).post('/api/auth/login').send({ email: 'locked.out@gmail.com', password: 'Str0ng!Pass' });
+    expect(locked.status).toBe(429);
+    expect(locked.body.error.code).toBe('LOGIN_LOCKED');
+    expect(locked.body.error.details.retryAfterSeconds).toBeGreaterThan(0);
+  }, 20000);
+
+  test('a successful login resets the per-account failed-attempt count', async () => {
+    await registerAndVerify({
+      firstName: 'Reset', lastName: 'Count', email: 'reset.count@gmail.com', phone: '09171234504', password: 'Str0ng!Pass', role: 'tenant',
+      privacyConsent: true, emergencyContact: { name: 'Gigi Tenant', phone: '09171234596' },
+    });
+
+    for (let i = 0; i < 3; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await request(app).post('/api/auth/login').send({ email: 'reset.count@gmail.com', password: 'WrongPassword1!' });
+    }
+
+    const ok = await request(app).post('/api/auth/login').send({ email: 'reset.count@gmail.com', password: 'Str0ng!Pass' });
+    expect(ok.status).toBe(200);
+
+    // If the earlier 3 failures had survived the reset, only 7 more would be
+    // needed to hit the lockout threshold of 10. All 9 here should still be
+    // plain 401s, proving the counter restarted from zero after the success.
+    const failures = [];
+    for (let i = 0; i < 9; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      failures.push(await request(app).post('/api/auth/login').send({ email: 'reset.count@gmail.com', password: 'WrongPassword1!' }));
+    }
+    expect(failures.every((r) => r.status === 401)).toBe(true);
+  }, 20000);
 });

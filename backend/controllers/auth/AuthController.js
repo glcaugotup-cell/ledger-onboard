@@ -13,8 +13,11 @@ class AuthController {
   });
 
   login = asyncHandler(async (req, res) => {
+    // Login itself is exempt from the IP-wide authRateLimiter window
+    // (AuthService enforces a per-account failed-attempt lockout instead),
+    // but a successful login still resets this IP's shared auth rate-limit
+    // count, since it's also used by /register, /forgot-password, etc.
     const result = await AuthService.login(req.body);
-    // A completed login resets this IP's auth rate-limit count (best-effort).
     if (!result.mfaRequired) {
       await authRateLimiter.resetKey(req.ip).catch(() => {});
     }
