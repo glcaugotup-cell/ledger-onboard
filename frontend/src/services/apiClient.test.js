@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import instance, { ApiClientError, BaseApiClient, setAccessToken } from './apiClient.js';
+import instance, { ApiClientError, BaseApiClient, mediaUrl, normalizeApiOrigin, setAccessToken } from './apiClient.js';
 
 // axios exposes registered interceptors on `interceptors.response.handlers`
 // (and `.request.handlers`) — undocumented but stable, and the only way to
@@ -129,5 +129,26 @@ describe('ApiClientError', () => {
     expect(err.code).toBe('CODE');
     expect(err.statusCode).toBe(400);
     expect(err.details).toEqual([{ field: 'x', message: 'y' }]);
+  });
+});
+
+describe('API base URL and media URLs (VITE_API_URL unset in tests)', () => {
+  it('falls back to the relative /api base used with the Vite dev proxy', () => {
+    expect(instance.defaults.baseURL).toBe('/api');
+  });
+
+  it('normalizes VITE_API_URL so requests never become //api or /api/api', () => {
+    const host = 'https://ledger-onboard-backend.onrender.com';
+    for (const v of [host, `${host}/`, `${host}/api`, `${host}/api/`, ` ${host} `]) {
+      expect(normalizeApiOrigin(v)).toBe(host);
+    }
+    expect(normalizeApiOrigin(undefined)).toBe('');
+  });
+
+  it('leaves backend-relative media paths relative and passes absolute/blob URLs through', () => {
+    expect(mediaUrl('/uploads/properties/a.jpg')).toBe('/uploads/properties/a.jpg');
+    expect(mediaUrl('https://cdn.example.com/a.jpg')).toBe('https://cdn.example.com/a.jpg');
+    expect(mediaUrl('blob:http://localhost/abc')).toBe('blob:http://localhost/abc');
+    expect(mediaUrl(undefined)).toBeUndefined();
   });
 });

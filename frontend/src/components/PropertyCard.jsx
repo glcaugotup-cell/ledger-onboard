@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { MapPinIcon } from '@heroicons/react/24/outline';
 import { Badge } from './ui/Feedback.jsx';
+import { mediaUrl } from '../services/apiClient.js';
 
 /**
  * `onShowOnMap` is optional (tenant Discover only): when given, a "Show on
@@ -15,7 +16,7 @@ export default function PropertyCard({ property, linkPrefix = '/tenant/propertie
       <Link to={`${linkPrefix}/${property._id}`} className="block flex-1">
         <div className="h-40 w-full bg-gray-100">
           {image ? (
-            <img src={image} alt={property.propertyName} className="h-full w-full object-cover" />
+            <img src={mediaUrl(image)} alt={property.propertyName} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-gray-300">No image</div>
           )}

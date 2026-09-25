@@ -16,8 +16,26 @@ export class ApiClientError extends Error {
   }
 }
 
+/**
+ * Backend origin, e.g. https://ledger-onboard-backend.onrender.com (set via
+ * VITE_API_URL at build time). Empty in local dev, where Vite proxies /api and
+ * /uploads to the Express server.
+ */
+export const API_ORIGIN = normalizeApiOrigin(import.meta.env.VITE_API_URL);
+
+/** Accepts "https://host", "https://host/" or "https://host/api" and returns "https://host". */
+export function normalizeApiOrigin(value) {
+  return (value || '').trim().replace(/\/+$/, '').replace(/\/api$/, '');
+}
+
+/** Resolves a backend-served path such as /uploads/properties/x.jpg against API_ORIGIN. */
+export function mediaUrl(path) {
+  if (!path || /^(https?:|blob:|data:)/.test(path)) return path;
+  return `${API_ORIGIN}${path}`;
+}
+
 const instance = axios.create({
-  baseURL: '/api',
+  baseURL: `${API_ORIGIN}/api`,
   withCredentials: false, // auth is via Bearer token, not cookies
   timeout: 20000,
 });

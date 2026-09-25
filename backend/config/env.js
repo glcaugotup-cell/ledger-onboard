@@ -9,12 +9,22 @@ function required(name, fallback) {
   return value;
 }
 
+// CLIENT_ORIGIN may list several comma-separated origins (e.g. the Vercel URL
+// and http://localhost:5173). The first one is used to build links in emails.
+const clientOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
   isTest: process.env.NODE_ENV === 'test',
   port: Number(process.env.PORT) || 5000,
-  clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  clientOrigins,
+  clientOrigin: clientOrigins[0],
+  // Behind a hosting proxy (Render), trust one hop so req.ip is the real client IP for rate limiting.
+  trustProxy: process.env.TRUST_PROXY !== undefined ? Number(process.env.TRUST_PROXY) : process.env.NODE_ENV === 'production' ? 1 : 0,
 
   mongoUri: required('MONGODB_URI', process.env.NODE_ENV === 'test' ? 'mongodb://127.0.0.1:27017/ledger_onboard_test' : undefined),
 

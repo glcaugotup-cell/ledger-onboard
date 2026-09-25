@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowRightOnRectangleIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, MapPinIcon, WifiIcon } from '@heroicons/react/24/outline';
 import PropertyApi from '../services/PropertyApi.js';
 import ReservationApi from '../services/ReservationApi.js';
+import { mediaUrl } from '../services/apiClient.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import PropertyMap from './map/PropertyMap.jsx';
 import Button from './ui/Button.jsx';
@@ -35,7 +36,7 @@ function Gallery({ images, propertyName }) {
   return (
     <div>
       <div className="relative h-64 overflow-hidden rounded-2xl bg-gray-100 sm:h-96">
-        <img src={images[active]} alt={propertyName} className="h-full w-full object-cover" />
+        <img src={mediaUrl(images[active])} alt={propertyName} className="h-full w-full object-cover" />
         {showNav && (
           <>
             <button
@@ -70,7 +71,7 @@ function Gallery({ images, propertyName }) {
               onClick={() => setActive(i)}
               className={`h-16 overflow-hidden rounded-lg border-2 transition-colors sm:h-20 ${i === active ? 'border-brand-600' : 'border-transparent hover:border-gray-200'}`}
             >
-              <img src={img} alt="" className="h-full w-full object-cover" />
+              <img src={mediaUrl(img)} alt="" className="h-full w-full object-cover" />
             </button>
           ))}
         </div>

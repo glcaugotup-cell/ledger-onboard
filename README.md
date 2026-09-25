@@ -50,7 +50,7 @@ npm install
 |---|---|
 | `MONGODB_URI` | MongoDB connection string |
 | `JWT_SECRET`, `JWT_REFRESH_SECRET` | Long random strings used to sign access and refresh tokens |
-| `CLIENT_ORIGIN` | Frontend URL allowed by CORS (default `http://localhost:5173`) |
+| `CLIENT_ORIGIN` | Frontend URL(s) allowed by CORS, comma-separated; the first is used in email links (default `http://localhost:5173`) |
 | `EMAIL_TRANSPORT` | `console` prints emails (OTP codes, invitations) in the backend terminal; any other value sends real email using the `SMTP_*` settings |
 | `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing email settings (for Gmail, use an App Password) |
 | `ACCOUNT_ARCHIVE_WARNING_DAYS`, `ACCOUNT_ARCHIVE_DAYS`, `ACCOUNT_LIFECYCLE_CRON` | Inactivity warning/archive thresholds and the daily job schedule |
@@ -58,7 +58,7 @@ npm install
 
 Never commit `backend/.env`; it is excluded by `.gitignore`.
 
-The frontend needs no environment file for local development: the Vite dev server proxies `/api` and `/uploads` to `http://localhost:5000`.
+The frontend needs no environment file for local development: the Vite dev server proxies `/api` and `/uploads` to `http://localhost:5000`. For a deployed build, set `VITE_API_URL` to the backend origin (see `frontend/.env.example`), e.g. `https://ledger-onboard-backend.onrender.com`.
 
 ## Running the app
 
@@ -129,5 +129,6 @@ The backend follows a layered architecture: **Route → Controller → Service �
 ## Deployment notes
 
 - Serve the API behind HTTPS (a reverse proxy or your hosting platform's TLS) and set `CLIENT_ORIGIN` to the frontend's HTTPS URL.
+- Current setup: frontend on Vercel (`frontend/` with `VITE_API_URL=https://ledger-onboard-backend.onrender.com`; `frontend/vercel.json` rewrites all routes to `index.html`), backend on Render (`npm start`, `NODE_ENV=production`, `CLIENT_ORIGIN` = the Vercel URL).
 - Use a MongoDB user limited to this application's database.
 - Uploaded files are stored on local disk in `backend/uploads/`; a multi-server deployment would need shared or object storage.

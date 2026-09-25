@@ -11,13 +11,15 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
+if (env.trustProxy) app.set('trust proxy', env.trustProxy);
+
 // Security headers on every response.
 app.use(helmet());
 
-// Only the configured frontend origin may call the API with credentials.
+// Only the configured frontend origin(s) may call the API with credentials.
 app.use(
   cors({
-    origin: env.clientOrigin,
+    origin: env.clientOrigins,
     credentials: true,
   })
 );
@@ -36,7 +38,15 @@ if (!env.isTest) {
 // Payment-proof / property images — served only through an authorization
 // check inside the relevant controller/route, never as a bare static mount
 // for private files. Property listing images (public) are served here.
-app.use('/uploads/properties', express.static(path.join(__dirname, env.uploadDir, 'properties')));
+// cross-origin CORP lets the separately hosted frontend display these public images.
+app.use(
+  '/uploads/properties',
+  (req, res, next) => {
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  },
+  express.static(path.join(__dirname, env.uploadDir, 'properties'))
+);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ success: true, data: { status: 'ok', env: env.nodeEnv }, error: null });
