@@ -16,6 +16,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import AdminApi from '../../services/AdminApi.js';
 import LandlordVerificationApi from '../../services/LandlordVerificationApi.js';
 import Button from '../../components/ui/Button.jsx';
+import ReasonDialog from '../../components/ReasonDialog.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState } from '../../components/ui/Feedback.jsx';
 
 function DocumentRow({ title, onView }) {
@@ -107,6 +108,7 @@ export default function LandlordVerificationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [rejecting, setRejecting] = useState(null); // submission id awaiting a rejection reason
 
   const load = () => {
     setLoading(true);
@@ -127,8 +129,7 @@ export default function LandlordVerificationPage() {
     }
   };
 
-  const act = async (id, approve) => {
-    const rejectionReason = !approve ? prompt('Reason for rejection?') || undefined : undefined;
+  const act = async (id, approve, rejectionReason) => {
     setBusyId(id);
     try {
       await AdminApi.reviewLandlordVerification(id, { approve, rejectionReason });
@@ -163,7 +164,7 @@ export default function LandlordVerificationPage() {
         {!loading && submissions.length > 0 && (
           <div className="space-y-5">
             {submissions.map((s) => (
-              <SubmissionCard key={s._id} submission={s} busy={busyId === s._id} onView={viewDocument} onAct={act} />
+              <SubmissionCard key={s._id} submission={s} busy={busyId === s._id} onView={viewDocument} onAct={(id, approve) => (approve ? act(id, true) : setRejecting(id))} />
             ))}
           </div>
         )}
@@ -180,6 +181,21 @@ export default function LandlordVerificationPage() {
           </div>
         )}
       </div>
+      {rejecting && (
+        <ReasonDialog
+          open
+          title="Reject this verification?"
+          message="The landlord will be emailed that their documents need attention. A reason helps them correct and resubmit (optional)."
+          required={false}
+          confirmLabel="Reject submission"
+          onConfirm={(reason) => {
+            const id = rejecting;
+            setRejecting(null);
+            act(id, false, reason || undefined);
+          }}
+          onCancel={() => setRejecting(null)}
+        />
+      )}
     </DashboardLayout>
   );
 }

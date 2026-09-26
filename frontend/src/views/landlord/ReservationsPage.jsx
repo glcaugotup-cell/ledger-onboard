@@ -9,6 +9,40 @@ import { Badge, EmptyState, ErrorBanner, LoadingState } from '../../components/u
 
 const STATUS_TONE = { pending: 'yellow', approved: 'green', rejected: 'red', cancelled: 'gray', completed: 'blue' };
 
+/** Caretakers who work in the property's barangay are listed first, under their own heading. */
+function CaretakerOptions({ caretakers, barangay }) {
+  const suitable = caretakers.filter((c) => barangay && c.serviceBarangay === barangay);
+  const others = caretakers.filter((c) => !suitable.includes(c));
+  const label = (c) => (c.serviceBarangay ? `${c.fullName} (works in ${c.serviceBarangay})` : c.fullName);
+  if (suitable.length === 0) {
+    return others.map((c) => (
+      <option key={c._id} value={c._id}>
+        {label(c)}
+      </option>
+    ));
+  }
+  return (
+    <>
+      <optgroup label={`Suitable — works in ${barangay}`}>
+        {suitable.map((c) => (
+          <option key={c._id} value={c._id}>
+            {c.fullName}
+          </option>
+        ))}
+      </optgroup>
+      {others.length > 0 && (
+        <optgroup label="Other caretakers">
+          {others.map((c) => (
+            <option key={c._id} value={c._id}>
+              {label(c)}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </>
+  );
+}
+
 export default function ReservationsPage() {
   const [reservations, setReservations] = useState([]);
   const [caretakers, setCaretakers] = useState([]);
@@ -72,9 +106,8 @@ export default function ReservationsPage() {
                       className="w-48"
                     >
                       <option value="" disabled hidden>Assign caretaker (optional)</option>
-                      {caretakers.map((c) => (
-                        <option key={c._id} value={c._id}>{c.fullName}</option>
-                      ))}
+                      <CaretakerOptions caretakers={caretakers} barangay={r.propertyId?.address?.barangay} />
+
                     </Select>
                     <Button
                       loading={busyId === r._id}

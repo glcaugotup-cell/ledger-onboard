@@ -21,7 +21,10 @@ import Button from '../../components/ui/Button.jsx';
 import { Field, Select, TextArea, TextInput } from '../../components/ui/Field.jsx';
 import { ErrorBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
-import { toSentenceCase, toTitleCase } from '../../utils/textFormat.js';
+import { capitalizeFirst, toSentenceCase, toTitleCase } from '../../utils/textFormat.js';
+
+// Free-text label fields get their first letter raised as the landlord types.
+const LIVE_CAPITALIZED = new Set(['propertyName', 'street', 'description']);
 import { DAGUPAN_BARANGAYS } from '../../data/dagupanBarangays.js';
 
 const PROPERTY_TYPES = ['Room Only', 'Apartment', 'Bedspace', 'Studio'];
@@ -157,7 +160,10 @@ export default function PropertyFormPage() {
     setVideoError('');
   }
 
-  const update = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const update = (key) => (e) => {
+    const value = LIVE_CAPITALIZED.has(key) ? capitalizeFirst(e.target.value) : e.target.value;
+    setForm((f) => ({ ...f, [key]: value }));
+  };
 
   function onStreetBlur() {
     setForm((f) => ({ ...f, street: toTitleCase(f.street) }));
@@ -195,8 +201,13 @@ export default function PropertyFormPage() {
 
   function validateAll() {
     const nextErrors = {};
-    if (!form.propertyName.trim()) nextErrors.propertyName = 'Property name is required.';
+    // Same limits as backend/validators/propertyValidators.js.
+    const name = form.propertyName.trim();
+    if (!name) nextErrors.propertyName = 'Property name is required.';
+    else if (name.length < 2 || name.length > 120) nextErrors.propertyName = 'Property name must be 2-120 characters.';
     if (!form.street.trim()) nextErrors.street = 'Street is required.';
+    else if (form.street.trim().length > 200) nextErrors.street = 'Street must be at most 200 characters.';
+    if (form.description.length > 4000) nextErrors.description = 'Description must be at most 4000 characters.';
     if (!selectedBarangay) nextErrors.barangay = 'Select the exact barangay from the list.';
     if (!form.propertyType) nextErrors.propertyType = 'Choose a property type.';
     if (!form.tenantGenderPolicy) nextErrors.tenantGenderPolicy = 'Choose a gender policy.';
@@ -242,7 +253,11 @@ export default function PropertyFormPage() {
     } catch (err) {
       const { message, fieldErrors } = describeApiError(err);
       setError(message);
-      setErrors((prev) => ({ ...prev, ...fieldErrors }));
+      // The API names address fields "address.street"/"address.barangay"; this form calls them street/barangay.
+      const mapped = { ...fieldErrors };
+      if (fieldErrors['address.street']) mapped.street = fieldErrors['address.street'];
+      if (fieldErrors['address.barangay']) mapped.barangay = fieldErrors['address.barangay'];
+      setErrors((prev) => ({ ...prev, ...mapped }));
     } finally {
       setLoading(false);
     }
@@ -313,12 +328,13 @@ export default function PropertyFormPage() {
                     error={errors.propertyName}
                   />
                 </Field>
-                <Field label="Description">
+                <Field label="Description" error={errors.description}>
                   <TextArea
                     rows={3}
                     value={form.description}
                     onChange={update('description')}
                     maxLength={4000}
+                    error={errors.description}
                     placeholder="e.g., Comfortable boarding house near the highway and universities."
                   />
                 </Field>

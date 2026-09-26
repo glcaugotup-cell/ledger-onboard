@@ -20,10 +20,13 @@ class AnalyticsService {
       throw ApiError.forbidden('Only landlords and admins can view analytics', 'FORBIDDEN_ANALYTICS_ACCESS');
     }
 
-    const properties = await PropertyRepository.findByLandlord(targetLandlordId);
-    const propertyIds = properties.map((p) => p._id);
-    const rooms = await RoomRepository.find({ propertyId: { $in: propertyIds } });
-    const roomIds = rooms.map((r) => r._id);
+    const allProperties = await PropertyRepository.findByLandlord(targetLandlordId);
+    // Deleted (soft-deleted) listings no longer count toward rooms/occupancy, but
+    // their bills and payments stay in the revenue and debt history below.
+    const properties = allProperties.filter((p) => !p.deletedAt);
+    const rooms = await RoomRepository.find({ propertyId: { $in: properties.map((p) => p._id) } });
+    const allRooms = await RoomRepository.find({ propertyId: { $in: allProperties.map((p) => p._id) } });
+    const roomIds = allRooms.map((r) => r._id);
 
     const totalRooms = rooms.length;
     const occupiedRooms = rooms.filter((r) => r.status === ROOM_STATUS.OCCUPIED).length;

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -88,7 +88,7 @@ describe('DashboardLayout', () => {
     expect(markAllRead).toHaveBeenCalled();
   });
 
-  it('logs out and navigates to the landing page', async () => {
+  it('asks for confirmation; Cancel keeps the user signed in', async () => {
     const logout = vi.fn().mockResolvedValue(undefined);
     useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Tenant Cruz', role: 'tenant' }, logout }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());
@@ -96,8 +96,33 @@ describe('DashboardLayout', () => {
     renderLayout();
 
     await user.click(screen.getByRole('button', { name: /log out/i }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Are you sure you want to log out?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
-    expect(logout).toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(logout).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('logs out and navigates to the landing page after confirming', async () => {
+    const logout = vi.fn().mockResolvedValue(undefined);
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Tenant Cruz', role: 'tenant' }, logout }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    const user = userEvent.setup();
+    renderLayout();
+
+    await user.click(screen.getByRole('button', { name: /log out/i }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Log Out' }));
+
+    await waitFor(() => expect(logout).toHaveBeenCalled());
     expect(navigateMock).toHaveBeenCalledWith('/');
+  });
+
+  it.each(['tenant', 'landlord', 'caretaker', 'admin'])('shows a Profile link for the %s dashboard', (role) => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Someone', role } }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    renderLayout();
+    expect(screen.getAllByRole('link', { name: 'Profile' })[0]).toHaveAttribute('href', `/${role}/profile`);
   });
 });

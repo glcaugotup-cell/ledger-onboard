@@ -6,6 +6,9 @@ const { VERIFICATION_STATUS } = require('../../utils/constants');
 
 let app;
 
+// Move-in dates must be today or later, so tests reserve a month ahead.
+const futureDate = (days = 30) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
 beforeAll(async () => {
   await startTestDb();
   app = require('../../app'); // required after DB connects so models attach to the live connection
@@ -212,7 +215,7 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     const res = await request(app)
       .post('/api/landlord/caretakers')
       .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Pedro', lastName: 'Caretaker', email: 'pedro.caretaker@gmail.com', phone: '09201234567' });
+      .send({ firstName: 'Pedro', lastName: 'Caretaker', email: 'pedro.caretaker@gmail.com', phone: '09201234567', serviceBarangay: 'Poblacion Oeste' });
     expect(res.status).toBe(201);
     expect(res.body.data.caretaker.accountStatus).toBe('pending_activation');
     caretakerId = res.body.data.caretaker._id;
@@ -244,7 +247,7 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     const res = await request(app)
       .post('/api/reservations')
       .set('Authorization', `Bearer ${tenantToken}`)
-      .send({ roomId, moveInDate: '2026-10-01' });
+      .send({ roomId, moveInDate: futureDate() });
     expect(res.status).toBe(201);
     expect(res.body.data.reservation.status).toBe('pending');
     reservationId = res.body.data.reservation._id;
@@ -367,6 +370,13 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     expect(res.body.data.totalRooms).toBe(1);
   });
 
+  test('landlord cannot delete a property while a tenant still lives there (409)', async () => {
+    const res = await request(app).delete(`/api/properties/${propertyId}`).set('Authorization', `Bearer ${landlordToken}`);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('PROPERTY_HAS_TENANTS');
+    expect((await request(app).get(`/api/properties/${propertyId}`)).status).toBe(200);
+  });
+
   test('reservation completes, freeing the room, and the tenant becomes review-eligible', async () => {
     const complete = await request(app)
       .patch(`/api/reservations/${reservationId}/status`)
@@ -429,5 +439,55 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     const res = await request(app).get('/api/users/me').set('Authorization', `Bearer ${tenantToken}`);
     expect(res.status).toBe(200);
     expect(JSON.stringify(res.body)).not.toMatch(/passwordHash/);
+  });
+
+  test('deleting the property is a soft delete: it disappears from listings, but its rooms, reservations, bills, payments, readings, reviews and GCash proof are all kept', async () => {
+    const RoomRepository = require('../../repositories/RoomRepository');
+    const ReservationRepository = require('../../repositories/ReservationRepository');
+    const BillingSOARepository = require('../../repositories/BillingSOARepository');
+    const PaymentTransactionRepository = require('../../repositories/PaymentTransactionRepository');
+    const UtilityReadingRepository = require('../../repositories/UtilityReadingRepository');
+    const ReviewRepository = require('../../repositories/PropertyReviewRepository');
+    const PropertyRepository = require('../../repositories/PropertyRepository');
+    const FileRepository = require('../../repositories/FileRepository');
+
+    const payment = await PaymentTransactionRepository.findById(paymentId);
+    const proofFilename = payment.proofImageURL.split('/').pop();
+    const before = {
+      rooms: await RoomRepository.count({ propertyId }),
+      reservations: await ReservationRepository.count({ propertyId }),
+      reviews: await ReviewRepository.count({ propertyId }),
+      readings: await UtilityReadingRepository.count({ roomId }),
+    };
+
+    const res = await request(app).delete(`/api/properties/${propertyId}`).set('Authorization', `Bearer ${landlordToken}`);
+    expect(res.status).toBe(200);
+
+    // Hidden: public page, search, the landlord's own list and management actions.
+    expect((await request(app).get(`/api/properties/${propertyId}`)).status).toBe(404);
+    const search = await request(app).get('/api/properties').query({ text: 'Sunshine Boarding House' });
+    expect(search.body.data.properties.some((p) => p._id === propertyId)).toBe(false);
+    const mine = await request(app).get('/api/properties/mine').set('Authorization', `Bearer ${landlordToken}`);
+    expect(mine.body.data.properties.some((p) => p._id === propertyId)).toBe(false);
+    expect((await request(app).get(`/api/properties/${propertyId}/manage`).set('Authorization', `Bearer ${landlordToken}`)).status).toBe(404);
+
+    // Kept: the property record itself and every piece of history attached to it.
+    const stored = await PropertyRepository.findById(propertyId);
+    expect(stored).not.toBeNull();
+    expect(stored.deletedAt).toBeInstanceOf(Date);
+    expect(stored.listingStatus).toBe('inactive');
+    expect(await RoomRepository.count({ propertyId })).toBe(before.rooms);
+    expect(await ReservationRepository.count({ propertyId })).toBe(before.reservations);
+    expect(await ReviewRepository.count({ propertyId })).toBe(before.reviews);
+    expect(await UtilityReadingRepository.count({ roomId })).toBe(before.readings);
+    expect(await BillingSOARepository.count({ _id: soaId })).toBe(1);
+    expect(await PaymentTransactionRepository.count({ _id: paymentId })).toBe(1);
+    expect(await FileRepository.findOne({ filename: proofFilename, category: 'payment-proofs' })).not.toBeNull();
+
+    // Still traceable: the tenant's bill history and the landlord's payment history.
+    const tenantBills = await request(app).get('/api/billing/soa').set('Authorization', `Bearer ${tenantToken}`);
+    expect(tenantBills.body.data.soas.map((s) => String(s._id))).toContain(String(soaId));
+    const landlordPayments = await request(app).get('/api/payments').set('Authorization', `Bearer ${landlordToken}`);
+    expect(landlordPayments.body.data.payments.map((p) => String(p._id))).toContain(String(paymentId));
   });
 });

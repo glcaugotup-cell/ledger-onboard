@@ -21,13 +21,26 @@ import { Badge, ErrorBanner, LoadingState, SuccessBanner } from '../../component
 import { describeApiError } from '../../utils/errors.js';
 
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,application/pdf';
+const MAX_DOCUMENT_MB = 5;
 
 /** Drag-and-drop (or click-to-browse) upload zone for one required document. Purely presentational — every pick, whether dropped or chosen, still goes through the same `onFileChange` state setter the page already had. */
 function DocumentUploadCard({ label, file, onFileChange, inputId }) {
   const [dragActive, setDragActive] = useState(false);
+  const [fileError, setFileError] = useState('');
 
+  // Same rules as the server's upload filter: PDF/JPG/PNG/WebP, 5 MB. Rejected picks never replace the current file.
   function pick(fileList) {
-    onFileChange(fileList?.[0] || null);
+    const picked = fileList?.[0] || null;
+    if (picked && !ACCEPTED_TYPES.split(',').includes(picked.type)) {
+      setFileError('Only PDF, JPG, PNG or WebP files are accepted.');
+      return;
+    }
+    if (picked && picked.size > MAX_DOCUMENT_MB * 1024 * 1024) {
+      setFileError(`The file must be ${MAX_DOCUMENT_MB} MB or smaller.`);
+      return;
+    }
+    setFileError('');
+    onFileChange(picked);
   }
 
   return (
@@ -70,6 +83,11 @@ function DocumentUploadCard({ label, file, onFileChange, inputId }) {
         <input id={inputId} type="file" accept={ACCEPTED_TYPES} className="hidden" onChange={(e) => pick(e.target.files)} />
         <p className="text-xs text-gray-400">Accepted formats: PDF, JPG, PNG (Max 5MB)</p>
       </label>
+      {fileError && (
+        <p className="mt-2 text-xs text-red-600" role="alert">
+          {fileError}
+        </p>
+      )}
 
       <p className="mt-3 flex items-center gap-1.5 text-xs text-gray-400">
         <LockClosedIcon className="h-3.5 w-3.5" /> Your document will be kept private and secure.

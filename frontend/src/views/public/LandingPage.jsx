@@ -3,6 +3,8 @@ import { CheckCircleIcon, XCircleIcon, ChevronDownIcon, ChevronUpIcon, SparklesI
 import DiscoverContent from '../../components/DiscoverContent.jsx';
 import HeroAuthCard from './HeroAuthCard.jsx';
 import logo from '../../assets/logo.webp';
+import { capitalizeFirst } from '../../utils/textFormat.js';
+import { validateName } from '../../utils/validators.js';
 
 const FEATURES = [
   { icon: '🏠', num: '01', title: 'Discover', desc: 'Browse verified boarding houses across Dagupan City barangays — filtered by university, price, and availability. No more door-to-door hunting.' },
@@ -187,11 +189,24 @@ export default function LandingPage() {
   const [authMode, setAuthMode] = useState('login');
   const [contactForm, setContactForm] = useState({ fullName: '', email: '', inquiryType: 'General Inquiry', message: '' });
   const [contactStatus, setContactStatus] = useState('');
+  const [contactErrors, setContactErrors] = useState({});
 
   const scrollToAbout = () => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const handleContactSubmit = async (e) => {
     e.preventDefault();
+    const errors = {};
+    const nameError = validateName(contactForm.fullName.trim());
+    if (nameError) errors.fullName = nameError === 'This field is required' ? 'Enter your name.' : nameError;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactForm.email.trim())) errors.email = 'Enter a valid email address.';
+    const message = contactForm.message.trim();
+    if (message.length < 10) errors.message = 'Please write at least 10 characters.';
+    else if (message.length > 2000) errors.message = 'Please keep your message under 2000 characters.';
+    setContactErrors(errors);
+    if (Object.keys(errors).length) {
+      setContactStatus('');
+      return;
+    }
     setContactStatus('Sending your message...');
     try {
       // There is no contact endpoint; submission is simulated and nothing is sent.
@@ -392,29 +407,31 @@ export default function LandingPage() {
           <h2 className="mb-2 text-2xl font-black tracking-tight text-brand-800 sm:text-3xl">Have questions or feedback?</h2>
           <p className="mb-8 text-sm text-slate-600">Send a direct message to our system administration team and we will respond shortly.</p>
 
-          <form onSubmit={handleContactSubmit} className="space-y-4">
+          <form onSubmit={handleContactSubmit} noValidate className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">Full Name</label>
                 <input
                   type="text"
-                  required
                   placeholder="Juan Dela Cruz"
+                  aria-label="Full Name"
                   value={contactForm.fullName}
-                  onChange={(e) => setContactForm({ ...contactForm, fullName: e.target.value })}
-                  className={inputClass}
+                  onChange={(e) => setContactForm({ ...contactForm, fullName: capitalizeFirst(e.target.value) })}
+                  className={`${inputClass} ${contactErrors.fullName ? '!border-red-400' : ''}`}
                 />
+                {contactErrors.fullName && <p className="mt-1 text-xs text-red-600">{contactErrors.fullName}</p>}
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">Email Address</label>
                 <input
                   type="email"
-                  required
                   placeholder="juan@gmail.com"
+                  aria-label="Email Address"
                   value={contactForm.email}
                   onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                  className={inputClass}
+                  className={`${inputClass} ${contactErrors.email ? '!border-red-400' : ''}`}
                 />
+                {contactErrors.email && <p className="mt-1 text-xs text-red-600">{contactErrors.email}</p>}
               </div>
             </div>
 
@@ -432,12 +449,14 @@ export default function LandingPage() {
               <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">Message</label>
               <textarea
                 rows={4}
-                required
+                maxLength={2000}
                 placeholder="How can we help you today?"
+                aria-label="Message"
                 value={contactForm.message}
-                onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                className={inputClass}
+                onChange={(e) => setContactForm({ ...contactForm, message: capitalizeFirst(e.target.value) })}
+                className={`${inputClass} ${contactErrors.message ? '!border-red-400' : ''}`}
               />
+              {contactErrors.message && <p className="mt-1 text-xs text-red-600">{contactErrors.message}</p>}
             </div>
 
             {contactStatus && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{contactStatus}</p>}

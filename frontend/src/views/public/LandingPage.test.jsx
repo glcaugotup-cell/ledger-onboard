@@ -29,6 +29,11 @@ function renderLandingPage() {
   );
 }
 
+// The register-flow tests type every field of the form; under the full suite's
+// parallel load that can exceed vitest's default 5000ms per test (they pass
+// reliably alone). Same headroom as PropertyFormPage.test.jsx.
+vi.setConfig({ testTimeout: 15000 });
+
 describe('LandingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();

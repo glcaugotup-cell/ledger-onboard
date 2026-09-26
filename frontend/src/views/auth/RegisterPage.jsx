@@ -11,7 +11,7 @@ import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import PrivacyPolicyModal from '../../components/PrivacyPolicyModal.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { normalizePhToE164, sanitizePhoneInput, validateGmail, validateName, validatePassword, validatePhone } from '../../utils/validators.js';
-import { toNameCase } from '../../utils/textFormat.js';
+import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
 import { useAuthedRedirect } from '../../routes/useAuthedRedirect.js';
 
 const RESEND_COOLDOWN_SECONDS = 45;
@@ -41,6 +41,14 @@ const FIELD_VALIDATORS = {
 const EMERGENCY_CONTACT_VALIDATORS = {
   emergencyContactName: validateName,
   emergencyContactPhone: validatePhone,
+};
+
+// Applied on every keystroke to free-text name fields only: raises the first letter
+// ("juan" -> "Juan"). Emails, passwords, phone numbers and codes are never touched.
+const LIVE_FORMATTERS = {
+  firstName: capitalizeFirst,
+  lastName: capitalizeFirst,
+  emergencyContactName: capitalizeFirst,
 };
 
 // Applied on blur and again before submit; mirrors the backend sanitizers.
@@ -82,7 +90,8 @@ export default function RegisterPage() {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  function updateField(key, value) {
+  function updateField(key, rawValue) {
+    const value = LIVE_FORMATTERS[key] ? LIVE_FORMATTERS[key](rawValue) : rawValue;
     setForm((prev) => ({ ...prev, [key]: value }));
     const validate = FIELD_VALIDATORS[key] || EMERGENCY_CONTACT_VALIDATORS[key];
     if (validate && errors[key]) {
@@ -441,8 +450,8 @@ export default function RegisterPage() {
               >
                 Privacy Policy
               </button>{' '}
-              — my information is collected only to run this platform (registration, reservations, billing, and safety) and won&apos;t be used
-              beyond that.
+              — my information, including property and service-area location (GPS) data, is collected only to run this platform (registration,
+              reservations, billing, and safety) and won&apos;t be used beyond that.
             </span>
           </label>
           {touched.privacyConsent && errors.privacyConsent && <p className="mt-1 text-xs text-red-600">{errors.privacyConsent}</p>}

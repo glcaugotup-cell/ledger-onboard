@@ -39,7 +39,7 @@ describe('Caretaker invitation email', () => {
     const res = await request(app)
       .post('/api/landlord/caretakers')
       .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Glad', lastName: 'Estioco', email: 'caretaker.success@gmail.com', phone: '09302845654' });
+      .send({ firstName: 'Glad', lastName: 'Estioco', email: 'caretaker.success@gmail.com', phone: '09302845654', serviceBarangay: 'Poblacion Oeste' });
 
     expect(res.status).toBe(201);
     expect(res.body.data.caretaker.accountStatus).toBe('pending_activation');
@@ -60,7 +60,7 @@ describe('Caretaker invitation email', () => {
     const res = await request(app)
       .post('/api/landlord/caretakers')
       .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Fails', lastName: 'ToSend', email: 'caretaker.failure@gmail.com', phone: '09302845655' });
+      .send({ firstName: 'Fails', lastName: 'ToSend', email: 'caretaker.failure@gmail.com', phone: '09302845655', serviceBarangay: 'Poblacion Oeste' });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('CARETAKER_EMAIL_DELIVERY_FAILED');
@@ -76,7 +76,7 @@ describe('Caretaker invitation email', () => {
     const retry = await request(app)
       .post('/api/landlord/caretakers')
       .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Fails', lastName: 'ToSend', email: 'caretaker.failure@gmail.com', phone: '09302845655' });
+      .send({ firstName: 'Fails', lastName: 'ToSend', email: 'caretaker.failure@gmail.com', phone: '09302845655', serviceBarangay: 'Poblacion Oeste' });
     expect(retry.status).toBe(201);
   });
 
@@ -85,7 +85,7 @@ describe('Caretaker invitation email', () => {
     const res = await request(app)
       .post('/api/landlord/caretakers')
       .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Activate', lastName: 'Me', email: 'caretaker.activate@gmail.com', phone: '09302845656' });
+      .send({ firstName: 'Activate', lastName: 'Me', email: 'caretaker.activate@gmail.com', phone: '09302845656', serviceBarangay: 'Poblacion Oeste' });
     expect(res.status).toBe(201);
 
     const call = sendSpy.mock.calls.find((c) => c[0].to === 'caretaker.activate@gmail.com');

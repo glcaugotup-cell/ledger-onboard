@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import instance from './apiClient.js';
+import instance, { UPLOAD_CONFIG } from './apiClient.js';
 import AdminApi from './AdminApi.js';
 import AnalyticsApi from './AnalyticsApi.js';
 import AuthApi from './AuthApi.js';
@@ -123,7 +123,7 @@ describe('resource API clients', () => {
     it('submits multipart form data and verifies payments', async () => {
       const formData = new FormData();
       await PaymentApi.submit(formData);
-      expect(instance.post).toHaveBeenCalledWith('/payments', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      expect(instance.post).toHaveBeenCalledWith('/payments', formData, UPLOAD_CONFIG);
 
       await PaymentApi.verify('pay1', { approved: true });
       expect(instance.patch).toHaveBeenCalledWith('/payments/pay1/verify', { approved: true }, undefined);
@@ -159,10 +159,10 @@ describe('resource API clients', () => {
     it('creates and updates via multipart form data, and deletes/lists rooms', async () => {
       const formData = new FormData();
       await PropertyApi.create(formData);
-      expect(instance.post).toHaveBeenCalledWith('/properties', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      expect(instance.post).toHaveBeenCalledWith('/properties', formData, UPLOAD_CONFIG);
 
       await PropertyApi.update('p1', formData);
-      expect(instance.patch).toHaveBeenCalledWith('/properties/p1', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      expect(instance.patch).toHaveBeenCalledWith('/properties/p1', formData, UPLOAD_CONFIG);
 
       await PropertyApi.remove('p1');
       expect(instance.delete).toHaveBeenCalledWith('/properties/p1', undefined);

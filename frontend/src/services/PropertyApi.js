@@ -1,4 +1,4 @@
-import { BaseApiClient } from './apiClient';
+import { BaseApiClient, UPLOAD_CONFIG } from './apiClient';
 
 class PropertyApi extends BaseApiClient {
   search(params) {
@@ -18,11 +18,11 @@ class PropertyApi extends BaseApiClient {
   }
 
   create(formData) {
-    return this.post('/properties', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return this.post('/properties', formData, UPLOAD_CONFIG);
   }
 
   update(id, formData) {
-    return this.patch(`/properties/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return this.patch(`/properties/${id}`, formData, UPLOAD_CONFIG);
   }
 
   remove(id) {
@@ -39,6 +39,15 @@ class PropertyApi extends BaseApiClient {
 
   updateRoom(roomId, payload) {
     return this.patch(`/rooms/${roomId}`, payload);
+  }
+
+  /** The landlord's caretakers, ranked by whether they work in this property's barangay. */
+  listCaretakerSuggestions(id) {
+    return this.get(`/properties/${id}/caretakers`);
+  }
+
+  assignCaretaker(id, caretakerId) {
+    return this.post(`/properties/${id}/caretakers`, { caretakerId });
   }
 }
 

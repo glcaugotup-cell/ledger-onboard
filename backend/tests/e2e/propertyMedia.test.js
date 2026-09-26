@@ -245,7 +245,7 @@ describe('Property media — stored in GridFS', () => {
     expect(hijack.body.data.property.videoUrl).toBeNull();
   });
 
-  test('deleting a property also deletes its files', async () => {
+  test('deleting a property is a soft delete: the listing disappears but its files are kept', async () => {
     const token = await verifiedLandlordToken('gridfs.delete@gmail.com', 12);
     const created = await baseFields(request(app).post('/api/properties').set('Authorization', `Bearer ${token}`))
       .attach('images', Buffer.from('photo'), { filename: 'p.png', contentType: 'image/png' })
@@ -255,8 +255,9 @@ describe('Property media — stored in GridFS', () => {
 
     const del = await request(app).delete(`/api/properties/${id}`).set('Authorization', `Bearer ${token}`);
     expect(del.status).toBe(200);
-    expect((await request(app).get(imageUrl)).status).toBe(404);
-    expect((await request(app).get(videoUrl)).status).toBe(404);
+    expect((await request(app).get(`/api/properties/${id}`)).status).toBe(404);
+    expect((await request(app).get(imageUrl)).status).toBe(200);
+    expect((await request(app).get(videoUrl)).status).toBe(200);
   });
 
   test('an unverified landlord is rejected before anything is stored', async () => {

@@ -21,6 +21,11 @@ class AdminController {
     const user = await AdminService.setUserStatus(req.user.id, req.params.id, status, reason);
     sendSuccess(res, { data: { user: sanitizeUser(user) } });
   });
+
+  deactivateForInactivity = asyncHandler(async (req, res) => {
+    const user = await AdminService.deactivateForInactivity(req.user.id, req.params.id, req.body.reason);
+    sendSuccess(res, { data: { user: sanitizeUser(user) } });
+  });
 }
 
 module.exports = new AdminController();

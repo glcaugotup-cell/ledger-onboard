@@ -76,6 +76,21 @@ describe('UtilityEntryPage', () => {
     expect(await screen.findByText(/reading logged/i)).toBeInTheDocument();
   });
 
+  it('rejects a current reading lower than the previous one before sending', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.selectOptions(await screen.findByLabelText(/room/i), 'r1');
+    await user.type(screen.getByLabelText(/total electric bill/i), '500');
+    await user.type(screen.getByLabelText(/total water bill/i), '200');
+    await user.type(screen.getByPlaceholderText('Previous reading'), '150');
+    await user.type(screen.getByPlaceholderText('Current reading'), '100');
+    await user.click(screen.getByRole('button', { name: /submit reading/i }));
+
+    expect(screen.getByText('Current reading cannot be less than the previous reading.')).toBeInTheDocument();
+    expect(UtilityApi.logReading).not.toHaveBeenCalled();
+  });
+
   it('shows an error message when submission fails', async () => {
     UtilityApi.logReading.mockRejectedValue({ message: 'Reading already logged for this month' });
     const user = userEvent.setup();

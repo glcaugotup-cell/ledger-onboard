@@ -6,6 +6,8 @@ import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Field, TextInput } from '../../components/ui/Field.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
+import { describeApiError } from '../../utils/errors.js';
+import { validateImageFile, validatePaymentAmount } from '../../utils/validators.js';
 
 const STATUS_TONE = { UNPAID: 'yellow', PARTIAL: 'blue', PAID: 'green', OVERDUE: 'red' };
 
@@ -13,12 +15,18 @@ function PaySoaForm({ soa, onDone }) {
   const [amount, setAmount] = useState(String(soa.remainingBalance));
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!file) return setError('Please attach a screenshot of your GCash payment.');
+    const errors = {
+      amount: validatePaymentAmount(amount, soa.remainingBalance),
+      file: validateImageFile(file, { label: 'a screenshot of your GCash payment' }),
+    };
+    setFieldErrors(errors);
+    if (errors.amount || errors.file) return;
     setLoading(true);
     try {
       const formData = new FormData();
@@ -29,20 +37,30 @@ function PaySoaForm({ soa, onDone }) {
       await PaymentApi.submit(formData);
       onDone();
     } catch (err) {
-      setError(err.message || 'Could not submit payment.');
+      const { message, fieldErrors: serverErrors } = describeApiError(err);
+      setError(message || 'Could not submit payment.');
+      setFieldErrors({ amount: serverErrors.amount });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={onSubmit} className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+    <form onSubmit={onSubmit} noValidate className="mt-3 space-y-3 border-t border-gray-100 pt-3">
       <ErrorBanner message={error} />
-      <Field label="Amount (₱)">
-        <TextInput type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+      <Field label="Amount (₱)" error={fieldErrors.amount}>
+        <TextInput
+          type="number"
+          min="0.01"
+          max={soa.remainingBalance}
+          step="0.01"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          error={fieldErrors.amount}
+        />
       </Field>
-      <Field label="GCash screenshot">
-        <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setFile(e.target.files[0])} required className="text-sm" />
+      <Field label="GCash screenshot" error={fieldErrors.file}>
+        <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setFile(e.target.files[0] || null)} className="block text-sm" />
       </Field>
       <Button type="submit" loading={loading} className="w-full">
         Submit proof of payment

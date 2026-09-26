@@ -65,6 +65,21 @@ describe('MyBillingPage', () => {
     expect(screen.queryByRole('button', { name: /pay via gcash/i })).not.toBeInTheDocument();
   });
 
+  it('rejects an amount above the remaining balance before sending', async () => {
+    BillingApi.list.mockResolvedValue({ soas: [unpaidSoa] });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /pay via gcash/i }));
+    const amount = screen.getByLabelText(/amount/i);
+    await user.clear(amount);
+    await user.type(amount, '5000');
+    await user.click(screen.getByRole('button', { name: /submit proof of payment/i }));
+
+    expect(screen.getByText(/cannot be more than the remaining balance of ₱2,400/)).toBeInTheDocument();
+    expect(PaymentApi.submit).not.toHaveBeenCalled();
+  });
+
   it('never calls the API when no screenshot is attached', async () => {
     // The file input carries `required` and this form has no `noValidate`,
     // so — same as a real browser — a plain submit click is blocked by

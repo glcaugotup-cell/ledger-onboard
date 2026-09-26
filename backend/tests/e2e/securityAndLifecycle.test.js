@@ -167,7 +167,7 @@ describe('Account inactivity lifecycle (Section 7)', () => {
       .send({ roomNumber: '1', capacity: 1, monthlyBaseRent: 2000 });
     const roomId = roomRes.body.data.room._id;
 
-    const reserveRes = await request(app).post('/api/reservations').set('Authorization', `Bearer ${tenantToken}`).send({ roomId, moveInDate: '2026-01-01' });
+    const reserveRes = await request(app).post('/api/reservations').set('Authorization', `Bearer ${tenantToken}`).send({ roomId, moveInDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) });
     const reservationId = reserveRes.body.data.reservation._id;
     await request(app).patch(`/api/reservations/${reservationId}/status`).set('Authorization', `Bearer ${landlordToken}`).send({ status: 'approved' });
     await request(app).patch(`/api/reservations/${reservationId}/status`).set('Authorization', `Bearer ${landlordToken}`).send({ status: 'completed' });
@@ -224,7 +224,7 @@ describe('Caretaker creation is audited and landlord-owned only', () => {
     const createRes = await request(app)
       .post('/api/landlord/caretakers')
       .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Audit', lastName: 'Caretaker', email: 'audit.caretaker@gmail.com', phone: '09171234507' });
+      .send({ firstName: 'Audit', lastName: 'Caretaker', email: 'audit.caretaker@gmail.com', phone: '09171234507', serviceBarangay: 'Poblacion Oeste' });
     expect(createRes.status).toBe(201);
     const caretakerId = createRes.body.data.caretaker._id;
 
@@ -268,7 +268,7 @@ describe('RBAC — role-gated routes reject the wrong role', () => {
     const res = await request(app)
       .post('/api/landlord/caretakers')
       .set('Authorization', `Bearer ${token}`)
-      .send({ firstName: 'Should', lastName: 'Not Work', email: 'should.not.work@gmail.com', phone: '09171234511' });
+      .send({ firstName: 'Should', lastName: 'Not Work', email: 'should.not.work@gmail.com', phone: '09171234511', serviceBarangay: 'Poblacion Oeste' });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('FORBIDDEN_ROLE');
   });

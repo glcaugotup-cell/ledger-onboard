@@ -42,6 +42,9 @@ const propertySchema = new Schema(
       enum: Object.values(LISTING_STATUS),
       default: LISTING_STATUS.DRAFT,
     },
+    // Soft delete: a "deleted" listing is hidden everywhere but kept, with its rooms and history.
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );

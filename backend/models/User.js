@@ -5,8 +5,9 @@ const { Schema } = mongoose;
 
 const GMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
 const PH_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
-// Min 2 chars, starts uppercase, letters/spaces/hyphens/periods only.
-const NAME_REGEX = /^[A-Z][a-zA-Z\s.-]{1,}$/;
+// Min 2 chars, starts uppercase, letters/spaces/hyphens/periods/apostrophes only.
+const { FULL_NAME: NAME_REGEX } = require('../validators/patterns');
+const { DAGUPAN_BARANGAYS } = require('../utils/dagupanBarangays');
 
 const userSchema = new Schema(
   {
@@ -14,13 +15,13 @@ const userSchema = new Schema(
       type: String,
       required: true,
       trim: true,
-      match: [NAME_REGEX, 'First name must start with an uppercase letter and contain only letters, spaces, hyphens, or periods'],
+      match: [NAME_REGEX, 'First name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes'],
     },
     lastName: {
       type: String,
       required: true,
       trim: true,
-      match: [NAME_REGEX, 'Last name must start with an uppercase letter and contain only letters, spaces, hyphens, or periods'],
+      match: [NAME_REGEX, 'Last name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes'],
     },
     // Derived from firstName + lastName by the service layer; stored because it's read widely.
     fullName: {
@@ -67,6 +68,16 @@ const userSchema = new Schema(
       type: String,
       enum: Object.values(ACCOUNT_STATUS),
       default: ACCOUNT_STATUS.ACTIVE,
+    },
+    // Why the account was last suspended/deactivated/closed (admin-selected reasons or self-closure).
+    statusReason: { type: String, default: null },
+    statusChangedAt: { type: Date, default: null },
+    // Caretakers only: the Dagupan City barangay they work in, used to suggest them for properties there.
+    serviceBarangay: {
+      type: String,
+      trim: true,
+      default: null,
+      enum: [...DAGUPAN_BARANGAYS.map((b) => b.name), null],
     },
     mfaEnabled: {
       type: Boolean,
@@ -118,7 +129,7 @@ const userSchema = new Schema(
       name: {
         type: String,
         trim: true,
-        match: [NAME_REGEX, 'Emergency contact name must start with an uppercase letter and contain only letters, spaces, hyphens, or periods'],
+        match: [NAME_REGEX, 'Emergency contact name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes'],
       },
       phone: {
         type: String,

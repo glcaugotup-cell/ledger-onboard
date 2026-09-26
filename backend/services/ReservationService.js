@@ -6,7 +6,7 @@ const AuditLogRepository = require('../repositories/AuditLogRepository');
 const RoomService = require('./RoomService');
 const NotificationService = require('./NotificationService');
 const ApiError = require('../utils/ApiError');
-const { ROLES, RESERVATION_STATUS, RESERVATION_TRANSITIONS, ROOM_STATUS } = require('../utils/constants');
+const { ACCOUNT_STATUS, ROLES, RESERVATION_STATUS, RESERVATION_TRANSITIONS, ROOM_STATUS } = require('../utils/constants');
 
 class ReservationService {
   /** Tenant submits a reservation request for a room. */
@@ -15,7 +15,9 @@ class ReservationService {
     if (!room) throw ApiError.notFound('Room not found', 'ROOM_NOT_FOUND');
 
     const property = await PropertyRepository.findById(room.propertyId);
-    if (!property || property.listingStatus !== 'approved') {
+    const landlord = property && (await UserRepository.findById(property.landlordId));
+    // Deleted listings are inactive, and a closed landlord account can't answer requests.
+    if (!property || property.listingStatus !== 'approved' || property.deletedAt || landlord?.accountStatus !== ACCOUNT_STATUS.ACTIVE) {
       throw ApiError.badRequest('This property is not currently accepting reservations', 'PROPERTY_NOT_AVAILABLE');
     }
     if (room.status !== ROOM_STATUS.AVAILABLE || room.currentOccupancy >= room.capacity) {

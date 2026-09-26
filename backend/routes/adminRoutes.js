@@ -6,7 +6,7 @@ const { authenticate } = require('../middleware/auth');
 const { requireRole } = require('../middleware/rbac');
 const validate = require('../middleware/validate');
 const { objectIdParam } = require('../validators/commonValidators');
-const { listUsersValidators, setUserStatusValidators } = require('../validators/adminValidators');
+const { listUsersValidators, setUserStatusValidators, deactivateInactiveValidators } = require('../validators/adminValidators');
 const { moderatePropertyValidators } = require('../validators/propertyValidators');
 const { reviewLandlordVerificationValidators } = require('../validators/landlordVerificationValidators');
 const { ROLES } = require('../utils/constants');
@@ -17,6 +17,8 @@ router.use(authenticate, requireRole(ROLES.ADMIN));
 router.get('/users', listUsersValidators, validate, AdminController.listUsers);
 router.get('/logs', AdminController.listAuditLogs);
 router.patch('/users/:id/status', objectIdParam('id'), setUserStatusValidators, validate, AdminController.setUserStatus);
+// Manual, admin-confirmed deactivation of accounts inactive for 60+ days (never automatic).
+router.post('/users/:id/deactivate-inactive', objectIdParam('id'), deactivateInactiveValidators, validate, AdminController.deactivateForInactivity);
 
 // Manual per-property moderation. Not used by the UI: verified landlords' listings are approved on creation.
 router.get('/properties/pending', PropertyController.listPendingModeration);

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
+import ConfirmDialog from '../ui/ConfirmDialog.jsx';
 import logo from '../../assets/logo.webp';
 
 const NAV_BY_ROLE = {
@@ -9,7 +10,7 @@ const NAV_BY_ROLE = {
     { to: '/tenant/discover', label: 'Discover' },
     { to: '/tenant/reservations', label: 'My Reservations' },
     { to: '/tenant/billing', label: 'Billing' },
-    { to: '/tenant/account', label: 'Account' },
+    { to: '/tenant/profile', label: 'Profile' },
   ],
   landlord: [
     { to: '/landlord/dashboard', label: 'Dashboard' },
@@ -19,17 +20,20 @@ const NAV_BY_ROLE = {
     { to: '/landlord/billing', label: 'Billing' },
     { to: '/landlord/payments', label: 'Payments' },
     { to: '/landlord/verification', label: 'Verification' },
+    { to: '/landlord/profile', label: 'Profile' },
   ],
   caretaker: [
     { to: '/caretaker/rooms', label: 'Assigned Rooms' },
     { to: '/caretaker/utilities', label: 'Utility Entry' },
     { to: '/caretaker/payments', label: 'Cash & Payments' },
+    { to: '/caretaker/profile', label: 'Profile' },
   ],
   admin: [
     { to: '/admin/users', label: 'Users' },
     { to: '/admin/reviews', label: 'Review Moderation' },
     { to: '/admin/landlord-verifications', label: 'Landlord Verification' },
     { to: '/admin/logs', label: 'Audit Logs' },
+    { to: '/admin/profile', label: 'Profile' },
   ],
 };
 
@@ -38,14 +42,23 @@ export default function DashboardLayout({ children }) {
   const { unreadCount, notifications, markAllRead } = useNotifications();
   const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const links = NAV_BY_ROLE[user?.role] || [];
-  // Long nav lists (landlord: 7 links) only fit inline from xl; shorter ones from lg.
+  // Long nav lists (landlord: 8 links) only fit inline from xl; shorter ones from lg.
   // Below that, the scrollable second-row nav is used instead.
   const wideNav = links.length > 5;
 
+  // Runs only after the user confirms in the dialog; Cancel keeps them signed in.
   const handleLogout = async () => {
-    await logout();
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+      setLogoutOpen(false);
+    }
     navigate('/');
   };
 
@@ -114,9 +127,18 @@ export default function DashboardLayout({ children }) {
               <p className="font-medium text-gray-800">{user?.fullName}</p>
               <p className="text-xs capitalize text-gray-400">{user?.role}</p>
             </div>
-            <button onClick={handleLogout} className="whitespace-nowrap rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100">
+            <button onClick={() => setLogoutOpen(true)} className="whitespace-nowrap rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100">
               Log out
             </button>
+            <ConfirmDialog
+              open={logoutOpen}
+              title="Log out?"
+              message="Are you sure you want to log out?"
+              confirmLabel="Log Out"
+              loading={loggingOut}
+              onConfirm={handleLogout}
+              onCancel={() => setLogoutOpen(false)}
+            />
           </div>
         </div>
         <nav className={`flex gap-1 overflow-x-auto border-t border-gray-100 px-4 py-1 ${wideNav ? 'xl:hidden' : 'lg:hidden'}`}>

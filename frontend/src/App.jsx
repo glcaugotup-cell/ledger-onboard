@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { NotificationProvider } from './context/NotificationContext.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import ScrollToTop from './routes/ScrollToTop.jsx';
+import ServerWakeNotice from './components/ServerWakeNotice.jsx';
 
 import LandingPage from './views/public/LandingPage.jsx';
 import PropertyDetailPublicPage from './views/public/PropertyDetailPublicPage.jsx';
@@ -21,7 +22,6 @@ import DiscoverPage from './views/tenant/DiscoverPage.jsx';
 import TenantPropertyDetailPage from './views/tenant/PropertyDetailPage.jsx';
 import MyReservationsPage from './views/tenant/MyReservationsPage.jsx';
 import MyBillingPage from './views/tenant/MyBillingPage.jsx';
-import AccountPage from './views/tenant/AccountPage.jsx';
 
 import LandlordDashboardPage from './views/landlord/DashboardPage.jsx';
 import PropertiesPage from './views/landlord/PropertiesPage.jsx';
@@ -37,6 +37,8 @@ import AssignedRoomsPage from './views/caretaker/AssignedRoomsPage.jsx';
 import UtilityEntryPage from './views/caretaker/UtilityEntryPage.jsx';
 import CashPaymentsPage from './views/caretaker/CashPaymentsPage.jsx';
 
+import ProfilePage from './views/shared/ProfilePage.jsx';
+
 import UsersPage from './views/admin/UsersPage.jsx';
 import ReviewModerationPage from './views/admin/ReviewModerationPage.jsx';
 import AuditLogsPage from './views/admin/AuditLogsPage.jsx';
@@ -48,6 +50,7 @@ export default function App() {
       <AuthProvider>
         <NotificationProvider>
           <ScrollToTop />
+          <ServerWakeNotice />
           <Routes>
             {/* Public */}
             <Route path="/" element={<LandingPage />} />
@@ -70,7 +73,9 @@ export default function App() {
               <Route path="/tenant/properties/:id" element={<TenantPropertyDetailPage />} />
               <Route path="/tenant/reservations" element={<MyReservationsPage />} />
               <Route path="/tenant/billing" element={<MyBillingPage />} />
-              <Route path="/tenant/account" element={<AccountPage />} />
+              <Route path="/tenant/profile" element={<ProfilePage />} />
+              {/* The page was called "Account" before every role got a Profile; keep old links working. */}
+              <Route path="/tenant/account" element={<Navigate to="/tenant/profile" replace />} />
             </Route>
 
             {/* Landlord */}
@@ -84,6 +89,7 @@ export default function App() {
               <Route path="/landlord/billing" element={<LandlordBillingPage />} />
               <Route path="/landlord/payments" element={<LandlordPaymentsPage />} />
               <Route path="/landlord/verification" element={<BusinessVerificationPage />} />
+              <Route path="/landlord/profile" element={<ProfilePage />} />
             </Route>
 
             {/* Caretaker */}
@@ -91,6 +97,7 @@ export default function App() {
               <Route path="/caretaker/rooms" element={<AssignedRoomsPage />} />
               <Route path="/caretaker/utilities" element={<UtilityEntryPage />} />
               <Route path="/caretaker/payments" element={<CashPaymentsPage />} />
+              <Route path="/caretaker/profile" element={<ProfilePage />} />
             </Route>
 
             {/* Admin */}
@@ -99,6 +106,7 @@ export default function App() {
               <Route path="/admin/reviews" element={<ReviewModerationPage />} />
               <Route path="/admin/logs" element={<AuditLogsPage />} />
               <Route path="/admin/landlord-verifications" element={<LandlordVerificationPage />} />
+              <Route path="/admin/profile" element={<ProfilePage />} />
             </Route>
 
             <Route path="*" element={<NotFoundPage />} />

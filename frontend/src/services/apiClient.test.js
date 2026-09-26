@@ -1,11 +1,21 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import instance, { ApiClientError, BaseApiClient, mediaUrl, normalizeApiOrigin, setAccessToken } from './apiClient.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import instance, {
+  ApiClientError,
+  BaseApiClient,
+  SLOW_REQUEST_MS,
+  isServerSlow,
+  mediaUrl,
+  normalizeApiOrigin,
+  onServerSlowChange,
+  setAccessToken,
+} from './apiClient.js';
 
 // axios exposes registered interceptors on `interceptors.response.handlers`
 // (and `.request.handlers`) — undocumented but stable, and the only way to
 // exercise the error-mapping logic without making a real network call.
 const responseRejected = instance.interceptors.response.handlers[0].rejected;
 const requestFulfilled = instance.interceptors.request.handlers[0].fulfilled;
+const responseFulfilled = instance.interceptors.response.handlers[0].fulfilled;
 
 describe('request interceptor', () => {
   afterEach(() => {
@@ -15,12 +25,14 @@ describe('request interceptor', () => {
   it('does not attach an Authorization header when there is no access token', () => {
     const config = requestFulfilled({ headers: {} });
     expect(config.headers.Authorization).toBeUndefined();
+    responseFulfilled({ config });
   });
 
   it('attaches a Bearer token once one has been set', () => {
     setAccessToken('token-123');
     const config = requestFulfilled({ headers: {} });
     expect(config.headers.Authorization).toBe('Bearer token-123');
+    responseFulfilled({ config });
   });
 });
 
@@ -68,6 +80,19 @@ describe('response error interceptor', () => {
     });
   });
 
+  it('maps a request timeout to TIMEOUT', async () => {
+    const axiosError = { code: 'ECONNABORTED', message: 'timeout of 70000ms exceeded', request: {} };
+    await expect(responseRejected(axiosError)).rejects.toMatchObject({
+      message: 'The server took too long to respond. Please try again.',
+      code: 'TIMEOUT',
+    });
+  });
+
+  it('does not report a plain browser abort as a timeout', async () => {
+    const axiosError = { code: 'ECONNABORTED', message: 'Request aborted', request: {} };
+    await expect(responseRejected(axiosError)).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+  });
+
   it('maps a no-response network error to NETWORK_ERROR', async () => {
     const axiosError = { request: {} };
     await expect(responseRejected(axiosError)).rejects.toMatchObject({
@@ -82,6 +107,51 @@ describe('response error interceptor', () => {
       message: 'Something exploded',
       code: 'CLIENT_ERROR',
     });
+  });
+});
+
+describe('slow-request tracking (server wake-up notice)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reports a request that runs past SLOW_REQUEST_MS until it succeeds', () => {
+    const listener = vi.fn();
+    const unsubscribe = onServerSlowChange(listener);
+    const config = requestFulfilled({ headers: {} });
+
+    vi.advanceTimersByTime(SLOW_REQUEST_MS - 1);
+    expect(isServerSlow()).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(isServerSlow()).toBe(true);
+    expect(listener).toHaveBeenLastCalledWith(true);
+
+    responseFulfilled({ config });
+    expect(isServerSlow()).toBe(false);
+    expect(listener).toHaveBeenLastCalledWith(false);
+    unsubscribe();
+  });
+
+  it('clears the slow state when the request fails', async () => {
+    const config = requestFulfilled({ headers: {} });
+    vi.advanceTimersByTime(SLOW_REQUEST_MS);
+    expect(isServerSlow()).toBe(true);
+
+    await expect(responseRejected({ config, response: { status: 500, data: {} } })).rejects.toBeInstanceOf(ApiClientError);
+    expect(isServerSlow()).toBe(false);
+  });
+
+  it('never flags a request that finishes quickly, or a long-running upload', () => {
+    const quick = requestFulfilled({ headers: {} });
+    responseFulfilled({ config: quick });
+    const upload = requestFulfilled({ headers: {}, longRunning: true });
+    vi.advanceTimersByTime(SLOW_REQUEST_MS * 20);
+    expect(isServerSlow()).toBe(false);
+    responseFulfilled({ config: upload });
   });
 });
 

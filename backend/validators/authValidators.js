@@ -1,5 +1,6 @@
 const { body } = require('express-validator');
-const { FULL_NAME, GMAIL, PH_PHONE, OTP, STRONG_PASSWORD } = require('./patterns');
+const { FULL_NAME, GMAIL, PH_PHONE, OTP, STRONG_PASSWORD, WHITESPACE } = require('./patterns');
+const { findBarangayByName } = require('../utils/dagupanBarangays');
 const { ROLES } = require('../utils/constants');
 const { toNameCase } = require('../utils/nameCase');
 const { normalizePhToE164 } = require('../utils/phoneFormat');
@@ -10,24 +11,35 @@ const firstNameChain = body('firstName')
   .trim()
   .customSanitizer(toNameCase)
   .matches(FULL_NAME)
-  .withMessage('First name must start with an uppercase letter and contain only letters, spaces, hyphens, or periods (min 2 characters)');
+  .withMessage('First name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes (min 2 characters)');
 
 const lastNameChain = body('lastName')
   .trim()
   .customSanitizer(toNameCase)
   .matches(FULL_NAME)
-  .withMessage('Last name must start with an uppercase letter and contain only letters, spaces, hyphens, or periods (min 2 characters)');
+  .withMessage('Last name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes (min 2 characters)');
 
 const emailChain = body('email').trim().toLowerCase().matches(GMAIL).withMessage('Email must be a valid @gmail.com address');
 
-const phoneChain = body('phone')
-  .trim()
-  .customSanitizer(normalizePhToE164)
-  .matches(PH_PHONE)
-  .withMessage('Phone must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX)');
+const buildPhoneChain = () =>
+  body('phone')
+    .trim()
+    .customSanitizer(normalizePhToE164)
+    .matches(PH_PHONE)
+    .withMessage('Phone must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX)');
 
+const phoneChain = buildPhoneChain();
+
+// Spaces are rejected first with their own message, then the strength rules apply.
 const strongPasswordChain = (field = 'password') =>
   body(field)
+    .isString()
+    .withMessage('Password is required')
+    .bail()
+    .not()
+    .matches(WHITESPACE)
+    .withMessage('Password must not contain spaces.')
+    .bail()
     .matches(STRONG_PASSWORD)
     .withMessage('Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character');
 
@@ -41,7 +53,7 @@ const emergencyContactNameChain = body('emergencyContact.name')
   .trim()
   .customSanitizer(toNameCase)
   .matches(FULL_NAME)
-  .withMessage('Emergency contact name must start with an uppercase letter and contain only letters, spaces, hyphens, or periods (min 2 characters)');
+  .withMessage('Emergency contact name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes (min 2 characters)');
 
 const emergencyContactPhoneChain = body('emergencyContact.phone')
   .if((value, { req }) => req.body.role === ROLES.TENANT)
@@ -80,7 +92,27 @@ const resetPasswordValidators = [emailChain, body('code').matches(OTP).withMessa
 
 const changePasswordValidators = [body('currentPassword').notEmpty(), strongPasswordChain('newPassword')];
 
-const createCaretakerValidators = [firstNameChain, lastNameChain, emailChain, phoneChain];
+// Caretakers only: the barangay they work in, used to suggest them for properties there.
+// Chains are built fresh each time: calling .optional() on a shared chain would change it everywhere it's used.
+const buildServiceBarangayChain = () =>
+  body('serviceBarangay')
+    .trim()
+    .notEmpty()
+    .withMessage('Select the barangay this caretaker works in')
+    .bail()
+    .custom((value) => {
+      if (!findBarangayByName(value)) throw new Error('Select a valid Dagupan City barangay from the list');
+      return true;
+    });
+
+const createCaretakerValidators = [firstNameChain, lastNameChain, emailChain, phoneChain, buildServiceBarangayChain()];
+
+// Landlords may update a caretaker's contact number and service area; the name and email are their identity and stay fixed.
+const updateCaretakerValidators = [
+  body(['firstName', 'lastName', 'fullName', 'email']).not().exists().withMessage("A caretaker's name and email cannot be changed"),
+  buildPhoneChain().optional(),
+  buildServiceBarangayChain().optional(),
+];
 
 const activateCaretakerValidators = [body('token').notEmpty(), strongPasswordChain('password')];
 
@@ -100,6 +132,7 @@ module.exports = {
   resetPasswordValidators,
   changePasswordValidators,
   createCaretakerValidators,
+  updateCaretakerValidators,
   activateCaretakerValidators,
   accountRecoveryValidators,
   mfaPreferenceValidators,

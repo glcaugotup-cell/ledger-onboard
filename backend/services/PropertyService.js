@@ -2,10 +2,11 @@ const PropertyRepository = require('../repositories/PropertyRepository');
 const RoomRepository = require('../repositories/RoomRepository');
 const ReviewRepository = require('../repositories/PropertyReviewRepository');
 const UserRepository = require('../repositories/UserRepository');
+const ReservationRepository = require('../repositories/ReservationRepository');
 const FileStorageService = require('./FileStorageService');
 const { FILE_CATEGORIES } = require('./FileStorageService');
 const ApiError = require('../utils/ApiError');
-const { LISTING_STATUS, ROLES, VERIFICATION_STATUS } = require('../utils/constants');
+const { ACCOUNT_STATUS, LISTING_STATUS, RESERVATION_STATUS, ROLES, VERIFICATION_STATUS } = require('../utils/constants');
 
 /**
  * Tenant discovery (search/filter) and landlord listing management.
@@ -13,7 +14,9 @@ const { LISTING_STATUS, ROLES, VERIFICATION_STATUS } = require('../utils/constan
  */
 class PropertyService {
   async search(filters, pagination) {
-    const properties = await PropertyRepository.search(filters, pagination);
+    // Listings of closed/suspended landlord accounts stay in the database but are hidden from tenants.
+    const excludeLandlordIds = await this._inactiveLandlordIds();
+    const properties = await PropertyRepository.search(filters, pagination, { excludeLandlordIds });
     const list = await this._withLandlordVerifiedFlag(properties);
     return this._withStartingRent(list);
   }
@@ -51,14 +54,26 @@ class PropertyService {
     return isArray ? list : list[0];
   }
 
-  /** Landlord's own listings regardless of moderation status (draft/pending/rejected/approved). */
+  async _inactiveLandlordIds() {
+    const landlords = await UserRepository.find({ role: ROLES.LANDLORD, accountStatus: { $ne: ACCOUNT_STATUS.ACTIVE } }, { select: '_id' });
+    return landlords.map((l) => l._id);
+  }
+
+  /** True when the listing's landlord can currently take reservations (their account is active). */
+  async isLandlordActive(property) {
+    const landlord = await UserRepository.findById(property.landlordId, { select: 'accountStatus' });
+    return landlord?.accountStatus === ACCOUNT_STATUS.ACTIVE;
+  }
+
+  /** Landlord's own listings regardless of moderation status (draft/pending/rejected/approved); deleted ones are left out. */
   async listMine(landlordId) {
-    return PropertyRepository.findByLandlord(landlordId);
+    const properties = await PropertyRepository.findByLandlord(landlordId);
+    return properties.filter((p) => !p.deletedAt);
   }
 
   async getPublicDetail(propertyId) {
     const property = await PropertyRepository.findById(propertyId);
-    if (!property || property.listingStatus !== LISTING_STATUS.APPROVED) {
+    if (!property || property.listingStatus !== LISTING_STATUS.APPROVED || !(await this.isLandlordActive(property))) {
       throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
     }
     const [rooms, reviews] = await Promise.all([
@@ -70,8 +85,7 @@ class PropertyService {
 
   /** Owner/admin detail view — not gated by listingStatus. */
   async getDetailForManagement(propertyId, requester) {
-    const property = await PropertyRepository.findById(propertyId);
-    if (!property) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
+    const property = await this._findManageable(propertyId);
     this._assertLandlordOwnsOrAdmin(property, requester);
     const rooms = await RoomRepository.findByProperty(propertyId);
     return { property, rooms };
@@ -104,8 +118,7 @@ class PropertyService {
   }
 
   async update(propertyId, requester, updates, media = {}) {
-    const property = await PropertyRepository.findById(propertyId);
-    if (!property) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
+    const property = await this._findManageable(propertyId);
     this._assertLandlordOwnsOrAdmin(property, requester);
 
     // Whitelist editable fields — landlordId/listingStatus (moderation) are not client-editable here.
@@ -138,13 +151,46 @@ class PropertyService {
     return updated;
   }
 
+  /**
+   * "Deletes" a listing as a soft delete: it is marked deleted and inactive, so it
+   * disappears from search, the public page and the landlord's list, but the
+   * property, its rooms, photos, reservations, bills, payments, readings and
+   * reviews all stay in the database and remain traceable in billing/payment
+   * history. Refused while tenants still live there, and while reservation
+   * requests are waiting for an answer.
+   */
   async delete(propertyId, requester) {
-    const property = await PropertyRepository.findById(propertyId);
-    if (!property) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
+    const property = await this._findManageable(propertyId);
     this._assertLandlordOwnsOrAdmin(property, requester);
-    await PropertyRepository.deleteById(propertyId);
-    await FileStorageService.deleteByUrls([...(property.images || []), property.videoUrl].filter(Boolean));
+
+    const currentTenants = await ReservationRepository.count({ propertyId, status: RESERVATION_STATUS.APPROVED });
+    if (currentTenants > 0) {
+      throw ApiError.conflict(
+        `This property still has ${currentTenants} current tenant${currentTenants === 1 ? '' : 's'}. Complete or cancel their reservations before deleting it.`,
+        'PROPERTY_HAS_TENANTS'
+      );
+    }
+    const pendingRequests = await ReservationRepository.count({ propertyId, status: RESERVATION_STATUS.PENDING });
+    if (pendingRequests > 0) {
+      throw ApiError.conflict(
+        `This property has ${pendingRequests} reservation request${pendingRequests === 1 ? '' : 's'} waiting for an answer. Approve or reject ${pendingRequests === 1 ? 'it' : 'them'} before deleting the property.`,
+        'PROPERTY_HAS_PENDING_REQUESTS'
+      );
+    }
+
+    await PropertyRepository.updateById(propertyId, {
+      listingStatus: LISTING_STATUS.INACTIVE,
+      deletedAt: new Date(),
+      deletedBy: requester.id,
+    });
     return { deleted: true };
+  }
+
+  /** Loads a property that hasn't been (soft-)deleted, for owner/admin management actions. */
+  async _findManageable(propertyId) {
+    const property = await PropertyRepository.findById(propertyId);
+    if (!property || property.deletedAt) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
+    return property;
   }
 
   /** Saves uploaded photos/video to GridFS; `stored` lists everything saved, for rollback. */
@@ -170,8 +216,7 @@ class PropertyService {
     if (![LISTING_STATUS.APPROVED, LISTING_STATUS.REJECTED].includes(status)) {
       throw ApiError.badRequest('Invalid moderation status', 'INVALID_STATUS');
     }
-    const property = await PropertyRepository.findById(propertyId);
-    if (!property) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
+    await this._findManageable(propertyId);
     return PropertyRepository.updateById(propertyId, { listingStatus: status, moderationReason: reason || null });
   }
 
@@ -179,10 +224,52 @@ class PropertyService {
     return RoomRepository.findByProperty(propertyId);
   }
 
-  async assignCaretaker(propertyId, requester, caretakerId) {
-    const property = await PropertyRepository.findById(propertyId);
-    if (!property) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
+  /**
+   * The landlord's active caretakers for this property, each marked `suitable` when
+   * their service barangay matches the property's barangay, with a plain-language
+   * reason. Suitable caretakers come first; the landlord still chooses and confirms.
+   */
+  async listCaretakerSuggestions(propertyId, requester) {
+    const property = await this._findManageable(propertyId);
     this._assertLandlordOwnsOrAdmin(property, requester);
+
+    const barangay = property.address?.barangay || '';
+    const caretakers = await UserRepository.findCaretakersByLandlord(property.landlordId, { accountStatus: ACCOUNT_STATUS.ACTIVE });
+    const assigned = new Set((property.caretakerIds || []).map(String));
+
+    const suggestions = caretakers.map((c) => {
+      const suitable = Boolean(c.serviceBarangay) && c.serviceBarangay.toLowerCase() === barangay.toLowerCase();
+      let matchReason;
+      if (suitable) matchReason = `Works in ${c.serviceBarangay}, the same barangay as this property`;
+      else if (c.serviceBarangay) matchReason = `Works in ${c.serviceBarangay}, not ${barangay}`;
+      else matchReason = 'No service barangay set for this caretaker yet';
+      return {
+        _id: c._id,
+        fullName: c.fullName,
+        email: c.email,
+        phone: c.phone,
+        serviceBarangay: c.serviceBarangay || null,
+        suitable,
+        matchReason,
+        assigned: assigned.has(String(c._id)),
+      };
+    });
+    suggestions.sort((a, b) => Number(b.suitable) - Number(a.suitable) || a.fullName.localeCompare(b.fullName));
+    return { propertyBarangay: barangay, caretakers: suggestions };
+  }
+
+  /** Explicit assignment chosen and confirmed by the landlord (or an admin). */
+  async assignCaretaker(propertyId, requester, caretakerId) {
+    const property = await this._findManageable(propertyId);
+    this._assertLandlordOwnsOrAdmin(property, requester);
+
+    const caretaker = await UserRepository.findById(caretakerId);
+    if (!caretaker || caretaker.role !== ROLES.CARETAKER || String(caretaker.assignedLandlordId) !== String(property.landlordId)) {
+      throw ApiError.badRequest("This caretaker doesn't work for this property's landlord", 'INVALID_CARETAKER');
+    }
+    if (caretaker.accountStatus !== ACCOUNT_STATUS.ACTIVE) {
+      throw ApiError.badRequest('Only an active caretaker account can be assigned', 'CARETAKER_NOT_ACTIVE');
+    }
 
     if (!property.caretakerIds.some((id) => String(id) === String(caretakerId))) {
       property.caretakerIds.push(caretakerId);

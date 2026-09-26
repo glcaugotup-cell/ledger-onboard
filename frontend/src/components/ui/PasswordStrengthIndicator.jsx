@@ -1,4 +1,4 @@
-import { getPasswordStrength } from '../../utils/validators.js';
+import { PASSWORD_SPACES_MESSAGE, getPasswordStrength } from '../../utils/validators.js';
 
 /** One color per level — the single source for every password form's strength bar. */
 const LEVEL_STYLES = {
@@ -41,6 +41,12 @@ export default function PasswordStrengthIndicator({ password, className = '' }) 
       <p className={`mt-1 text-xs font-medium transition-colors duration-200 ease-out ${style ? style.text : 'text-gray-400'}`} aria-live="polite">
         Password strength: {label}
       </p>
+      {/* Shown as soon as a space is typed; every new-password field renders this indicator. */}
+      {/\s/.test(password || '') && (
+        <p className="mt-1 text-xs font-medium text-red-600" role="alert">
+          {PASSWORD_SPACES_MESSAGE}
+        </p>
+      )}
     </div>
   );
 }

@@ -5,7 +5,7 @@ const LandlordVerificationController = require('../controllers/landlord/Landlord
 const { authenticate } = require('../middleware/auth');
 const { requireRole } = require('../middleware/rbac');
 const validate = require('../middleware/validate');
-const { createCaretakerValidators } = require('../validators/authValidators');
+const { createCaretakerValidators, updateCaretakerValidators } = require('../validators/authValidators');
 const { objectIdParam } = require('../validators/commonValidators');
 const { documentParamValidators } = require('../validators/landlordVerificationValidators');
 const { landlordVerificationUpload } = require('../middleware/upload');
@@ -16,7 +16,7 @@ caretakersRouter.use(authenticate);
 // Only an authenticated landlord may create a caretaker (there is no public caretaker registration).
 caretakersRouter.post('/caretakers', requireRole(ROLES.LANDLORD), createCaretakerValidators, validate, CaretakerController.create);
 caretakersRouter.get('/caretakers', requireRole(ROLES.LANDLORD), CaretakerController.list);
-caretakersRouter.patch('/caretakers/:id', requireRole(ROLES.LANDLORD), objectIdParam('id'), validate, CaretakerController.update);
+caretakersRouter.patch('/caretakers/:id', requireRole(ROLES.LANDLORD), objectIdParam('id'), updateCaretakerValidators, validate, CaretakerController.update);
 
 // Analytics is mounted at /api/analytics/landlord.
 const analyticsRouter = express.Router();

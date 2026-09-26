@@ -13,6 +13,11 @@ class AdminApi extends BaseApiClient {
     return this.patch(`/admin/users/${id}/status`, payload);
   }
 
+  /** Admin-confirmed deactivation of an account inactive for 60+ days. */
+  deactivateInactive(id, reason) {
+    return this.post(`/admin/users/${id}/deactivate-inactive`, { reason });
+  }
+
   listPendingLandlordVerifications() {
     return this.get('/admin/landlord-verifications/pending');
   }

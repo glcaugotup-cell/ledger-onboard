@@ -10,7 +10,7 @@ import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.j
 const { useAuthMock, useNotificationsMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), useNotificationsMock: vi.fn() }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
-vi.mock('../../services/CaretakerApi.js', () => ({ default: { list: vi.fn(), create: vi.fn() } }));
+vi.mock('../../services/CaretakerApi.js', () => ({ default: { list: vi.fn(), create: vi.fn(), update: vi.fn() } }));
 
 function renderPage() {
   return render(
@@ -25,6 +25,7 @@ async function fillValidForm(user) {
   await user.type(screen.getByLabelText('Last name'), 'Reyes');
   await user.type(screen.getByLabelText(/email/i), 'pedro.reyes@gmail.com');
   await user.type(screen.getByLabelText(/phone/i), '09171234567');
+  await user.selectOptions(screen.getByLabelText('Service barangay'), 'Bonuan Gueset');
 }
 
 describe('CaretakersPage', () => {
@@ -78,9 +79,44 @@ describe('CaretakersPage', () => {
         lastName: 'Reyes',
         email: 'pedro.reyes@gmail.com',
         phone: '09171234567',
+        serviceBarangay: 'Bonuan Gueset',
       });
     });
     expect(await screen.findByText(/invitation sent to pedro.reyes@gmail.com/i)).toBeInTheDocument();
+  });
+
+  it('requires a service barangay and capitalizes names as they are typed (but not the email)', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(/no caretakers yet/i);
+
+    await user.type(screen.getByLabelText('First name'), "o'connor");
+    expect(screen.getByLabelText('First name')).toHaveValue("O'connor");
+    await user.type(screen.getByLabelText(/email/i), 'pedro@gmail.com');
+    expect(screen.getByLabelText(/email/i)).toHaveValue('pedro@gmail.com');
+
+    await user.click(screen.getByRole('button', { name: /send activation invite/i }));
+    expect(CaretakerApi.create).not.toHaveBeenCalled();
+    expect(screen.getByText('Select the barangay this caretaker works in')).toBeInTheDocument();
+    // Submitting normalizes the name the same way the server does.
+    expect(screen.getByLabelText('First name')).toHaveValue("O'Connor");
+  });
+
+  it('lets the landlord set an existing caretaker\'s service barangay', async () => {
+    CaretakerApi.list.mockResolvedValue({
+      caretakers: [{ _id: 'c1', fullName: 'Carlo Cruz', email: 'carlo@gmail.com', phone: '09170000000', accountStatus: 'active', serviceBarangay: null }],
+    });
+    CaretakerApi.update.mockResolvedValue({
+      caretaker: { _id: 'c1', fullName: 'Carlo Cruz', email: 'carlo@gmail.com', phone: '09170000000', accountStatus: 'active', serviceBarangay: 'Lucao' },
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByText('not set yet')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Service barangay for Carlo Cruz'), 'Lucao');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(CaretakerApi.update).toHaveBeenCalledWith('c1', { serviceBarangay: 'Lucao' }));
+    expect(await screen.findByText('Lucao', { selector: 'span' })).toBeInTheDocument();
   });
 
   it('surfaces a server-side duplicate-email error', async () => {

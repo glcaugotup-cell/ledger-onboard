@@ -14,7 +14,7 @@ class RoomService {
 
   async create(propertyId, requester, data) {
     const property = await PropertyRepository.findById(propertyId);
-    if (!property) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
+    if (!property || property.deletedAt) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
     this._assertLandlordOwnsOrAdmin(property, requester);
 
     return RoomRepository.create({
@@ -33,6 +33,7 @@ class RoomService {
     const room = await RoomRepository.findById(roomId);
     if (!room) throw ApiError.notFound('Room not found', 'ROOM_NOT_FOUND');
     const property = await PropertyRepository.findById(room.propertyId);
+    if (!property || property.deletedAt) throw ApiError.notFound('Room not found', 'ROOM_NOT_FOUND');
     this._assertLandlordOwnsOrAdmin(property, requester);
 
     const allowed = ['roomNumber', 'description', 'capacity', 'monthlyBaseRent', 'amenities', 'status'];

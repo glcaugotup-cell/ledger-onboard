@@ -5,7 +5,7 @@ const { authenticate, optionalAuthenticate } = require('../middleware/auth');
 const { requireRole } = require('../middleware/rbac');
 const validate = require('../middleware/validate');
 const { objectIdParam } = require('../validators/commonValidators');
-const { searchValidators, createPropertyValidators, updatePropertyValidators } = require('../validators/propertyValidators');
+const { searchValidators, createPropertyValidators, updatePropertyValidators, assignCaretakerValidators } = require('../validators/propertyValidators');
 const { createRoomValidators } = require('../validators/roomValidators');
 const { submitReviewValidators } = require('../validators/reviewValidators');
 const { propertyMediaUpload, assertMediaSizeLimits } = require('../middleware/upload');
@@ -49,6 +49,25 @@ router.patch(
   PropertyController.update
 );
 router.delete('/:id', authenticate, requireRole(ROLES.LANDLORD, ROLES.ADMIN), objectIdParam('id'), validate, PropertyController.remove);
+
+// Caretaker assignment: suggestions are ranked by location (same barangay as the property); assigning is an explicit landlord action.
+router.get(
+  '/:id/caretakers',
+  authenticate,
+  requireRole(ROLES.LANDLORD, ROLES.ADMIN),
+  objectIdParam('id'),
+  validate,
+  PropertyController.listCaretakerSuggestions
+);
+router.post(
+  '/:id/caretakers',
+  authenticate,
+  requireRole(ROLES.LANDLORD, ROLES.ADMIN),
+  objectIdParam('id'),
+  assignCaretakerValidators,
+  validate,
+  PropertyController.assignCaretaker
+);
 
 router.get('/:id/rooms', objectIdParam('id'), validate, PropertyController.listRooms);
 router.post(

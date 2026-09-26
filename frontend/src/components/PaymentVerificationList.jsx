@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import PaymentApi from '../services/PaymentApi.js';
 import Card from './ui/Card.jsx';
 import Button from './ui/Button.jsx';
+import ReasonDialog from './ReasonDialog.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState } from './ui/Feedback.jsx';
 
 const STATUS_TONE = { PENDING: 'yellow', VERIFIED: 'green', REJECTED: 'red' };
@@ -26,6 +27,7 @@ export default function PaymentVerificationList({ canVerify }) {
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [rejecting, setRejecting] = useState(null); // payment id awaiting a rejection reason
 
   const load = () => {
     setLoading(true);
@@ -37,11 +39,11 @@ export default function PaymentVerificationList({ canVerify }) {
 
   useEffect(load, []);
 
-  const verify = async (id, approve) => {
+  const verify = async (id, approve, reason) => {
     setBusyId(id);
     setError('');
     try {
-      const rejectionReason = approve ? undefined : prompt('Reason for rejecting this payment?') || 'Not specified';
+      const rejectionReason = approve ? undefined : reason || 'Not specified';
       await PaymentApi.verify(id, { approve, rejectionReason });
       load();
     } catch (err) {
@@ -81,7 +83,7 @@ export default function PaymentVerificationList({ canVerify }) {
                       <Button loading={busyId === p._id} onClick={() => verify(p._id, true)}>
                         Verify
                       </Button>
-                      <Button variant="danger" loading={busyId === p._id} onClick={() => verify(p._id, false)}>
+                      <Button variant="danger" loading={busyId === p._id} onClick={() => setRejecting(p._id)}>
                         Reject
                       </Button>
                     </div>
@@ -111,6 +113,21 @@ export default function PaymentVerificationList({ canVerify }) {
             ))}
           </div>
         </>
+      )}
+      {rejecting && (
+        <ReasonDialog
+          open
+          title="Reject this payment?"
+          message="The tenant will be told the payment could not be verified. Add a reason so they know what to fix (optional)."
+          required={false}
+          confirmLabel="Reject payment"
+          onConfirm={(reason) => {
+            const id = rejecting;
+            setRejecting(null);
+            verify(id, false, reason);
+          }}
+          onCancel={() => setRejecting(null)}
+        />
       )}
     </div>
   );

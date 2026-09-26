@@ -10,7 +10,7 @@ const { generateOtp, hashOtp, compareOtp } = require('../utils/otp');
 const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 const { sanitizeUser } = require('../utils/sanitize');
 const { deriveFullName } = require('../utils/name');
-const { ROLES, ACCOUNT_STATUS } = require('../utils/constants');
+const { ROLES, ACCOUNT_STATUS, RESERVATION_STATUS } = require('../utils/constants');
 const env = require('../config/env');
 
 const OTP_MAX_ATTEMPTS = 5;
@@ -184,6 +184,16 @@ class AuthService {
       scheduledArchiveAt: null,
     });
 
+    if (user.role === ROLES.TENANT) {
+      // Fire-and-forget: any bill due-date reminder the daily job missed is sent on sign-in.
+      require('./BillingReminderService')
+        .runForTenant(user._id)
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('[AuthService] bill reminder check failed:', err.message);
+        });
+    }
+
     return { user: sanitizeUser(user), accessToken, refreshToken };
   }
 
@@ -345,22 +355,15 @@ class AuthService {
     return sanitizeUser(updated);
   }
 
-  /** Whitelisted self-edit: email, role, status and lifecycle fields are never client-editable. */
+  /**
+   * Whitelisted self-edit. Name and email are the registered identity and are never
+   * editable here (the validators reject them too), nor are role, status and lifecycle fields.
+   */
   async updateProfile(userId, updates) {
-    const allowed = ['firstName', 'lastName', 'phone', 'profilePhotoUrl', 'notificationPreferences'];
+    const allowed = ['phone', 'profilePhotoUrl', 'notificationPreferences'];
     const safeUpdates = {};
     for (const key of allowed) {
       if (updates[key] !== undefined) safeUpdates[key] = updates[key];
-    }
-
-    // findByIdAndUpdate skips document middleware, so keep the derived fullName in sync here.
-    if (safeUpdates.firstName !== undefined || safeUpdates.lastName !== undefined) {
-      const current = await UserRepository.findById(userId);
-      if (!current) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
-      safeUpdates.fullName = deriveFullName(
-        safeUpdates.firstName !== undefined ? safeUpdates.firstName : current.firstName,
-        safeUpdates.lastName !== undefined ? safeUpdates.lastName : current.lastName
-      );
     }
 
     const updated = await UserRepository.updateById(userId, safeUpdates);
@@ -368,15 +371,56 @@ class AuthService {
     return sanitizeUser(updated);
   }
 
-  /** Self-service account closure. Never hard-deletes: marks the account deactivated and keeps its history. */
+  /**
+   * Self-service account closure ("Delete Account") for tenants, landlords and caretakers.
+   * Never hard-deletes: the account is marked deactivated (login blocked) and every
+   * reservation, bill, payment, review, reading, property and audit record stays linked to it.
+   * A landlord's listings stop appearing in search while the account is closed (see
+   * PropertyService), and closure is refused while tenants still depend on the landlord.
+   */
   async deactivateOwnAccount(userId) {
-    await UserRepository.updateById(userId, { accountStatus: ACCOUNT_STATUS.DEACTIVATED, refreshTokenHash: null });
-    return { message: 'Your account has been deactivated.' };
+    const user = await UserRepository.findById(userId);
+    if (!user) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
+    if (user.role === ROLES.ADMIN) {
+      throw ApiError.forbidden('Admin accounts cannot be closed from the profile', 'CANNOT_CLOSE_ADMIN');
+    }
+
+    if (user.role === ROLES.LANDLORD) {
+      // Required lazily: PropertyRepository/ReservationRepository aren't otherwise needed by auth.
+      const PropertyRepository = require('../repositories/PropertyRepository');
+      const ReservationRepository = require('../repositories/ReservationRepository');
+      const properties = await PropertyRepository.findByLandlord(userId);
+      const open = await ReservationRepository.count({
+        propertyId: { $in: properties.map((p) => p._id) },
+        status: { $in: [RESERVATION_STATUS.PENDING, RESERVATION_STATUS.APPROVED] },
+      });
+      if (open > 0) {
+        throw ApiError.conflict(
+          `You still have ${open} pending or current reservation${open === 1 ? '' : 's'}. Answer the pending requests and complete or cancel current tenancies before closing your account.`,
+          'LANDLORD_HAS_OPEN_RESERVATIONS'
+        );
+      }
+    }
+
+    await UserRepository.updateById(userId, {
+      accountStatus: ACCOUNT_STATUS.DEACTIVATED,
+      statusReason: 'Closed by the account owner',
+      statusChangedAt: new Date(),
+      refreshTokenHash: null,
+    });
+    await AuditLogRepository.record({
+      action: 'ACCOUNT_CLOSED_BY_OWNER',
+      actorId: userId,
+      actorRole: user.role,
+      targetType: 'User',
+      targetId: userId,
+    });
+    return { message: 'Your account has been closed.' };
   }
 
   // ── Landlord-initiated caretaker creation & activation ──
 
-  async createCaretaker(landlordId, { firstName, lastName, email, phone }) {
+  async createCaretaker(landlordId, { firstName, lastName, email, phone, serviceBarangay }) {
     const existing = await UserRepository.findByEmail(email);
     if (existing) throw ApiError.conflict('An account with this email already exists', 'ACCOUNT_EXISTS');
 
@@ -391,6 +435,7 @@ class AuthService {
       phone,
       passwordHash: placeholderHash,
       role: ROLES.CARETAKER,
+      serviceBarangay,
       assignedLandlordId: landlordId,
       createdByLandlordId: landlordId,
       accountStatus: ACCOUNT_STATUS.PENDING_ACTIVATION,
@@ -437,16 +482,11 @@ class AuthService {
     if (!caretaker || String(caretaker.assignedLandlordId) !== String(landlordId)) {
       throw ApiError.notFound('Caretaker not found', 'CARETAKER_NOT_FOUND');
     }
-    const allowed = ['firstName', 'lastName', 'phone'];
+    // The caretaker's name and email are their identity; the landlord can update contact number and service area.
+    const allowed = ['phone', 'serviceBarangay'];
     const safeUpdates = {};
     for (const key of allowed) {
       if (updates[key] !== undefined) safeUpdates[key] = updates[key];
-    }
-    if (safeUpdates.firstName !== undefined || safeUpdates.lastName !== undefined) {
-      safeUpdates.fullName = deriveFullName(
-        safeUpdates.firstName !== undefined ? safeUpdates.firstName : caretaker.firstName,
-        safeUpdates.lastName !== undefined ? safeUpdates.lastName : caretaker.lastName
-      );
     }
     const updated = await UserRepository.updateById(caretakerId, safeUpdates);
     return sanitizeUser(updated);

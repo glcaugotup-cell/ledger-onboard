@@ -30,8 +30,10 @@ class EmailService {
     if (env.emailTransport === 'console') {
       // eslint-disable-next-line no-console
       console.log(`\n[EmailService] ---- (console transport, not actually sent) ----`);
+      // Never print real one-time codes in production logs (this transport is meant for development).
+      const loggedText = env.isProduction ? String(text).replace(/\b\d{6}\b/g, '******') : text;
       // eslint-disable-next-line no-console
-      console.log(`To: ${to}\nSubject: ${subject}\n${text}\n---------------------------------------------\n`);
+      console.log(`To: ${to}\nSubject: ${subject}\n${loggedText}\n---------------------------------------------\n`);
       return { accepted: [to], messageId: 'console-transport' };
     }
 
@@ -90,6 +92,15 @@ class EmailService {
       to,
       subject: 'Ledger OnBoard — Payment could not be verified',
       text: `Hi ${fullName},\n\nYour submitted payment could not be verified. Reason: ${reason || 'Not specified'}. Please contact your landlord/caretaker or resubmit proof.`,
+    });
+  }
+
+  sendBillReminderEmail(to, fullName, { periodLabel, amount, dueDateLabel, daysRemaining, reference }) {
+    const when = daysRemaining === 0 ? 'today' : `in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} (${dueDateLabel})`;
+    return this.send({
+      to,
+      subject: `Ledger OnBoard — Your ${periodLabel} bill is due ${daysRemaining === 0 ? 'today' : `in ${daysRemaining} days`}`,
+      text: `Hi ${fullName},\n\nThis is a reminder that your statement of account for ${periodLabel} (ref. ${reference}) is due ${when}.\n\nAmount due: PHP ${amount}\nDue date: ${dueDateLabel}\n\nYou can view the bill and submit your payment from the Billing page of your Ledger OnBoard account. If you have already paid, you can ignore this reminder.\n\nLedger OnBoard`,
     });
   }
 

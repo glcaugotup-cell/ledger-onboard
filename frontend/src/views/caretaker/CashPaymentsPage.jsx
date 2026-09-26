@@ -8,6 +8,8 @@ import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Field, Select, TextInput } from '../../components/ui/Field.jsx';
 import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
+import { describeApiError } from '../../utils/errors.js';
+import { validatePaymentAmount } from '../../utils/validators.js';
 
 export default function CashPaymentsPage() {
   const { user } = useAuth();
@@ -19,6 +21,7 @@ export default function CashPaymentsPage() {
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadError, setLoadError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
     BillingApi.list()
@@ -33,6 +36,13 @@ export default function CashPaymentsPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+    const selected = soas.find((s) => s._id === soaId);
+    const errors = {
+      soaId: selected ? null : 'Select a statement of account.',
+      amount: validatePaymentAmount(amount, selected?.remainingBalance),
+    };
+    setFieldErrors(errors);
+    if (errors.soaId || errors.amount) return;
     setLoading(true);
     try {
       const fd = new FormData();
@@ -45,7 +55,9 @@ export default function CashPaymentsPage() {
       setAmount('');
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      setError(err.message || 'Could not log cash payment.');
+      const { message, fieldErrors: serverErrors } = describeApiError(err);
+      setError(message || 'Could not log cash payment.');
+      setFieldErrors({ amount: serverErrors.amount, soaId: serverErrors.soaId });
     } finally {
       setLoading(false);
     }
@@ -55,12 +67,12 @@ export default function CashPaymentsPage() {
     <DashboardLayout>
       <h1 className="mb-4 text-xl font-semibold text-gray-900">Cash &amp; payments</h1>
       <Card title="Record cash collected on-site" className="mb-6 max-w-xl">
-        <form onSubmit={onSubmit} className="space-y-3">
+        <form onSubmit={onSubmit} noValidate className="space-y-3">
           <ErrorBanner message={loadError} />
           <ErrorBanner message={error} />
           <SuccessBanner message={success} />
-          <Field label="Statement of account">
-            <Select value={soaId} onChange={(e) => setSoaId(e.target.value)} required>
+          <Field label="Statement of account" error={fieldErrors.soaId}>
+            <Select value={soaId} onChange={(e) => setSoaId(e.target.value)} error={fieldErrors.soaId}>
               <option value="">Select a statement…</option>
               {soas.map((s) => (
                 <option key={s._id} value={s._id}>
@@ -69,8 +81,8 @@ export default function CashPaymentsPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Amount collected (₱)">
-            <TextInput type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+          <Field label="Amount collected (₱)" error={fieldErrors.amount}>
+            <TextInput type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} error={fieldErrors.amount} />
           </Field>
           <Button type="submit" loading={loading}>
             Log cash payment

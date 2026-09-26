@@ -6,6 +6,7 @@ import PropertyDetailContent from './PropertyDetailContent.jsx';
 import PropertyApi from '../services/PropertyApi.js';
 import ReservationApi from '../services/ReservationApi.js';
 import { mockAuthValue } from '../test/mockContexts.js';
+import { todayInputValue } from '../utils/validators.js';
 
 const { useAuthMock, navigateMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), navigateMock: vi.fn() }));
 vi.mock('../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
@@ -118,13 +119,59 @@ describe('PropertyDetailContent', () => {
     const user = userEvent.setup();
     renderContent();
 
+    const nextMonth = todayInputValue(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
     await user.click(await screen.findByRole('button', { name: /reserve this room/i }));
-    await user.type(screen.getByLabelText(/preferred move-in date/i), '2026-10-01');
+    await user.type(screen.getByLabelText(/preferred move-in date/i), nextMonth);
     await user.click(screen.getByRole('button', { name: /submit request/i }));
 
     await waitFor(() => {
-      expect(ReservationApi.create).toHaveBeenCalledWith({ roomId: 'r1', moveInDate: '2026-10-01' });
+      expect(ReservationApi.create).toHaveBeenCalledWith({ roomId: 'r1', moveInDate: nextMonth });
     });
     expect(await screen.findByText(/reservation request submitted/i)).toBeInTheDocument();
+  });
+
+  it('disables past days in the picker and rejects a typed past date', async () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated' }));
+    PropertyApi.getPublicDetail.mockResolvedValue(detail);
+    const user = userEvent.setup();
+    renderContent();
+
+    await user.click(await screen.findByRole('button', { name: /reserve this room/i }));
+    const input = screen.getByLabelText(/preferred move-in date/i);
+    expect(input).toHaveAttribute('min', todayInputValue());
+
+    const yesterday = todayInputValue(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    await user.type(input, yesterday);
+    expect(screen.getByText('Move-in date cannot be in the past.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /submit request/i }));
+    expect(ReservationApi.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts today', async () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated' }));
+    PropertyApi.getPublicDetail.mockResolvedValue(detail);
+    ReservationApi.create.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderContent();
+
+    await user.click(await screen.findByRole('button', { name: /reserve this room/i }));
+    await user.type(screen.getByLabelText(/preferred move-in date/i), todayInputValue());
+    await user.click(screen.getByRole('button', { name: /submit request/i }));
+    await waitFor(() => expect(ReservationApi.create).toHaveBeenCalledWith({ roomId: 'r1', moveInDate: todayInputValue() }));
+  });
+
+  it('shows the server’s move-in date error next to the field', async () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated' }));
+    PropertyApi.getPublicDetail.mockResolvedValue(detail);
+    ReservationApi.create.mockRejectedValue(
+      Object.assign(new Error('Validation failed'), { code: 'VALIDATION_ERROR', details: [{ field: 'moveInDate', message: 'Move-in date cannot be in the past.' }] })
+    );
+    const user = userEvent.setup();
+    renderContent();
+
+    await user.click(await screen.findByRole('button', { name: /reserve this room/i }));
+    await user.type(screen.getByLabelText(/preferred move-in date/i), todayInputValue());
+    await user.click(screen.getByRole('button', { name: /submit request/i }));
+    expect(await screen.findByText('Move-in date cannot be in the past.')).toBeInTheDocument();
   });
 });

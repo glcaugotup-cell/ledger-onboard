@@ -3,7 +3,8 @@
  * The backend remains the authoritative check.
  */
 export const PATTERNS = {
-  NAME: /^[A-Z][a-zA-Z\s.-]{1,}$/,
+  // Letters, spaces, hyphens, periods and apostrophes (O'Connor, D'Angelo).
+  NAME: /^[A-Z][a-zA-Z\s.'-]{1,}$/,
   GMAIL: /^[a-zA-Z0-9._%+-]+@gmail\.com$/,
   PH_PHONE: /^(09\d{9}|\+639\d{9})$/,
   OTP: /^\d{6}$/,
@@ -12,7 +13,7 @@ export const PATTERNS = {
 export function validateName(value) {
   if (!value) return 'This field is required';
   if (!PATTERNS.NAME.test(value)) {
-    return 'Must start with an uppercase letter and contain only letters, spaces, hyphens, or periods (min 2 characters)';
+    return 'Must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes (min 2 characters)';
   }
   return null;
 }
@@ -105,11 +106,50 @@ const MISSING_REQUIREMENT_TEXT = {
   special: 'a special character',
 };
 
+export const PASSWORD_SPACES_MESSAGE = 'Password must not contain spaces.';
+
 export function validatePassword(value) {
   if (!value) return 'Password is required';
+  if (/\s/.test(value)) return PASSWORD_SPACES_MESSAGE;
   const unmet = getPasswordChecklist(value).filter((r) => !r.met);
   if (unmet.length === 0) return null;
   const missing = unmet.map((r) => MISSING_REQUIREMENT_TEXT[r.key]);
   const list = missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`;
   return `Password needs ${list}`;
+}
+
+/** Today's date as a date-input value (YYYY-MM-DD) in the user's local time zone. */
+export function todayInputValue(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** Move-in must be today or later (the backend enforces the same rule). */
+export function validateMoveInDate(value, now = new Date()) {
+  if (!value) return 'Choose a move-in date.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return 'Enter a valid date.';
+  if (value < todayInputValue(now)) return 'Move-in date cannot be in the past.';
+  return null;
+}
+
+/** A payment must be more than zero and no more than what is still owed (the backend checks the same). */
+export function validatePaymentAmount(value, remainingBalance) {
+  if (value === '' || value === null || value === undefined) return 'Enter the amount.';
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return 'Amount must be greater than 0.';
+  if (!/^\d+(\.\d{1,2})?$/.test(String(value).trim())) return 'Use at most 2 decimal places.';
+  if (remainingBalance !== undefined && amount > remainingBalance) {
+    return `Amount cannot be more than the remaining balance of ₱${Number(remainingBalance).toLocaleString()}.`;
+  }
+  return null;
+}
+
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
+/** Matches the backend upload rules for proof/verification images (PNG, JPEG or WebP, 5 MB). */
+export function validateImageFile(file, { maxMb = 5, label = 'an image' } = {}) {
+  if (!file) return `Please attach ${label}.`;
+  if (!IMAGE_TYPES.includes(file.type)) return 'Only PNG, JPEG or WebP images are accepted.';
+  if (file.size > maxMb * 1024 * 1024) return `The image must be ${maxMb} MB or smaller.`;
+  return null;
 }

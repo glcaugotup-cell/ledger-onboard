@@ -20,6 +20,7 @@ class PaymentService {
     if (String(soa.tenantId) !== String(tenantId)) {
       throw ApiError.forbidden('This statement of account does not belong to you', 'FORBIDDEN_SOA_ACCESS');
     }
+    this._assertAmountWithinBalance(soa, amount);
     if (!proofFile) throw ApiError.badRequest('Proof of payment image is required', 'PROOF_IMAGE_REQUIRED');
 
     const proofImageURL = await FileStorageService.saveUpload(proofFile, FILE_CATEGORIES.PAYMENT_PROOFS);
@@ -44,6 +45,8 @@ class PaymentService {
     const soa = await BillingSOARepository.findById(soaId);
     if (!soa) throw ApiError.notFound('Statement of account not found', 'SOA_NOT_FOUND');
 
+    this._assertAmountWithinBalance(soa, amount);
+
     const room = await RoomRepository.findById(soa.roomId);
     const property = await PropertyRepository.findById(room.propertyId);
     const isAssigned = property.caretakerIds.some((id) => String(id) === String(caretaker.id));
@@ -60,6 +63,16 @@ class PaymentService {
       verificationStatus: VERIFICATION_STATUS.PENDING,
       timestamp: new Date(),
     });
+  }
+
+  /** A payment can't be more than what is still owed on the statement. */
+  _assertAmountWithinBalance(soa, amount) {
+    if (!(soa.remainingBalance > 0)) {
+      throw ApiError.badRequest('This statement is already fully paid', 'SOA_ALREADY_PAID');
+    }
+    if (Number(amount) > soa.remainingBalance) {
+      throw ApiError.badRequest(`Amount cannot be more than the remaining balance of ₱${soa.remainingBalance.toLocaleString('en-PH')}`, 'AMOUNT_EXCEEDS_BALANCE');
+    }
   }
 
   async listForRequester(requester) {

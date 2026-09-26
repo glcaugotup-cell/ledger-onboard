@@ -35,6 +35,11 @@ async function fillValidForm(user) {
   await user.click(screen.getByRole('checkbox'));
 }
 
+// The register-flow tests type every field of the form; under the full suite's
+// parallel load that can exceed vitest's default 5000ms per test (they pass
+// reliably alone). Same headroom as PropertyFormPage.test.jsx.
+vi.setConfig({ testTimeout: 15000 });
+
 describe('RegisterPage', () => {
   afterEach(() => {
     useAuthMock.mockReset();
@@ -43,7 +48,7 @@ describe('RegisterPage', () => {
     AuthApi.cancelRegistration.mockReset();
   });
 
-  it('auto-capitalizes a lowercase First Name on blur instead of showing an error', async () => {
+  it('capitalizes the first letter while typing, name-cases on blur, and shows no error', async () => {
     useAuthMock.mockReturnValue({ register: vi.fn() });
     const user = userEvent.setup();
     renderRegisterPage();
@@ -51,14 +56,14 @@ describe('RegisterPage', () => {
     const firstName = screen.getByLabelText(/first name/i);
     expect(screen.queryByText(/starts with an uppercase letter and contain only/i)).not.toBeInTheDocument();
 
-    // Not fought while typing — the raw keystrokes land exactly as typed.
-    await user.type(firstName, 'juan');
-    expect(firstName).toHaveValue('juan');
+    // Only the first letter is raised while typing; the rest lands exactly as typed.
+    await user.type(firstName, "juan o'connor");
+    expect(firstName).toHaveValue("Juan o'connor");
 
     await user.tab();
 
-    // Normalized on blur, and since "Juan" is valid, no error appears.
-    await waitFor(() => expect(firstName).toHaveValue('Juan'));
+    // Name-cased on blur (apostrophes included), and since it's valid, no error appears.
+    await waitFor(() => expect(firstName).toHaveValue("Juan O'Connor"));
     expect(screen.queryByText(/must start with an uppercase letter/i)).not.toBeInTheDocument();
   });
 

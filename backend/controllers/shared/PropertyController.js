@@ -55,6 +55,16 @@ class PropertyController {
     sendSuccess(res, { data: { property } });
   });
 
+  listCaretakerSuggestions = asyncHandler(async (req, res) => {
+    const result = await PropertyService.listCaretakerSuggestions(req.params.id, req.user);
+    sendSuccess(res, { data: result });
+  });
+
+  assignCaretaker = asyncHandler(async (req, res) => {
+    const property = await PropertyService.assignCaretaker(req.params.id, req.user, req.body.caretakerId);
+    sendSuccess(res, { data: { property } });
+  });
+
   listRooms = asyncHandler(async (req, res) => {
     const rooms = await RoomService.listByProperty(req.params.id);
     sendSuccess(res, { data: { rooms } });

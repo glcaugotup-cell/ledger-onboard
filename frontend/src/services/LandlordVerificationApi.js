@@ -1,8 +1,8 @@
-import { BaseApiClient } from './apiClient';
+import { BaseApiClient, UPLOAD_CONFIG } from './apiClient';
 
 class LandlordVerificationApi extends BaseApiClient {
   submit(formData) {
-    return this.post('/landlord/verification', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return this.post('/landlord/verification', formData, UPLOAD_CONFIG);
   }
 
   getMine() {

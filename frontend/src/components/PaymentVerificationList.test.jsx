@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PaymentVerificationList from './PaymentVerificationList.jsx';
@@ -59,18 +59,30 @@ describe('PaymentVerificationList', () => {
     expect(PaymentApi.list).toHaveBeenCalledTimes(2);
   });
 
-  it('rejects a payment using the prompted reason', async () => {
+  it('rejects a payment with the reason typed in the dialog', async () => {
     PaymentApi.list.mockResolvedValue({ payments: [pendingPayment] });
     PaymentApi.verify.mockResolvedValue({});
-    vi.spyOn(window, 'prompt').mockReturnValue('Blurry screenshot');
     const user = userEvent.setup();
     render(<PaymentVerificationList canVerify={() => true} />);
 
     await user.click(await screen.findByRole('button', { name: /^reject$/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Reason'), 'blurry screenshot');
+    await user.click(within(dialog).getByRole('button', { name: 'Reject payment' }));
 
     await waitFor(() => {
       expect(PaymentApi.verify).toHaveBeenCalledWith('pay1', { approve: false, rejectionReason: 'Blurry screenshot' });
     });
+  });
+
+  it('cancelling the rejection dialog leaves the payment pending', async () => {
+    PaymentApi.list.mockResolvedValue({ payments: [pendingPayment] });
+    const user = userEvent.setup();
+    render(<PaymentVerificationList canVerify={() => true} />);
+
+    await user.click(await screen.findByRole('button', { name: /^reject$/i }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(PaymentApi.verify).not.toHaveBeenCalled();
   });
 
   it('toggles and loads the proof image when "View proof" is clicked', async () => {

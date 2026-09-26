@@ -6,9 +6,10 @@ class PropertyRepository extends BaseRepository {
     super(Property);
   }
 
-  /** Public/tenant-facing search — approved listings only, with filters. */
-  search({ barangay, propertyType, tenantGenderPolicy, minRent, maxRent, university, text } = {}, { skip, limit } = {}) {
-    const filter = { listingStatus: 'approved' };
+  /** Public/tenant-facing search — approved listings only, with filters; `excludeLandlordIds` hides closed landlords' listings. */
+  search({ barangay, propertyType, tenantGenderPolicy, minRent, maxRent, university, text } = {}, { skip, limit } = {}, { excludeLandlordIds = [] } = {}) {
+    const filter = { listingStatus: 'approved', deletedAt: null };
+    if (excludeLandlordIds.length) filter.landlordId = { $nin: excludeLandlordIds };
     if (barangay) filter['address.barangay'] = new RegExp(`^${escapeRegex(barangay)}$`, 'i');
     if (propertyType) filter.propertyType = propertyType;
     if (tenantGenderPolicy) filter.tenantGenderPolicy = tenantGenderPolicy;

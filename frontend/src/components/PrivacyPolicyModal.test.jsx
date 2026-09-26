@@ -16,6 +16,9 @@ describe('PrivacyPolicyModal', () => {
     expect(screen.getByText(/respects your privacy/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Information We Collect' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Contact Us' })).toBeInTheDocument();
+    // Location use is explained, without claiming device tracking.
+    expect(screen.getByRole('heading', { name: 'Location (GPS) Information' })).toBeInTheDocument();
+    expect(screen.getByText(/does not read your device's GPS and does not track where you are/i)).toBeInTheDocument();
   });
 
   it('calls onClose when the X button is clicked', async () => {

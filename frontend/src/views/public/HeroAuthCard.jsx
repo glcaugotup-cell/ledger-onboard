@@ -32,7 +32,7 @@ import {
   validatePassword,
   validatePhone,
 } from '../../utils/validators.js';
-import { toNameCase } from '../../utils/textFormat.js';
+import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
 import logo from '../../assets/logo.webp';
 import houseWelcome from '../../assets/housedesign1.webp';
 import houseExplore from '../../assets/housedesign2.webp';
@@ -351,6 +351,14 @@ const EMERGENCY_CONTACT_VALIDATORS = {
   emergencyContactPhone: validatePhone,
 };
 
+// Applied on every keystroke to free-text name fields only: raises the first letter
+// ("juan" -> "Juan"). Emails, passwords, phone numbers and codes are never touched.
+const LIVE_FORMATTERS = {
+  firstName: capitalizeFirst,
+  lastName: capitalizeFirst,
+  emergencyContactName: capitalizeFirst,
+};
+
 // Applied on blur and again before submit; mirrors RegisterPage.jsx and the backend sanitizers.
 const NORMALIZERS = {
   firstName: toNameCase,
@@ -391,7 +399,8 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  function updateField(key, value) {
+  function updateField(key, rawValue) {
+    const value = LIVE_FORMATTERS[key] ? LIVE_FORMATTERS[key](rawValue) : rawValue;
     setForm((prev) => ({ ...prev, [key]: value }));
     const validate = FIELD_VALIDATORS[key] || EMERGENCY_CONTACT_VALIDATORS[key];
     if (validate && errors[key]) {
@@ -810,7 +819,8 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
                 >
                   Privacy Policy
                 </button>{' '}
-                — my information is used only to run this platform and won&apos;t be shared beyond that.
+                — my information, including property and service-area location (GPS) data, is used only to run this platform and won&apos;t be
+                shared beyond that.
               </span>
             </label>
             <FieldError message={touched.privacyConsent ? errors.privacyConsent : ''} />

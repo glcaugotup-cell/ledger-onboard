@@ -24,6 +24,11 @@ const billingSOASchema = new Schema(
     },
     dueDate: { type: Date, required: true },
     generatedAt: { type: Date, default: Date.now },
+    // When each due-date reminder went out, so a reminder is never sent twice for the same bill.
+    reminders: {
+      sevenDaySentAt: { type: Date, default: null },
+      threeDaySentAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );
@@ -31,5 +36,6 @@ const billingSOASchema = new Schema(
 billingSOASchema.index({ tenantId: 1 });
 billingSOASchema.index({ tenantId: 1, billingPeriod: 1 }, { unique: true });
 billingSOASchema.index({ paymentStatus: 1 });
+billingSOASchema.index({ paymentStatus: 1, dueDate: 1 }); // due-date reminder sweep
 
 module.exports = mongoose.models.BillingSOA || mongoose.model('BillingSOA', billingSOASchema);

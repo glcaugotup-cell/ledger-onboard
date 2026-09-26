@@ -7,6 +7,7 @@ import {
   Cog6ToothIcon,
   EnvelopeIcon,
   IdentificationIcon,
+  MapPinIcon,
   ShareIcon,
   ShieldCheckIcon,
   UserIcon,
@@ -29,6 +30,7 @@ const SECTIONS = [
           <li>Mobile number</li>
           <li>Account information</li>
           <li>Property and reservation information</li>
+          <li>Property locations (barangay and map coordinates) and caretaker service areas</li>
           <li>Information provided during registration and verification</li>
         </ul>
       </>
@@ -49,6 +51,30 @@ const SECTIONS = [
           <li>Improve the Ledger OnBoard platform</li>
           <li>Provide important system notifications</li>
         </ul>
+      </>
+    ),
+  },
+  {
+    icon: MapPinIcon,
+    title: 'Location (GPS) Information',
+    body: (
+      <>
+        <p className="mb-1.5">Ledger OnBoard uses location information only for its location-based features:</p>
+        <ul className="mb-1.5 list-inside list-disc space-y-0.5">
+          <li>
+            <span className="font-medium text-gray-700">Boarding house locations.</span> Each listing stores its barangay in Dagupan City and the map
+            (GPS) coordinates for that barangay, so tenants can see where a property is on the map and search by area.
+          </li>
+          <li>
+            <span className="font-medium text-gray-700">Caretaker service area.</span> A landlord records the barangay a caretaker works in, so the
+            system can suggest caretakers who work near a boarding house.
+          </li>
+        </ul>
+        <p>
+          Ledger OnBoard does not read your device&apos;s GPS and does not track where you are or where you go. The location data it keeps is the
+          property and service-area location entered by landlords. If a future feature ever needs your device&apos;s location, your browser will ask
+          for your permission first, and you can say no. By agreeing to this policy, you consent to the use of location information described here.
+        </p>
       </>
     ),
   },

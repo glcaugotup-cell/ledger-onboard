@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -65,14 +65,16 @@ describe('ReviewModerationPage', () => {
     });
   });
 
-  it('hides a review using the prompted reason', async () => {
+  it('hides a review with the reason typed in the dialog', async () => {
     ReviewApi.listPendingModeration.mockResolvedValue(pending);
     ReviewApi.moderate.mockResolvedValue({});
-    vi.spyOn(window, 'prompt').mockReturnValue('Contains personal contact info');
     const user = userEvent.setup();
     renderPage();
 
     await user.click(await screen.findByRole('button', { name: /^hide$/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Reason'), 'Contains personal contact info');
+    await user.click(within(dialog).getByRole('button', { name: 'Hide review' }));
 
     await waitFor(() => {
       expect(ReviewApi.moderate).toHaveBeenCalledWith('rev1', { status: 'HIDDEN', reason: 'Contains personal contact info' });

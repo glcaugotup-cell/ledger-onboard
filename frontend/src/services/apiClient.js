@@ -34,10 +34,26 @@ export function mediaUrl(path) {
   return `${API_ORIGIN}${path}`;
 }
 
+/**
+ * The free Render backend sleeps when idle and takes about 50 seconds to wake
+ * up, so the first request after a quiet period needs well over that.
+ */
+export const REQUEST_TIMEOUT_MS = 70000;
+
+/** How long a request may run before the "server is waking up" notice shows. */
+export const SLOW_REQUEST_MS = 5000;
+
+/**
+ * Config for multipart uploads: no time limit, since sending photos or a video
+ * on a slow connection can take minutes, and no wake-up notice, since a slow
+ * upload is not a sleeping server.
+ */
+export const UPLOAD_CONFIG = { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 0, longRunning: true };
+
 const instance = axios.create({
   baseURL: `${API_ORIGIN}/api`,
   withCredentials: false, // auth is via Bearer token, not cookies
-  timeout: 20000,
+  timeout: REQUEST_TIMEOUT_MS,
 });
 
 let accessToken = null;
@@ -47,16 +63,59 @@ export function setAccessToken(token) {
   accessToken = token;
 }
 
+// Number of in-flight requests that have passed SLOW_REQUEST_MS; ServerWakeNotice listens.
+let slowRequests = 0;
+const slowListeners = new Set();
+
+function changeSlowRequests(delta) {
+  slowRequests += delta;
+  for (const listener of slowListeners) listener(slowRequests > 0);
+}
+
+export function isServerSlow() {
+  return slowRequests > 0;
+}
+
+/** Calls `listener(isSlow)` whenever that changes; returns an unsubscribe function. */
+export function onServerSlowChange(listener) {
+  slowListeners.add(listener);
+  return () => {
+    slowListeners.delete(listener);
+  };
+}
+
+function trackSlow(config) {
+  if (config.longRunning) return;
+  config.slowTimer = setTimeout(() => {
+    config.slowCounted = true;
+    changeSlowRequests(1);
+  }, SLOW_REQUEST_MS);
+}
+
+function settleSlow(config) {
+  if (!config) return;
+  clearTimeout(config.slowTimer);
+  if (config.slowCounted) {
+    config.slowCounted = false;
+    changeSlowRequests(-1);
+  }
+}
+
 instance.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
+  trackSlow(config);
   return config;
 });
 
 instance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    settleSlow(response.config);
+    return response;
+  },
   (error) => {
+    settleSlow(error.config);
     if (error.response) {
       const { status, data } = error.response;
       // Errors that never reached the backend (proxy or gateway pages) lack the
@@ -70,6 +129,10 @@ instance.interceptors.response.use(
       const code = envelope?.error?.code || 'UNKNOWN_ERROR';
       const details = envelope?.error?.details;
       return Promise.reject(new ApiClientError(message, code, status, details));
+    }
+    // Browsers also report a plain abort as ECONNABORTED, so check the message too.
+    if (error.code === 'ETIMEDOUT' || (error.code === 'ECONNABORTED' && /timeout/i.test(error.message || ''))) {
+      return Promise.reject(new ApiClientError('The server took too long to respond. Please try again.', 'TIMEOUT'));
     }
     if (error.request) {
       return Promise.reject(new ApiClientError('Unable to reach the server. Check your connection.', 'NETWORK_ERROR'));

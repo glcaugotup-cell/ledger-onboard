@@ -89,13 +89,13 @@ describe('PropertyFormPage', () => {
     expect(formData.getAll('amenities[]')).toEqual(['WiFi', 'Aircon']);
   });
 
-  it('title-cases the Street and Property name fields on blur, without fighting the user while typing', async () => {
+  it('capitalizes the first letter of Street and Property name while typing, and title-cases them on blur', async () => {
     const user = userEvent.setup();
     renderPage();
 
     const propertyName = screen.getByLabelText('Property name');
     await user.type(propertyName, 'calaycay boarding house');
-    expect(propertyName).toHaveValue('calaycay boarding house'); // untouched while typing
+    expect(propertyName).toHaveValue('Calaycay boarding house'); // only the first letter is raised while typing
     await user.tab();
     expect(propertyName).toHaveValue('Calaycay Boarding House');
 

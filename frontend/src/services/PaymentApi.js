@@ -1,8 +1,8 @@
-import { BaseApiClient } from './apiClient';
+import { BaseApiClient, UPLOAD_CONFIG } from './apiClient';
 
 class PaymentApi extends BaseApiClient {
   submit(formData) {
-    return this.post('/payments', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return this.post('/payments', formData, UPLOAD_CONFIG);
   }
 
   list() {

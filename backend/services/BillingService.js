@@ -97,6 +97,8 @@ class BillingService {
 
   async listForRequester(requester) {
     if (requester.role === ROLES.TENANT) {
+      // Catch up on any due-date reminders the daily job hasn't sent yet (never duplicates).
+      await this._sendDueRemindersFor(requester.id);
       const soas = await BillingSOARepository.findByTenant(requester.id);
       return Promise.all(soas.map((s) => this._withFreshOverdueStatus(s)));
     }
@@ -120,6 +122,17 @@ class BillingService {
       return Promise.all(soas.map((s) => this._withFreshOverdueStatus(s)));
     }
     return [];
+  }
+
+  async _sendDueRemindersFor(tenantId) {
+    try {
+      // Required lazily: BillingReminderService is optional to billing reads.
+      await require('./BillingReminderService').runForTenant(tenantId);
+    } catch (err) {
+      // A reminder problem must never block a tenant from seeing their bills.
+      // eslint-disable-next-line no-console
+      console.error('[BillingService] due-date reminder check failed:', err.message);
+    }
   }
 
   async getByIdForRequester(soaId, requester) {

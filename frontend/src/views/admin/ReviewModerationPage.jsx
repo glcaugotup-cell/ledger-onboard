@@ -3,6 +3,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import ReviewApi from '../../services/ReviewApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
+import ReasonDialog from '../../components/ReasonDialog.jsx';
 import { EmptyState, ErrorBanner, LoadingState } from '../../components/ui/Feedback.jsx';
 
 export default function ReviewModerationPage() {
@@ -10,6 +11,7 @@ export default function ReviewModerationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [moderating, setModerating] = useState(null); // { id, status } awaiting a reason
 
   const load = () => {
     setLoading(true);
@@ -21,8 +23,7 @@ export default function ReviewModerationPage() {
 
   useEffect(load, []);
 
-  const act = async (id, status) => {
-    const reason = status !== 'APPROVED' ? prompt('Reason?') || undefined : undefined;
+  const act = async (id, status, reason) => {
     setBusyId(id);
     try {
       await ReviewApi.moderate(id, { status, reason });
@@ -52,16 +53,31 @@ export default function ReviewModerationPage() {
               <Button loading={busyId === r._id} onClick={() => act(r._id, 'APPROVED')}>
                 Approve
               </Button>
-              <Button variant="danger" loading={busyId === r._id} onClick={() => act(r._id, 'REJECTED')}>
+              <Button variant="danger" loading={busyId === r._id} onClick={() => setModerating({ id: r._id, status: 'REJECTED' })}>
                 Reject
               </Button>
-              <Button variant="ghost" loading={busyId === r._id} onClick={() => act(r._id, 'HIDDEN')}>
+              <Button variant="ghost" loading={busyId === r._id} onClick={() => setModerating({ id: r._id, status: 'HIDDEN' })}>
                 Hide
               </Button>
             </div>
           </Card>
         ))}
       </div>
+      {moderating && (
+        <ReasonDialog
+          open
+          title={moderating.status === 'REJECTED' ? 'Reject this review?' : 'Hide this review?'}
+          message="The review won't be shown publicly. You can add a reason for the record (optional)."
+          required={false}
+          confirmLabel={moderating.status === 'REJECTED' ? 'Reject review' : 'Hide review'}
+          onConfirm={(reason) => {
+            const { id, status } = moderating;
+            setModerating(null);
+            act(id, status, reason || undefined);
+          }}
+          onCancel={() => setModerating(null)}
+        />
+      )}
     </DashboardLayout>
   );
 }

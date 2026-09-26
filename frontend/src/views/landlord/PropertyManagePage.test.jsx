@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,7 +13,7 @@ const { useAuthMock, useNotificationsMock, navigateMock } = vi.hoisted(() => ({
 }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
-vi.mock('../../services/PropertyApi.js', () => ({ default: { getForManagement: vi.fn(), remove: vi.fn(), createRoom: vi.fn(), updateRoom: vi.fn() } }));
+vi.mock('../../services/PropertyApi.js', () => ({ default: { getForManagement: vi.fn(), remove: vi.fn(), createRoom: vi.fn(), updateRoom: vi.fn(), listCaretakerSuggestions: vi.fn(), assignCaretaker: vi.fn() } }));
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return { ...actual, useNavigate: () => navigateMock };
@@ -44,6 +44,7 @@ describe('PropertyManagePage', () => {
     vi.clearAllMocks();
     useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 'l1', fullName: 'Landlord Cruz', role: 'landlord' } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    PropertyApi.listCaretakerSuggestions.mockResolvedValue({ propertyBarangay: 'Bonuan', caretakers: [] });
   });
 
   it('renders the property header and its rooms', async () => {
@@ -89,14 +90,32 @@ describe('PropertyManagePage', () => {
     expect(screen.getByText('Room added.')).toBeInTheDocument();
   });
 
-  it('deletes the property after confirmation and navigates away', async () => {
+  it('rejects invalid room values before sending', async () => {
+    PropertyApi.getForManagement.mockResolvedValue({ ...managementData, rooms: [] });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText(/no rooms yet/i);
+    await user.clear(screen.getByLabelText('Capacity'));
+    await user.type(screen.getByLabelText('Capacity'), '0');
+    await user.click(screen.getByRole('button', { name: /add room/i }));
+
+    expect(PropertyApi.createRoom).not.toHaveBeenCalled();
+    expect(screen.getByText('Room number is required')).toBeInTheDocument();
+    expect(screen.getByText('Capacity must be a whole number from 1 to 50')).toBeInTheDocument();
+    expect(screen.getByText('Rent must be a number from 0 to 1,000,000')).toBeInTheDocument();
+  });
+
+  it('deletes the property only after confirming in the dialog, then navigates away', async () => {
     PropertyApi.getForManagement.mockResolvedValue(managementData);
     PropertyApi.remove.mockResolvedValue({});
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const user = userEvent.setup();
     renderPage();
 
     await user.click(await screen.findByRole('button', { name: /delete property/i }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/kept on record, not erased/i)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Delete property' }));
 
     await waitFor(() => {
       expect(PropertyApi.remove).toHaveBeenCalledWith('p1');
@@ -104,14 +123,63 @@ describe('PropertyManagePage', () => {
     });
   });
 
-  it('does not delete when the confirmation is declined', async () => {
+  it('shows the reason in the dialog and stays on the page when deletion is refused (current tenants)', async () => {
     PropertyApi.getForManagement.mockResolvedValue(managementData);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    PropertyApi.remove.mockRejectedValue(
+      Object.assign(new Error('This property still has 1 current tenant. Complete or cancel their reservations before deleting it.'), {
+        code: 'PROPERTY_HAS_TENANTS',
+      })
+    );
     const user = userEvent.setup();
     renderPage();
 
     await user.click(await screen.findByRole('button', { name: /delete property/i }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete property' }));
 
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(/still has 1 current tenant/i);
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Room 101')).toBeInTheDocument();
+  });
+
+  it('does not delete when the dialog is cancelled', async () => {
+    PropertyApi.getForManagement.mockResolvedValue(managementData);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /delete property/i }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(PropertyApi.remove).not.toHaveBeenCalled();
+  });
+
+  it('suggests caretakers from the same barangay first, with the reason, and assigns only after confirmation', async () => {
+    PropertyApi.getForManagement.mockResolvedValue(managementData);
+    PropertyApi.listCaretakerSuggestions.mockResolvedValue({
+      propertyBarangay: 'Bonuan Gueset',
+      caretakers: [
+        { _id: 'c1', fullName: 'Near Cruz', suitable: true, assigned: false, matchReason: 'Works in Bonuan Gueset, the same barangay as this property' },
+        { _id: 'c2', fullName: 'Far Reyes', suitable: false, assigned: false, matchReason: 'Works in Lucao, not Bonuan Gueset' },
+      ],
+    });
+    PropertyApi.assignCaretaker.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage();
+
+    const near = (await screen.findByText('Near Cruz')).closest('li');
+    expect(within(near).getByText('Suitable')).toBeInTheDocument();
+    expect(within(near).getByText(/same barangay as this property/)).toBeInTheDocument();
+    const far = screen.getByText('Far Reyes').closest('li');
+    expect(within(far).queryByText('Suitable')).not.toBeInTheDocument();
+    expect(within(far).getByText('Works in Lucao, not Bonuan Gueset')).toBeInTheDocument();
+
+    await user.click(within(near).getByRole('button', { name: 'Assign' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(PropertyApi.assignCaretaker).not.toHaveBeenCalled();
+
+    await user.click(within(near).getByRole('button', { name: 'Assign' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Assign caretaker' }));
+    await waitFor(() => expect(PropertyApi.assignCaretaker).toHaveBeenCalledWith('p1', 'c1'));
+    expect(await screen.findByText('Near Cruz is now assigned to this property.')).toBeInTheDocument();
   });
 });

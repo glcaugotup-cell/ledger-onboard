@@ -9,6 +9,8 @@ import PropertyMap from './map/PropertyMap.jsx';
 import Button from './ui/Button.jsx';
 import Card from './ui/Card.jsx';
 import { Badge, ErrorBanner, LoadingState, SuccessBanner } from './ui/Feedback.jsx';
+import { describeApiError } from '../utils/errors.js';
+import { todayInputValue, validateMoveInDate } from '../utils/validators.js';
 
 function Stars({ rating }) {
   return (
@@ -93,6 +95,7 @@ export default function PropertyDetailContent() {
   const [reserving, setReserving] = useState(false);
   const [reserveMessage, setReserveMessage] = useState('');
   const [reserveError, setReserveError] = useState('');
+  const [moveInError, setMoveInError] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -114,14 +117,21 @@ export default function PropertyDetailContent() {
 
   const onReserve = async (e) => {
     e.preventDefault();
-    setReserving(true);
     setReserveError('');
+    // Same rule as the backend: today or later. The picker also disables past days.
+    const dateError = validateMoveInDate(moveInDate);
+    setMoveInError(dateError || '');
+    if (dateError) return;
+
+    setReserving(true);
     try {
       await ReservationApi.create({ roomId: selectedRoom._id, moveInDate });
       setReserveMessage('Reservation request submitted! The landlord will review it shortly.');
       setSelectedRoom(null);
     } catch (err) {
-      setReserveError(err.message || 'Could not submit reservation.');
+      const { message, fieldErrors } = describeApiError(err);
+      if (fieldErrors.moveInDate) setMoveInError(fieldErrors.moveInDate);
+      else setReserveError(message || 'Could not submit reservation.');
     } finally {
       setReserving(false);
     }
@@ -278,17 +288,23 @@ export default function PropertyDetailContent() {
 
           {selectedRoom && (
             <Card title={`Reserve Room ${selectedRoom.roomNumber}`} className="mt-4">
-              <form onSubmit={onReserve} className="space-y-3">
+              <form onSubmit={onReserve} className="space-y-3" noValidate>
                 <ErrorBanner message={reserveError} />
                 <label className="block text-sm">
                   <span className="mb-1 block font-medium text-gray-700">Preferred move-in date</span>
                   <input
                     type="date"
                     required
+                    min={todayInputValue()}
                     value={moveInDate}
-                    onChange={(e) => setMoveInDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    onChange={(e) => {
+                      setMoveInDate(e.target.value);
+                      setMoveInError(e.target.value ? validateMoveInDate(e.target.value) || '' : '');
+                    }}
+                    aria-invalid={Boolean(moveInError)}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm ${moveInError ? 'border-red-400' : 'border-gray-300'}`}
                   />
+                  {moveInError && <span className="mt-1 block text-xs text-red-600">{moveInError}</span>}
                 </label>
                 <div className="flex gap-2">
                   <Button type="submit" loading={reserving} className="flex-1">
