@@ -292,7 +292,7 @@ export default function RegisterPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Registration successful!</h1>
         <SuccessBanner message="Your email has been verified successfully. You can now log in to your account." />
-        <Button variant="accent" className="mt-6 w-full" onClick={() => navigate('/login')}>
+        <Button variant="accent" className="mt-6 w-full" onClick={() => navigate('/')}>
           Go to Login
         </Button>
       </div>

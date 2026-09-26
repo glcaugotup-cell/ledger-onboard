@@ -11,7 +11,7 @@ export default function PropertyDetailPublicPage() {
             <img src={logo} alt="Ledger OnBoard" className="h-9 w-9 rounded-lg object-cover shadow-sm" />
             <span className="text-base font-bold text-brand-800">Ledger OnBoard</span>
           </Link>
-          <Link to="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
+          <Link to="/" className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
             Sign in
           </Link>
         </div>

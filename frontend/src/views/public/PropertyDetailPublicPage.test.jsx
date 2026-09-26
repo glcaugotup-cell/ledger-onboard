@@ -48,7 +48,7 @@ describe('PropertyDetailPublicPage', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
+    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/');
     expect(await screen.findByRole('heading', { name: 'Dagupan Demo Boarding House' })).toBeInTheDocument();
   });
 });

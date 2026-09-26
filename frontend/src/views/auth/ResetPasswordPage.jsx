@@ -43,7 +43,7 @@ export default function ResetPasswordPage() {
       // confirmPassword is a frontend-only typo guard — never sent to the backend.
       const res = await AuthApi.resetPassword(form);
       setSuccess(res.message);
-      setTimeout(() => navigate('/login'), 1200);
+      setTimeout(() => navigate('/'), 1200);
     } catch (err) {
       setError(describeApiError(err).message);
     } finally {
@@ -93,7 +93,7 @@ export default function ResetPasswordPage() {
         </Button>
       </form>
       <p className="mt-6 text-center text-sm text-gray-500">
-        <Link to="/login" className="hover:underline">
+        <Link to="/" className="hover:underline">
           Back to sign in
         </Link>
       </p>

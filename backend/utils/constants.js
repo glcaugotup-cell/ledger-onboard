@@ -18,7 +18,6 @@ const ACCOUNT_STATUS = Object.freeze({
 const MFA_METHOD = Object.freeze({
   NONE: 'none',
   EMAIL: 'email',
-  AUTHENTICATOR: 'authenticator',
 });
 
 const LISTING_STATUS = Object.freeze({

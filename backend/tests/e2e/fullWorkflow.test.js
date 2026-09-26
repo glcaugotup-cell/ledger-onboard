@@ -308,6 +308,12 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     expect(res.body.data.soa.paymentStatus).toBe('UNPAID');
   });
 
+  test('assigned caretaker can list SOAs for their rooms', async () => {
+    const res = await request(app).get('/api/billing/soa').set('Authorization', `Bearer ${caretakerToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.soas.map((s) => String(s._id))).toContain(String(soaId));
+  });
+
   test('tenant submits a GCash payment proof', async () => {
     const res = await request(app)
       .post('/api/payments')

@@ -4,6 +4,30 @@ import { setAccessToken } from '../services/apiClient.js';
 
 const REFRESH_TOKEN_KEY = 'ledgerOnboard.refreshToken';
 
+// The backend rotates the refresh token on every use and rejects the old one, so
+// overlapping refreshes (StrictMode's double effect, several tabs reloading at once)
+// must share one request instead of racing each other.
+let pendingRefresh = null;
+function refreshOnce(token) {
+  if (!pendingRefresh) {
+    pendingRefresh = AuthApi.refresh(token).finally(() => {
+      pendingRefresh = null;
+    });
+  }
+  return pendingRefresh;
+}
+
+async function resumeSession(token) {
+  try {
+    return await refreshOnce(token);
+  } catch (err) {
+    // Another tab may have already rotated the token; retry once with the newer one.
+    const latest = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (latest && latest !== token) return refreshOnce(latest);
+    throw err;
+  }
+}
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -33,7 +57,7 @@ export function AuthProvider({ children }) {
       setStatus('unauthenticated');
       return;
     }
-    AuthApi.refresh(storedRefreshToken)
+    resumeSession(storedRefreshToken)
       .then((session) => persistSession(session))
       .catch(() => clearSession());
     // eslint-disable-next-line react-hooks/exhaustive-deps

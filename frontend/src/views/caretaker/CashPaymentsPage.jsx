@@ -18,9 +18,15 @@ export default function CashPaymentsPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    BillingApi.list().then(({ soas: list }) => setSoas(list.filter((s) => s.remainingBalance > 0)));
+    BillingApi.list()
+      .then(({ soas: list }) => {
+        setSoas(list.filter((s) => s.remainingBalance > 0));
+        setLoadError('');
+      })
+      .catch((err) => setLoadError(err.message || 'Could not load statements of account.'));
   }, [refreshKey]);
 
   const onSubmit = async (e) => {
@@ -50,6 +56,7 @@ export default function CashPaymentsPage() {
       <h1 className="mb-4 text-xl font-semibold text-gray-900">Cash &amp; payments</h1>
       <Card title="Record cash collected on-site" className="mb-6 max-w-xl">
         <form onSubmit={onSubmit} className="space-y-3">
+          <ErrorBanner message={loadError} />
           <ErrorBanner message={error} />
           <SuccessBanner message={success} />
           <Field label="Statement of account">

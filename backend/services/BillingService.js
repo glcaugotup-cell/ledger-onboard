@@ -110,7 +110,8 @@ class BillingService {
       // Caretakers "review" billing for rooms they're assigned to, via reservations.
       const ReservationRepository = require('../repositories/ReservationRepository');
       const assigned = await ReservationRepository.findByCaretaker(requester.id);
-      const roomIds = [...new Set(assigned.map((r) => String(r.roomId)))];
+      // findByCaretaker populates roomId, so read the id off the populated room.
+      const roomIds = [...new Set(assigned.map((r) => String(r.roomId?._id ?? r.roomId)))];
       const soas = await BillingSOARepository.findByRoomIds(roomIds);
       return Promise.all(soas.map((s) => this._withFreshOverdueStatus(s)));
     }

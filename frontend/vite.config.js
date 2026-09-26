@@ -13,6 +13,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Fail instead of silently moving to 5174 when 5173 is taken, so a second
+    // (possibly stale or different-copy) dev server can't run unnoticed.
+    strictPort: true,
     proxy: {
       // Frontend calls relative /api/* paths in dev; Vite proxies them to
       // the Express backend so no CORS/base-URL juggling is needed locally.
