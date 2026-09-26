@@ -1,4 +1,3 @@
-const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -7,6 +6,7 @@ const mongoSanitize = require('express-mongo-sanitize');
 
 const env = require('./config/env');
 const apiRouter = require('./routes');
+const MediaController = require('./controllers/shared/MediaController');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -35,17 +35,16 @@ if (!env.isTest) {
   app.use(morgan(env.isProduction ? 'combined' : 'dev'));
 }
 
-// Payment-proof / property images — served only through an authorization
-// check inside the relevant controller/route, never as a bare static mount
-// for private files. Property listing images (public) are served here.
+// Public property photos/videos, read from GridFS. Payment proofs and business
+// documents are never served here — only through their authenticated routes.
 // cross-origin CORP lets the separately hosted frontend display these public images.
-app.use(
-  '/uploads/properties',
+app.get(
+  '/uploads/properties/:filename',
   (req, res, next) => {
     res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     next();
   },
-  express.static(path.join(__dirname, env.uploadDir, 'properties'))
+  MediaController.getPropertyMedia
 );
 
 app.get('/health', (req, res) => {

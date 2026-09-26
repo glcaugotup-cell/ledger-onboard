@@ -34,8 +34,8 @@ const propertySchema = new Schema(
     houseRules: [{ type: String, trim: true }],
     amenities: [{ type: String, trim: true }],
     images: [{ type: String, trim: true }],
-    // Optional single video tour — same public /uploads/properties mount as
-    // images (see upload.js), never required to create a listing.
+    // Optional single video tour, served from GridFS at the same public
+    // /uploads/properties route as images; never required to create a listing.
     videoUrl: { type: String, trim: true, default: null },
     listingStatus: {
       type: String,

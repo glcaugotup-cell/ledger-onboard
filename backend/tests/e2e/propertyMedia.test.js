@@ -147,3 +147,129 @@ describe('Property media — photos (max 5) and optional video', () => {
     expect(res.body.data.property.videoUrl).toBeNull();
   });
 });
+
+// Collects any response body as raw bytes, whatever its content type.
+function binaryParser(res, cb) {
+  const chunks = [];
+  res.on('data', (c) => chunks.push(c));
+  res.on('end', () => cb(null, Buffer.concat(chunks)));
+}
+const getBytes = (url, headers = {}) => request(app).get(url).set(headers).buffer(true).parse(binaryParser);
+
+describe('Property media — stored in GridFS', () => {
+  test('uploaded photos are served back publicly with their bytes and content type', async () => {
+    const token = await verifiedLandlordToken('gridfs.serve@gmail.com', 9);
+    const photo = Buffer.from('real-photo-bytes-123');
+    const res = await baseFields(request(app).post('/api/properties').set('Authorization', `Bearer ${token}`))
+      .attach('images', photo, { filename: 'room.png', contentType: 'image/png' });
+    expect(res.status).toBe(201);
+
+    const url = res.body.data.property.images[0];
+    const fetched = await getBytes(url);
+    expect(fetched.status).toBe(200);
+    expect(fetched.headers['content-type']).toBe('image/png');
+    expect(fetched.headers['cross-origin-resource-policy']).toBe('cross-origin');
+    expect(Buffer.compare(fetched.body, photo)).toBe(0);
+  });
+
+  test('video supports byte-range requests for seeking', async () => {
+    const token = await verifiedLandlordToken('gridfs.range@gmail.com', 10);
+    const video = Buffer.from('0123456789abcdefghij');
+    const res = await baseFields(request(app).post('/api/properties').set('Authorization', `Bearer ${token}`))
+      .attach('video', video, { filename: 'tour.mp4', contentType: 'video/mp4' });
+    expect(res.status).toBe(201);
+
+    const partial = await getBytes(res.body.data.property.videoUrl, { Range: 'bytes=5-9' });
+    expect(partial.status).toBe(206);
+    expect(partial.headers['content-range']).toBe(`bytes 5-9/${video.length}`);
+    expect(partial.body.toString()).toBe('56789');
+  });
+
+  test('stored filenames take their extension from the checked file type, not the client filename', async () => {
+    const token = await verifiedLandlordToken('gridfs.ext@gmail.com', 13);
+    const res = await baseFields(request(app).post('/api/properties').set('Authorization', `Bearer ${token}`))
+      .attach('images', Buffer.from('png-bytes'), { filename: 'evil.html', contentType: 'image/png' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.property.images[0]).toMatch(/^\/uploads\/properties\/\d+-[0-9a-f]{16}\.png$/);
+    const fetched = await request(app).get(res.body.data.property.images[0]);
+    expect(fetched.headers['content-type']).toBe('image/png');
+    expect(fetched.headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  test('a full database gives a clear STORAGE_FULL error and stores nothing', async () => {
+    const token = await verifiedLandlordToken('gridfs.full@gmail.com', 14);
+    // eslint-disable-next-line global-require
+    const FileRepository = require('../../repositories/FileRepository');
+    // eslint-disable-next-line global-require
+    const mongoose = require('mongoose');
+    const before = await mongoose.connection.db.collection('uploads.files').countDocuments();
+    const spy = jest.spyOn(FileRepository, 'upload').mockRejectedValueOnce(new Error('you are over your space quota, using 513 MB of 512 MB'));
+    try {
+      const res = await baseFields(request(app).post('/api/properties').set('Authorization', `Bearer ${token}`))
+        .attach('images', Buffer.from('a'), { filename: 'a.png', contentType: 'image/png' });
+      expect(res.status).toBe(507);
+      expect(res.body.error.code).toBe('STORAGE_FULL');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await mongoose.connection.db.collection('uploads.files').countDocuments()).toBe(before);
+  });
+
+  test('an unknown file returns 404', async () => {
+    const res = await request(app).get('/uploads/properties/does-not-exist.png');
+    expect(res.status).toBe(404);
+  });
+
+  test('replacing photos deletes the old files; the request body cannot set photo links', async () => {
+    const token = await verifiedLandlordToken('gridfs.replace@gmail.com', 11);
+    const created = await baseFields(request(app).post('/api/properties').set('Authorization', `Bearer ${token}`))
+      .attach('images', Buffer.from('old-photo'), { filename: 'old.png', contentType: 'image/png' });
+    const { _id: id, images: [oldUrl] } = created.body.data.property;
+
+    const updated = await request(app)
+      .patch(`/api/properties/${id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('images', Buffer.from('new-photo'), { filename: 'new.png', contentType: 'image/png' });
+    expect(updated.status).toBe(200);
+    const [newUrl] = updated.body.data.property.images;
+    expect(newUrl).not.toBe(oldUrl);
+    expect((await request(app).get(oldUrl)).status).toBe(404);
+    expect((await getBytes(newUrl)).body.toString()).toBe('new-photo');
+
+    const hijack = await request(app)
+      .patch(`/api/properties/${id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ images: ['/uploads/properties/someone-elses.png'], videoUrl: '/uploads/properties/x.mp4' });
+    expect(hijack.status).toBe(200);
+    expect(hijack.body.data.property.images).toEqual([newUrl]);
+    expect(hijack.body.data.property.videoUrl).toBeNull();
+  });
+
+  test('deleting a property also deletes its files', async () => {
+    const token = await verifiedLandlordToken('gridfs.delete@gmail.com', 12);
+    const created = await baseFields(request(app).post('/api/properties').set('Authorization', `Bearer ${token}`))
+      .attach('images', Buffer.from('photo'), { filename: 'p.png', contentType: 'image/png' })
+      .attach('video', Buffer.from('video'), { filename: 'v.mp4', contentType: 'video/mp4' });
+    const { _id: id, images: [imageUrl], videoUrl } = created.body.data.property;
+    expect((await request(app).get(imageUrl)).status).toBe(200);
+
+    const del = await request(app).delete(`/api/properties/${id}`).set('Authorization', `Bearer ${token}`);
+    expect(del.status).toBe(200);
+    expect((await request(app).get(imageUrl)).status).toBe(404);
+    expect((await request(app).get(videoUrl)).status).toBe(404);
+  });
+
+  test('an unverified landlord is rejected before anything is stored', async () => {
+    await registerAndVerify({
+      firstName: 'Unver', lastName: 'Landlord', email: 'gridfs.unverified@gmail.com', phone: '09171235199', password: 'Str0ng!Pass', role: 'landlord', privacyConsent: true,
+    });
+    const login = await request(app).post('/api/auth/login').send({ email: 'gridfs.unverified@gmail.com', password: 'Str0ng!Pass' });
+    // eslint-disable-next-line global-require
+    const mongoose = require('mongoose');
+    const before = await mongoose.connection.db.collection('uploads.files').countDocuments();
+    const res = await baseFields(request(app).post('/api/properties').set('Authorization', `Bearer ${login.body.data.accessToken}`))
+      .attach('images', Buffer.from('photo'), { filename: 'p.png', contentType: 'image/png' });
+    expect(res.status).toBe(403);
+    expect(await mongoose.connection.db.collection('uploads.files').countDocuments()).toBe(before);
+  });
+});

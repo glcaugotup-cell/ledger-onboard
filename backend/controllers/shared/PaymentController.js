@@ -1,17 +1,17 @@
-const path = require('path');
 const PaymentService = require('../../services/PaymentService');
+const FileStorageService = require('../../services/FileStorageService');
+const { FILE_CATEGORIES } = require('../../services/FileStorageService');
 const asyncHandler = require('../../utils/asyncHandler');
+const sendStoredFile = require('../../utils/sendStoredFile');
 const { sendSuccess } = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
 const { ROLES } = require('../../utils/constants');
-const env = require('../../config/env');
 
 class PaymentController {
   // Dispatches on the authenticated role, never a client-supplied identity.
   submit = asyncHandler(async (req, res) => {
     if (req.user.role === ROLES.TENANT) {
-      const proofImageURL = req.file ? `/uploads/payment-proofs/${req.file.filename}` : null;
-      const payment = await PaymentService.submitGcashProof(req.user.id, { ...req.body, proofImageURL });
+      const payment = await PaymentService.submitGcashProof(req.user.id, req.body, req.file);
       return sendSuccess(res, { statusCode: 201, data: { payment } });
     }
     if (req.user.role === ROLES.CARETAKER) {
@@ -33,8 +33,8 @@ class PaymentController {
 
   getProofImage = asyncHandler(async (req, res) => {
     const payment = await PaymentService.getProofImageInfo(req.params.id, req.user);
-    const absolutePath = path.join(__dirname, '..', '..', payment.proofImageURL.replace(/^\/?uploads\//, `${env.uploadDir}/`));
-    res.sendFile(absolutePath);
+    const file = await FileStorageService.getByUrl(payment.proofImageURL, FILE_CATEGORIES.PAYMENT_PROOFS);
+    sendStoredFile(req, res, file);
   });
 }
 

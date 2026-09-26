@@ -6,29 +6,37 @@ const AuditLogRepository = require('../repositories/AuditLogRepository');
 const BillingService = require('./BillingService');
 const NotificationService = require('./NotificationService');
 const EmailService = require('./EmailService');
+const FileStorageService = require('./FileStorageService');
+const { FILE_CATEGORIES } = require('./FileStorageService');
 const UserRepository = require('../repositories/UserRepository');
 const ApiError = require('../utils/ApiError');
 const { ROLES, PAYMENT_METHOD, VERIFICATION_STATUS } = require('../utils/constants');
 
 class PaymentService {
   /** Tenant uploads a GCash payment screenshot as proof. */
-  async submitGcashProof(tenantId, { soaId, amount, proofImageURL }) {
+  async submitGcashProof(tenantId, { soaId, amount }, proofFile) {
     const soa = await BillingSOARepository.findById(soaId);
     if (!soa) throw ApiError.notFound('Statement of account not found', 'SOA_NOT_FOUND');
     if (String(soa.tenantId) !== String(tenantId)) {
       throw ApiError.forbidden('This statement of account does not belong to you', 'FORBIDDEN_SOA_ACCESS');
     }
-    if (!proofImageURL) throw ApiError.badRequest('Proof of payment image is required', 'PROOF_IMAGE_REQUIRED');
+    if (!proofFile) throw ApiError.badRequest('Proof of payment image is required', 'PROOF_IMAGE_REQUIRED');
 
-    return PaymentTransactionRepository.create({
-      soaId,
-      tenantId,
-      paymentMethod: PAYMENT_METHOD.GCASH_SCREENSHOT,
-      amount,
-      proofImageURL,
-      verificationStatus: VERIFICATION_STATUS.PENDING,
-      timestamp: new Date(),
-    });
+    const proofImageURL = await FileStorageService.saveUpload(proofFile, FILE_CATEGORIES.PAYMENT_PROOFS);
+    try {
+      return await PaymentTransactionRepository.create({
+        soaId,
+        tenantId,
+        paymentMethod: PAYMENT_METHOD.GCASH_SCREENSHOT,
+        amount,
+        proofImageURL,
+        verificationStatus: VERIFICATION_STATUS.PENDING,
+        timestamp: new Date(),
+      });
+    } catch (err) {
+      await FileStorageService.deleteByUrls([proofImageURL]);
+      throw err;
+    }
   }
 
   /** Caretaker logs cash collected in person. */

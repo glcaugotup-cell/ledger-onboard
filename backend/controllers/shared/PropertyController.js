@@ -29,20 +29,14 @@ class PropertyController {
   });
 
   create = asyncHandler(async (req, res) => {
-    const images = (req.files?.images || []).map((f) => `/uploads/properties/${f.filename}`);
-    const videoFile = req.files?.video?.[0];
-    const videoUrl = videoFile ? `/uploads/properties/${videoFile.filename}` : null;
-    const property = await PropertyService.create(req.user.id, { ...req.body, images, videoUrl });
+    const media = { images: req.files?.images || [], video: req.files?.video?.[0] || null };
+    const property = await PropertyService.create(req.user.id, req.body, media);
     sendSuccess(res, { statusCode: 201, data: { property } });
   });
 
   update = asyncHandler(async (req, res) => {
-    const images = (req.files?.images || []).map((f) => `/uploads/properties/${f.filename}`);
-    const videoFile = req.files?.video?.[0];
-    const updates = { ...req.body };
-    if (images.length) updates.images = images;
-    if (videoFile) updates.videoUrl = `/uploads/properties/${videoFile.filename}`;
-    const property = await PropertyService.update(req.params.id, req.user, updates);
+    const media = { images: req.files?.images || [], video: req.files?.video?.[0] || null };
+    const property = await PropertyService.update(req.params.id, req.user, req.body, media);
     sendSuccess(res, { data: { property } });
   });
 

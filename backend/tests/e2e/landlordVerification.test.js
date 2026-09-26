@@ -243,5 +243,8 @@ describe('Landlord business verification', () => {
     const filename = submitRes.body.data.submission.mayorBusinessPermitUrl.split('/').pop();
     const staticFetch = await request(app).get(`/uploads/landlord-verification/${filename}`);
     expect(staticFetch.status).toBe(404);
+    // Nor through the public property-media route, even with the real filename.
+    const viaPublicRoute = await request(app).get(`/uploads/properties/${filename}`);
+    expect(viaPublicRoute.status).toBe(404);
   }, 30000);
 });

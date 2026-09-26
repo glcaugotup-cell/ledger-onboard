@@ -1,9 +1,10 @@
-const path = require('path');
 const LandlordVerificationService = require('../../services/LandlordVerificationService');
+const FileStorageService = require('../../services/FileStorageService');
+const { FILE_CATEGORIES } = require('../../services/FileStorageService');
 const asyncHandler = require('../../utils/asyncHandler');
+const sendStoredFile = require('../../utils/sendStoredFile');
 const { sendSuccess } = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
-const env = require('../../config/env');
 
 class LandlordVerificationController {
   submit = asyncHandler(async (req, res) => {
@@ -14,10 +15,7 @@ class LandlordVerificationController {
       throw ApiError.badRequest("Both the Mayor's/Business Permit and BIR Form 2303 are required", 'DOCUMENTS_REQUIRED');
     }
 
-    const result = await LandlordVerificationService.submit(req.user.id, {
-      mayorBusinessPermitUrl: `/uploads/landlord-verification/${permitFile.filename}`,
-      birForm2303Url: `/uploads/landlord-verification/${birFile.filename}`,
-    });
+    const result = await LandlordVerificationService.submit(req.user.id, { permitFile, birFile });
     sendSuccess(res, { statusCode: 201, data: result });
   });
 
@@ -29,8 +27,8 @@ class LandlordVerificationController {
   // The only way to fetch these private files; getDocumentPath enforces owner-or-admin access.
   getDocument = asyncHandler(async (req, res) => {
     const relativeUrl = await LandlordVerificationService.getDocumentPath(req.params.id, req.params.docType, req.user);
-    const absolutePath = path.join(__dirname, '..', '..', relativeUrl.replace(/^\/?uploads\//, `${env.uploadDir}/`));
-    res.sendFile(absolutePath);
+    const file = await FileStorageService.getByUrl(relativeUrl, FILE_CATEGORIES.LANDLORD_VERIFICATION);
+    sendStoredFile(req, res, file);
   });
 
   listPending = asyncHandler(async (req, res) => {

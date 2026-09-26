@@ -55,6 +55,27 @@ describe('PropertyDetailContent', () => {
     vi.clearAllMocks();
   });
 
+  it('shows a video tour player when the listing has a video', async () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: null, status: 'unauthenticated' }));
+    PropertyApi.getPublicDetail.mockResolvedValue({ ...detail, property: { ...detail.property, videoUrl: '/uploads/properties/tour.mp4' } });
+    renderContent();
+
+    expect(await screen.findByRole('heading', { name: /video tour/i })).toBeInTheDocument();
+    const video = screen.getByLabelText(/video tour of dagupan demo boarding house/i);
+    expect(video.tagName).toBe('VIDEO');
+    expect(video).toHaveAttribute('src', '/uploads/properties/tour.mp4');
+    expect(video).toHaveAttribute('controls');
+  });
+
+  it('shows no video section when the listing has no video', async () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: null, status: 'unauthenticated' }));
+    PropertyApi.getPublicDetail.mockResolvedValue(detail);
+    renderContent();
+
+    await screen.findByRole('heading', { name: 'Dagupan Demo Boarding House' });
+    expect(screen.queryByRole('heading', { name: /video tour/i })).not.toBeInTheDocument();
+  });
+
   it('shows an error message when the property cannot be found', async () => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: null, status: 'unauthenticated' }));
     PropertyApi.getPublicDetail.mockRejectedValue(new Error('not found'));

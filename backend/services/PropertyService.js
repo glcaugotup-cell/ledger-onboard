@@ -2,6 +2,8 @@ const PropertyRepository = require('../repositories/PropertyRepository');
 const RoomRepository = require('../repositories/RoomRepository');
 const ReviewRepository = require('../repositories/PropertyReviewRepository');
 const UserRepository = require('../repositories/UserRepository');
+const FileStorageService = require('./FileStorageService');
+const { FILE_CATEGORIES } = require('./FileStorageService');
 const ApiError = require('../utils/ApiError');
 const { LISTING_STATUS, ROLES, VERIFICATION_STATUS } = require('../utils/constants');
 
@@ -75,36 +77,65 @@ class PropertyService {
     return { property, rooms };
   }
 
-  async create(landlordId, data) {
+  async create(landlordId, data, media = {}) {
     // The authoritative check; hiding the button on the frontend is only a convenience.
     const landlord = await UserRepository.findById(landlordId);
     if (!landlord || landlord.businessVerificationStatus !== VERIFICATION_STATUS.VERIFIED) {
       throw ApiError.forbidden('Your business must be verified before you can upload a boarding house.', 'BUSINESS_NOT_VERIFIED');
     }
 
-    // Business rule: admins verify the landlord's business, not each property,
-    // so a verified landlord's listings are published (approved) immediately.
-    return PropertyRepository.create({
-      ...data,
-      landlordId, // always server-derived, never trusted from body
-      caretakerIds: [],
-      listingStatus: LISTING_STATUS.APPROVED,
-    });
+    const { images, videoUrl, stored } = await this._storeMedia(media);
+    try {
+      // Business rule: admins verify the landlord's business, not each property,
+      // so a verified landlord's listings are published (approved) immediately.
+      return await PropertyRepository.create({
+        ...data,
+        // Always from the uploads above, never from the request body.
+        images,
+        videoUrl,
+        landlordId, // always server-derived, never trusted from body
+        caretakerIds: [],
+        listingStatus: LISTING_STATUS.APPROVED,
+      });
+    } catch (err) {
+      await FileStorageService.deleteByUrls(stored);
+      throw err;
+    }
   }
 
-  async update(propertyId, requester, updates) {
+  async update(propertyId, requester, updates, media = {}) {
     const property = await PropertyRepository.findById(propertyId);
     if (!property) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
     this._assertLandlordOwnsOrAdmin(property, requester);
 
     // Whitelist editable fields — landlordId/listingStatus (moderation) are not client-editable here.
-    const allowed = ['propertyName', 'description', 'address', 'locationCoordinates', 'propertyType', 'tenantGenderPolicy', 'nearbyUniversities', 'houseRules', 'amenities', 'images', 'videoUrl'];
+    // images/videoUrl only change through actual uploads, so a listing can never point at
+    // (and later delete) another listing's files.
+    const allowed = ['propertyName', 'description', 'address', 'locationCoordinates', 'propertyType', 'tenantGenderPolicy', 'nearbyUniversities', 'houseRules', 'amenities'];
     const safeUpdates = {};
     for (const key of allowed) {
       if (updates[key] !== undefined) safeUpdates[key] = updates[key];
     }
 
-    return PropertyRepository.updateById(propertyId, safeUpdates);
+    const { images, videoUrl, stored } = await this._storeMedia(media);
+    if (images.length) safeUpdates.images = images;
+    if (videoUrl) safeUpdates.videoUrl = videoUrl;
+
+    let updated;
+    try {
+      updated = await PropertyRepository.updateById(propertyId, safeUpdates);
+      if (!updated) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND'); // deleted meanwhile
+    } catch (err) {
+      await FileStorageService.deleteByUrls(stored);
+      throw err;
+    }
+
+    // Remove files the listing no longer references (replaced photos/video).
+    const stillUsed = new Set([...(updated.images || []), updated.videoUrl].filter(Boolean));
+    const previous = [...(property.images || []), property.videoUrl].filter(Boolean);
+    await FileStorageService.deleteByUrls(previous.filter((url) => !stillUsed.has(url)));
+
+    return updated;
   }
 
   async delete(propertyId, requester) {
@@ -112,7 +143,23 @@ class PropertyService {
     if (!property) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
     this._assertLandlordOwnsOrAdmin(property, requester);
     await PropertyRepository.deleteById(propertyId);
+    await FileStorageService.deleteByUrls([...(property.images || []), property.videoUrl].filter(Boolean));
     return { deleted: true };
+  }
+
+  /** Saves uploaded photos/video to GridFS; `stored` lists everything saved, for rollback. */
+  async _storeMedia({ images = [], video = null } = {}) {
+    const imageUrls = await FileStorageService.saveUploads(images, FILE_CATEGORIES.PROPERTIES);
+    let videoUrl = null;
+    if (video) {
+      try {
+        videoUrl = await FileStorageService.saveUpload(video, FILE_CATEGORIES.PROPERTIES);
+      } catch (err) {
+        await FileStorageService.deleteByUrls(imageUrls);
+        throw err;
+      }
+    }
+    return { images: imageUrls, videoUrl, stored: [...imageUrls, videoUrl].filter(Boolean) };
   }
 
   async listPendingModeration() {

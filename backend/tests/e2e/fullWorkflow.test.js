@@ -327,6 +327,18 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     expect(res.body.data.payment.verificationStatus).toBe('PENDING');
   });
 
+  test('tenant can view their own GCash proof; it is not publicly served', async () => {
+    const res = await request(app).get(`/api/payments/${paymentId}/proof-image`).set('Authorization', `Bearer ${tenantToken}`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/png');
+    expect((await request(app).get(`/api/payments/${paymentId}/proof-image`)).status).toBe(401);
+
+    const PaymentTransactionRepository = require('../../repositories/PaymentTransactionRepository');
+    const payment = await PaymentTransactionRepository.findById(paymentId);
+    const filename = payment.proofImageURL.split('/').pop();
+    expect((await request(app).get(`/uploads/properties/${filename}`)).status).toBe(404);
+  });
+
   test('caretaker cannot verify a GCash payment (only landlord/admin can)', async () => {
     const res = await request(app)
       .patch(`/api/payments/${paymentId}/verify`)

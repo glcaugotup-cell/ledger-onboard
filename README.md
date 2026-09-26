@@ -54,7 +54,9 @@ npm install
 | `EMAIL_TRANSPORT` | `console` prints emails (OTP codes, invitations) in the backend terminal; any other value sends real email using the `SMTP_*` settings |
 | `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing email settings (for Gmail, use an App Password) |
 | `ACCOUNT_ARCHIVE_WARNING_DAYS`, `ACCOUNT_ARCHIVE_DAYS`, `ACCOUNT_LIFECYCLE_CRON` | Inactivity warning/archive thresholds and the daily job schedule |
-| `UPLOAD_DIR`, `MAX_UPLOAD_MB`, `MAX_VIDEO_UPLOAD_MB` | Upload folder and size limits |
+| `MAX_UPLOAD_MB`, `MAX_VIDEO_UPLOAD_MB` | Upload size limits (photos/documents, video) |
+| `UPLOAD_DIR` | Source folder for `npm run migrate:uploads` (old on-disk uploads); uploads themselves are stored in MongoDB |
+| `SEED_DEMO_PASSWORD` | Password given to demo accounts created by `npm run seed` (strong password required; never commit it) |
 
 Never commit `backend/.env`; it is excluded by `.gitignore`.
 
@@ -81,7 +83,18 @@ cd backend
 npm run seed
 ```
 
-This creates one account per role — `ledgeronboard@gmail.com` (admin), `demo.landlord@gmail.com`, `demo.tenant@gmail.com`, `demo.caretaker@gmail.com` — plus a sample approved property. The seed script prints the shared demo password; it is for local development only.
+This creates one account per role — `ledgeronboard@gmail.com` (admin), `demo.landlord@gmail.com`, `demo.tenant@gmail.com`, `demo.caretaker@gmail.com` — plus a sample approved property. New demo accounts get the password set in `SEED_DEMO_PASSWORD` (backend `.env`); existing accounts are left unchanged.
+
+### Moving old uploads into MongoDB (one time)
+
+Uploaded files are stored in MongoDB GridFS. If you have files from before that change in `backend/uploads/`, copy them in with:
+
+```bash
+cd backend
+npm run migrate:uploads
+```
+
+It keeps the same filenames, skips files already copied, and deletes nothing from disk.
 
 ## Running tests
 
@@ -131,4 +144,4 @@ The backend follows a layered architecture: **Route → Controller → Service �
 - Serve the API behind HTTPS (a reverse proxy or your hosting platform's TLS) and set `CLIENT_ORIGIN` to the frontend's HTTPS URL.
 - Current setup: frontend on Vercel (`frontend/` with `VITE_API_URL=https://ledger-onboard-backend.onrender.com`; `frontend/vercel.json` rewrites all routes to `index.html`), backend on Render (`npm start`, `NODE_ENV=production`, `CLIENT_ORIGIN` = the Vercel URL).
 - Use a MongoDB user limited to this application's database.
-- Uploaded files are stored on local disk in `backend/uploads/`; a multi-server deployment would need shared or object storage.
+- Uploaded files (property photos/videos, payment proofs, business documents) are stored in MongoDB GridFS (bucket `uploads`), so they survive redeploys and restarts. Property media is served publicly at `/uploads/properties/<file>`; payment proofs and business documents are only available through their authenticated routes. They count toward the database's storage quota (512 MB on the Atlas free tier).

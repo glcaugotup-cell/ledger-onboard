@@ -10,7 +10,7 @@ const { Schema } = mongoose;
 const landlordVerificationSchema = new Schema(
   {
     landlordId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    // Private relative paths under uploadDir, served only through an authenticated route.
+    // "/uploads/landlord-verification/<file>" references to GridFS files, served only through an authenticated route.
     mayorBusinessPermitUrl: { type: String, required: true },
     birForm2303Url: { type: String, required: true },
     status: {

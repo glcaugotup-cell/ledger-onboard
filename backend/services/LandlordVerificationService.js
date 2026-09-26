@@ -3,6 +3,8 @@ const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const NotificationService = require('./NotificationService');
 const EmailService = require('./EmailService');
+const FileStorageService = require('./FileStorageService');
+const { FILE_CATEGORIES } = require('./FileStorageService');
 const ApiError = require('../utils/ApiError');
 const { ROLES, VERIFICATION_STATUS } = require('../utils/constants');
 
@@ -12,19 +14,30 @@ const { ROLES, VERIFICATION_STATUS } = require('../utils/constants');
  * enforced in PropertyService.create.
  */
 class LandlordVerificationService {
-  async submit(landlordId, { mayorBusinessPermitUrl, birForm2303Url }) {
+  async submit(landlordId, { permitFile, birFile }) {
     const existingPending = await LandlordVerificationRepository.findLatestByLandlord(landlordId);
     if (existingPending && existingPending.status === VERIFICATION_STATUS.PENDING) {
       throw ApiError.conflict('You already have a submission under review', 'VERIFICATION_ALREADY_PENDING');
     }
 
-    const submission = await LandlordVerificationRepository.create({
-      landlordId,
-      mayorBusinessPermitUrl,
-      birForm2303Url,
-      status: VERIFICATION_STATUS.PENDING,
-      submittedAt: new Date(),
-    });
+    // Documents from earlier submissions are kept (audit trail); only a failed save is rolled back.
+    const [mayorBusinessPermitUrl, birForm2303Url] = await FileStorageService.saveUploads(
+      [permitFile, birFile],
+      FILE_CATEGORIES.LANDLORD_VERIFICATION
+    );
+    let submission;
+    try {
+      submission = await LandlordVerificationRepository.create({
+        landlordId,
+        mayorBusinessPermitUrl,
+        birForm2303Url,
+        status: VERIFICATION_STATUS.PENDING,
+        submittedAt: new Date(),
+      });
+    } catch (err) {
+      await FileStorageService.deleteByUrls([mayorBusinessPermitUrl, birForm2303Url]);
+      throw err;
+    }
 
     await UserRepository.updateById(landlordId, { businessVerificationStatus: VERIFICATION_STATUS.PENDING });
 

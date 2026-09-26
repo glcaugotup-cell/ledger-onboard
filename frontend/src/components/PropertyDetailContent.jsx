@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowRightOnRectangleIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, MapPinIcon, WifiIcon } from '@heroicons/react/24/outline';
+import { ArrowRightOnRectangleIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, MapPinIcon, VideoCameraIcon, WifiIcon } from '@heroicons/react/24/outline';
 import PropertyApi from '../services/PropertyApi.js';
 import ReservationApi from '../services/ReservationApi.js';
 import { mediaUrl } from '../services/apiClient.js';
@@ -194,6 +194,24 @@ export default function PropertyDetailContent() {
                   <li key={r}>{r}</li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {property.videoUrl && (
+            <div className="mb-6 border-t border-gray-100 pt-6">
+              <h3 className="mb-3 flex items-center gap-1.5 text-lg font-semibold text-gray-900">
+                <VideoCameraIcon className="h-5 w-5 text-gray-400" /> Video tour
+              </h3>
+              <video
+                src={mediaUrl(property.videoUrl)}
+                controls
+                playsInline
+                preload="metadata"
+                aria-label={`Video tour of ${property.propertyName}`}
+                className="max-h-[28rem] w-full rounded-2xl bg-black"
+              >
+                Your browser can&apos;t play this video.
+              </video>
             </div>
           )}
 

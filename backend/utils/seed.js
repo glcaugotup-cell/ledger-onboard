@@ -1,6 +1,8 @@
 /**
  * Seeds demo accounts (one per role) and a sample approved property with a room.
- * Demo passwords are placeholders for local development only. Run: npm run seed
+ * The demo password comes from SEED_DEMO_PASSWORD in backend/.env — it is never
+ * stored in the code, because this repository is public and the database is live.
+ * Existing accounts are left untouched. Run: npm run seed
  */
 require('dotenv').config();
 const { connectDB, disconnectDB } = require('../config/db');
@@ -10,7 +12,13 @@ const RoomRepository = require('../repositories/RoomRepository');
 const { hashPassword } = require('./password');
 const { ROLES, ACCOUNT_STATUS, LISTING_STATUS, VERIFICATION_STATUS } = require('./constants');
 
-const DEMO_PASSWORD = 'Demo123!Pass';
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+const STRONG_PASSWORD = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+if (!DEMO_PASSWORD || !STRONG_PASSWORD.test(DEMO_PASSWORD)) {
+  // eslint-disable-next-line no-console
+  console.error('[seed] Set SEED_DEMO_PASSWORD in backend/.env to a strong password (8+ chars, upper, lower, number, symbol).');
+  process.exit(1);
+}
 
 async function upsertUser(fields) {
   const existing = await UserRepository.findByEmail(fields.email);
@@ -110,8 +118,8 @@ async function main() {
 
   // eslint-disable-next-line no-console
   console.log(`
-Seed complete. Demo accounts (placeholder password: ${DEMO_PASSWORD}):
-  Admin:     ${admin.email} (use "Forgot Password" to set the real admin password instead of keeping this placeholder)
+Seed complete. Newly created demo accounts use SEED_DEMO_PASSWORD from backend/.env:
+  Admin:     ${admin.email} (use "Forgot Password" to give the admin its own password)
   Landlord:  ${landlord.email}
   Tenant:    ${tenant.email}
   Caretaker: ${caretaker.email}
