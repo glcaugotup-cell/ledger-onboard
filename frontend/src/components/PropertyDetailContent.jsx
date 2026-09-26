@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowRightOnRectangleIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, MapPinIcon, VideoCameraIcon, WifiIcon } from '@heroicons/react/24/outline';
+import { ArrowRightOnRectangleIcon, CheckBadgeIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, MapPinIcon, VideoCameraIcon, WifiIcon } from '@heroicons/react/24/outline';
 import PropertyApi from '../services/PropertyApi.js';
 import ReservationApi from '../services/ReservationApi.js';
 import { mediaUrl } from '../services/apiClient.js';
@@ -8,7 +8,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import PropertyMap from './map/PropertyMap.jsx';
 import Button from './ui/Button.jsx';
 import Card from './ui/Card.jsx';
-import { Badge, ErrorBanner, LoadingState, SuccessBanner } from './ui/Feedback.jsx';
+import { Badge, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from './ui/Feedback.jsx';
+import { formatDate, formatPeso } from '../utils/format.js';
 import { describeApiError } from '../utils/errors.js';
 import { todayInputValue, validateMoveInDate } from '../utils/validators.js';
 
@@ -27,7 +28,7 @@ function Gallery({ images, propertyName }) {
 
   if (!images?.length) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-sm text-gray-400 sm:h-96">
+      <div className="flex h-64 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 text-sm text-gray-500 sm:h-96">
         No photos yet
       </div>
     );
@@ -143,6 +144,8 @@ export default function PropertyDetailContent() {
 
   const { property, rooms, reviews } = data;
   const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : null;
+  const openRooms = rooms.filter((room) => room.status === 'available' && room.currentOccupancy < room.capacity);
+  const cheapest = rooms.length ? Math.min(...rooms.map((room) => room.monthlyBaseRent)) : null;
 
   return (
     <div>
@@ -154,7 +157,12 @@ export default function PropertyDetailContent() {
           <div className="mb-3 mt-2 flex flex-wrap gap-2">
             <Badge tone="brand">{property.propertyType}</Badge>
             <Badge tone="gray">{property.tenantGenderPolicy}</Badge>
-            {property.landlordVerified && <Badge tone="green">✓ Verified Business</Badge>}
+            {property.landlordVerified && (
+              <Badge tone="green">
+                <CheckBadgeIcon className="-ml-0.5 mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                Verified Business
+              </Badge>
+            )}
           </div>
           <p className="flex items-start gap-1.5 text-sm text-gray-500">
             <MapPinIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
@@ -166,7 +174,21 @@ export default function PropertyDetailContent() {
             </p>
           )}
 
-          <p className="mb-6 mt-4 whitespace-pre-line text-sm leading-relaxed text-gray-700">{property.description}</p>
+          {/* The two facts renters look for first: price and whether anything is free. */}
+          <div className="mt-4 flex flex-wrap gap-3">
+            <div className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 shadow-sm">
+              <p className="text-xs text-gray-500">Monthly rent</p>
+              <p className="font-semibold text-gray-900">{cheapest !== null ? `From ${formatPeso(cheapest)}` : 'Not listed yet'}</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 shadow-sm">
+              <p className="text-xs text-gray-500">Availability</p>
+              <p className={`font-semibold ${openRooms.length ? 'text-green-700' : 'text-gray-900'}`}>
+                {rooms.length ? `${openRooms.length} of ${rooms.length} room${rooms.length === 1 ? '' : 's'} open` : 'No rooms yet'}
+              </p>
+            </div>
+          </div>
+
+          <p className="mb-6 mt-5 whitespace-pre-line text-sm leading-relaxed text-gray-700">{property.description}</p>
 
           {!!property.nearbyUniversities?.length && (
             <div className="mb-6">
@@ -234,15 +256,18 @@ export default function PropertyDetailContent() {
 
           <div className="mt-6 border-t border-gray-100 pt-6">
             <h3 className="mb-3 text-lg font-semibold text-gray-900">Reviews</h3>
-            {reviews.length === 0 && <p className="text-sm text-gray-400">No reviews yet.</p>}
+            {reviews.length === 0 && <p className="text-sm text-gray-500">No reviews yet.</p>}
             <div className="space-y-3">
               {reviews.map((r) => (
                 <Card key={r._id}>
-                  <div className="mb-1 flex items-center justify-between">
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium text-gray-800">{r.tenantId?.fullName || 'Former tenant'}</p>
                     {r.isVerifiedFormerTenant && <Badge tone="green">Verified Former Tenant</Badge>}
                   </div>
-                  <Stars rating={r.rating} />
+                  <div className="flex items-center gap-2">
+                    <Stars rating={r.rating} />
+                    {r.createdAt && <span className="text-xs text-gray-500">{formatDate(r.createdAt)}</span>}
+                  </div>
                   {r.comment && <p className="mt-1 text-sm text-gray-600">{r.comment}</p>}
                 </Card>
               ))}
@@ -250,7 +275,8 @@ export default function PropertyDetailContent() {
           </div>
         </div>
 
-        <div className="lg:sticky lg:top-6">
+        {/* Stays in view below the sticky app header while the details scroll. */}
+        <div className="lg:sticky lg:top-24">
           <Card title="Available rooms">
             <SuccessBanner message={reserveMessage} />
             <div className="space-y-3">
@@ -260,10 +286,12 @@ export default function PropertyDetailContent() {
                   <div key={room._id} className="rounded-xl border border-gray-200 p-3.5">
                     <div className="flex items-center justify-between">
                       <p className="font-medium text-gray-900">Room {room.roomNumber}</p>
-                      <Badge tone={room.status === 'available' ? 'green' : room.status === 'occupied' ? 'red' : 'yellow'}>{room.status}</Badge>
+                      <StatusBadge status={room.status} tones={{ available: 'green', occupied: 'red', maintenance: 'yellow' }} />
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">₱{room.monthlyBaseRent.toLocaleString()} / month per slot</p>
-                    <p className="text-xs text-gray-400">
+                    <p className="mt-1 text-sm text-gray-600">
+                      <span className="font-semibold text-gray-900">{formatPeso(room.monthlyBaseRent)}</span> / month per slot
+                    </p>
+                    <p className="text-xs text-gray-500">
                       {room.currentOccupancy}/{room.capacity} occupied
                     </p>
                     {isAvailable &&
@@ -276,13 +304,13 @@ export default function PropertyDetailContent() {
                           <Button variant="primary" className="mt-3 w-full gap-1.5" onClick={() => onReserveClick(room)}>
                             <ArrowRightOnRectangleIcon className="h-4 w-4" /> Login to Reserve
                           </Button>
-                          <p className="mt-1.5 text-center text-xs text-gray-400">Sign in to reserve this room.</p>
+                          <p className="mt-1.5 text-center text-xs text-gray-500">Sign in to reserve this room.</p>
                         </>
                       ))}
                   </div>
                 );
               })}
-              {rooms.length === 0 && <p className="text-sm text-gray-400">No rooms listed yet.</p>}
+              {rooms.length === 0 && <p className="text-sm text-gray-500">No rooms listed yet.</p>}
             </div>
           </Card>
 
@@ -302,7 +330,7 @@ export default function PropertyDetailContent() {
                       setMoveInError(e.target.value ? validateMoveInDate(e.target.value) || '' : '');
                     }}
                     aria-invalid={Boolean(moveInError)}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm ${moveInError ? 'border-red-400' : 'border-gray-300'}`}
+                    className={`min-h-[2.5rem] w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 ${moveInError ? 'border-red-400' : 'border-gray-300'}`}
                   />
                   {moveInError && <span className="mt-1 block text-xs text-red-600">{moveInError}</span>}
                 </label>

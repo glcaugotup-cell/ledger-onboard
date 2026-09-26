@@ -448,7 +448,7 @@ export default function PropertyFormPage() {
 
                   {barangayOpen && (
                     <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-                      {filteredBarangays.length === 0 && <p className="px-3 py-2 text-sm text-gray-400">No barangay matches your search.</p>}
+                      {filteredBarangays.length === 0 && <p className="px-3 py-2 text-sm text-gray-500">No barangay matches your search.</p>}
                       {filteredBarangays.map((b) => (
                         <button
                           key={b.id}
@@ -501,7 +501,7 @@ export default function PropertyFormPage() {
                       <span className="text-sm text-gray-600">
                         <span className="font-semibold text-brand-700">+ Add Photos</span> or drag and drop
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-gray-500">
                         JPG, PNG, WEBP (Max 5MB each) · {MAX_PHOTOS - images.length} of {MAX_PHOTOS} remaining
                       </span>
                       <input
@@ -535,7 +535,7 @@ export default function PropertyFormPage() {
                     </div>
                   )}
 
-                  <p className="mt-3 text-xs text-gray-400">
+                  <p className="mt-3 text-xs text-gray-500">
                     Photos help tenants understand the property before booking. For better results, upload clear photos taken in good lighting.
                   </p>
                 </Field>
@@ -545,7 +545,7 @@ export default function PropertyFormPage() {
                     <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/60 px-4 py-6 text-center hover:border-brand-300">
                       <VideoCameraIcon className="h-6 w-6 text-brand-500" />
                       <span className="text-sm font-semibold text-brand-700">Choose Video</span>
-                      <span className="text-xs text-gray-400">MP4, WEBM, or MOV</span>
+                      <span className="text-xs text-gray-500">MP4, WEBM, or MOV</span>
                       <input
                         type="file"
                         accept="video/mp4,video/webm,video/quicktime"
@@ -579,14 +579,14 @@ export default function PropertyFormPage() {
                     </div>
                   )}
                   {videoError && <p className="mt-2 text-xs font-medium text-red-600">{videoError}</p>}
-                  <p className="mt-3 text-xs text-gray-400">
+                  <p className="mt-3 text-xs text-gray-500">
                     Optional: Upload a short walkthrough video to give tenants a better view of the property.
                   </p>
                 </Field>
               </div>
 
               <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-gray-400">Your business is verified, so this listing will be published immediately — no admin review needed.</p>
+                <p className="text-xs text-gray-500">Your business is verified, so this listing will be published immediately — no admin review needed.</p>
                 <Button type="submit" loading={loading} className="sm:w-auto">
                   Create Listing
                 </Button>
@@ -617,10 +617,10 @@ export default function PropertyFormPage() {
               ) : (
                 <div className="flex h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 text-center">
                   <MapPinIcon className="h-6 w-6 text-gray-300" />
-                  <p className="text-xs text-gray-400">Select a barangay to preview the property location.</p>
+                  <p className="text-xs text-gray-500">Select a barangay to preview the property location.</p>
                 </div>
               )}
-              <p className="mt-3 text-xs text-gray-400">
+              <p className="mt-3 text-xs text-gray-500">
                 Select a barangay from the dropdown to automatically locate the property on the map and fill in the coordinates.
               </p>
             </Card>

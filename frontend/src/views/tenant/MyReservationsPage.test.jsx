@@ -47,7 +47,7 @@ describe('MyReservationsPage', () => {
 
     expect(await screen.findByText('Dagupan Demo Boarding House')).toBeInTheDocument();
     expect(screen.getByText('Room 101')).toBeInTheDocument();
-    expect(screen.getByText('approved')).toBeInTheDocument();
+    expect(screen.getByText('Approved')).toBeInTheDocument();
   });
 
   it('shows the rejection reason only for rejected reservations', async () => {

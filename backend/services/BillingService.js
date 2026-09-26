@@ -4,6 +4,7 @@ const PropertyRepository = require('../repositories/PropertyRepository');
 const ApiError = require('../utils/ApiError');
 const { roundMoney } = require('../utils/money');
 const { ROLES, PAYMENT_STATUS } = require('../utils/constants');
+const { withSoaContext } = require('./displayContext');
 
 const DUE_DAYS_AFTER_PERIOD = 10;
 
@@ -95,7 +96,12 @@ class BillingService {
     return soa;
   }
 
+  /** Statements visible to the requester, labeled with tenant, room and property names for display. */
   async listForRequester(requester) {
+    return withSoaContext(await this._listForRequester(requester));
+  }
+
+  async _listForRequester(requester) {
     if (requester.role === ROLES.TENANT) {
       // Catch up on any due-date reminders the daily job hasn't sent yet (never duplicates).
       await this._sendDueRemindersFor(requester.id);

@@ -77,6 +77,24 @@ describe('DiscoverContent', () => {
     });
   });
 
+  it('filters by a rent range, warns when min is above max, and clears all filters', async () => {
+    PropertyApi.search.mockResolvedValue({ properties });
+    const user = userEvent.setup();
+    renderContent();
+    await waitFor(() => expect(PropertyApi.search).toHaveBeenCalledTimes(1));
+
+    await user.type(screen.getByLabelText('Min rent (₱)'), '1500');
+    await waitFor(() => expect(PropertyApi.search).toHaveBeenLastCalledWith({ minRent: '1500' }));
+
+    await user.type(screen.getByLabelText('Max rent (₱)'), '900');
+    expect(await screen.findByText('Higher than max rent')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /clear filters \(2\)/i }));
+    await waitFor(() => expect(PropertyApi.search).toHaveBeenLastCalledWith({}));
+    expect(screen.getByLabelText('Min rent (₱)')).toHaveValue(null);
+    expect(screen.getByRole('button', { name: /^clear filters$/i })).toBeDisabled();
+  });
+
   it('switches to the map view and renders a marker per result', async () => {
     PropertyApi.search.mockResolvedValue({ properties });
     const user = userEvent.setup();

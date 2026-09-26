@@ -18,6 +18,7 @@ import LandlordVerificationApi from '../../services/LandlordVerificationApi.js';
 import Button from '../../components/ui/Button.jsx';
 import ReasonDialog from '../../components/ReasonDialog.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState } from '../../components/ui/Feedback.jsx';
+import { formatDateTime } from '../../utils/format.js';
 
 function DocumentRow({ title, onView }) {
   return (
@@ -71,7 +72,7 @@ function SubmissionCard({ submission: s, busy, onView, onAct }) {
             <CalendarDaysIcon className="h-5 w-5 shrink-0 text-gray-400" />
             <div>
               <p className="font-medium text-gray-800">Submitted On</p>
-              <p className="text-gray-500">{new Date(s.submittedAt).toLocaleString()}</p>
+              <p className="text-gray-500">{formatDateTime(s.submittedAt)}</p>
             </div>
           </div>
         )}

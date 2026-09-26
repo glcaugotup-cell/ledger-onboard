@@ -53,7 +53,7 @@ describe('PropertyManagePage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Dagupan Demo Boarding House' })).toBeInTheDocument();
     expect(screen.getByText('Room 101')).toBeInTheDocument();
-    expect(screen.getByText('available')).toBeInTheDocument();
+    expect(screen.getByText('Available')).toBeInTheDocument();
   });
 
   it('toggles a room to maintenance and back', async () => {

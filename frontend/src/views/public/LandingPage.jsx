@@ -102,8 +102,13 @@ function SectionLabel({ children }) {
   );
 }
 
-/** Sticky nav bar — transparent over the Hero, solid once the Hero scrolls out of view. */
-function NavBar({ heroRef }) {
+/**
+ * Sticky nav bar — transparent over the Hero, solid once the Hero scrolls out of view.
+ * Over the Hero, text color follows the sliding panel beneath it (desktop): in login
+ * mode the green panel is on the left and the white form on the right, and the
+ * other way round in register mode. On smaller screens the Hero is white.
+ */
+function NavBar({ heroRef, authMode }) {
   const [solid, setSolid] = useState(false);
 
   // Goes solid once the Hero's bottom edge scrolls above the nav bar.
@@ -119,6 +124,10 @@ function NavBar({ heroRef }) {
     return () => window.removeEventListener('scroll', onScroll);
   }, [heroRef]);
 
+  // Which half of the desktop Hero is green depends on the auth panel's mode.
+  const brandOnGreen = !solid && authMode !== 'register';
+  const linksOnGreen = !solid && authMode === 'register';
+
   const scrollToId = (id) => (e) => {
     e.preventDefault();
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -127,32 +136,41 @@ function NavBar({ heroRef }) {
   return (
     <header
       className={`fixed inset-x-0 top-0 z-40 transition-all duration-300 ${
-        solid ? 'border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur' : 'bg-gradient-to-b from-black/35 via-black/10 to-transparent'
+        solid ? 'border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur' : 'bg-white/85 backdrop-blur lg:bg-transparent lg:backdrop-blur-none'
       }`}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
         <a href="#top" onClick={scrollToId('top')} className="flex items-center gap-3">
           <img src={logo} alt="Ledger OnBoard" className="h-10 w-10 rounded-xl object-cover shadow-sm" />
           <span>
-            <span className={`block text-base font-bold leading-tight transition-colors ${solid ? 'text-brand-800' : 'text-white drop-shadow-sm'}`}>Ledger OnBoard</span>
-            <span className={`hidden text-xs sm:block ${solid ? 'text-gray-400' : 'text-white/80'}`}>Rental Homes. Made Easier.</span>
+            <span className={`block text-base font-bold leading-tight transition-colors ${brandOnGreen ? 'text-brand-800 lg:text-white' : 'text-brand-800'}`}>
+              Ledger OnBoard
+            </span>
+            <span className={`hidden text-xs sm:block ${brandOnGreen ? 'text-gray-500 lg:text-white/80' : 'text-gray-500'}`}>Rental Homes. Made Easier.</span>
           </span>
         </a>
         <nav className="flex items-center gap-1 sm:gap-2">
           {[
-            { id: 'about', label: 'About Platform' },
-            { id: 'team', label: 'Team' },
-            { id: 'contact', label: 'Contact Us' },
+            { id: 'about', label: 'About Platform', short: 'About' },
+            { id: 'team', label: 'Team', short: 'Team' },
+            { id: 'contact', label: 'Contact Us', short: 'Contact' },
           ].map((link) => (
             <a
               key={link.id}
               href={`#${link.id}`}
               onClick={scrollToId(link.id)}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                solid ? 'text-gray-600 hover:bg-gray-100' : 'text-white/90 drop-shadow-sm hover:bg-white/10 hover:text-white'
+              className={`whitespace-nowrap rounded-lg px-2 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 sm:px-3 ${
+                linksOnGreen ? 'text-gray-700 hover:bg-gray-100 lg:text-white lg:hover:bg-white/10' : 'text-gray-700 hover:bg-gray-100 hover:text-brand-800'
               }`}
+              aria-label={link.label}
             >
-              {link.label}
+              {/* Shorter labels on phones so the bar never overflows. */}
+              <span aria-hidden="true" className="sm:hidden">
+                {link.short}
+              </span>
+              <span aria-hidden="true" className="hidden sm:inline">
+                {link.label}
+              </span>
             </a>
           ))}
         </nav>
@@ -223,7 +241,7 @@ export default function LandingPage() {
 
   return (
     <div id="top" className="bg-slate-50 font-sans text-slate-800 selection:bg-amber-200 selection:text-brand-900">
-      <NavBar heroRef={heroRef} />
+      <NavBar heroRef={heroRef} authMode={authMode} />
 
       {/* HERO — fullscreen sliding Login/Register widget */}
       <div ref={heroRef} className="relative w-full overflow-hidden">

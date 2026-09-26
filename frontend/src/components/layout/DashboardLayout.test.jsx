@@ -68,6 +68,35 @@ describe('DashboardLayout', () => {
     expect(screen.getByText('Reservation approved')).toBeInTheDocument();
   });
 
+  it('opens a menu with every link and a Log out action on small screens', async () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Landlord Cruz', role: 'landlord' } }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    const user = userEvent.setup();
+    renderLayout();
+
+    expect(document.getElementById('mobile-menu')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const menu = document.getElementById('mobile-menu');
+    expect(within(menu).getAllByRole('link')).toHaveLength(8);
+    expect(within(menu).getByRole('button', { name: /log out/i })).toBeInTheDocument();
+
+    await user.click(within(menu).getByRole('button', { name: /log out/i }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Are you sure you want to log out?');
+    expect(document.getElementById('mobile-menu')).toBeNull();
+  });
+
+  it('closes the notifications panel with Escape', async () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Tenant Cruz', role: 'tenant' } }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    const user = userEvent.setup();
+    renderLayout();
+
+    await user.click(screen.getByRole('button', { name: /notifications/i }));
+    expect(screen.getByText("You're all caught up.")).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByText("You're all caught up.")).not.toBeInTheDocument();
+  });
+
   it('caps the unread badge at "9+"', () => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Tenant Cruz', role: 'tenant' } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue({ unreadCount: 15 }));

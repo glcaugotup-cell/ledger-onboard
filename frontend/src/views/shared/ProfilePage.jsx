@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
+import PageHeader from '../../components/layout/PageHeader.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import AuthApi from '../../services/AuthApi.js';
 import ReviewApi from '../../services/ReviewApi.js';
@@ -14,6 +15,7 @@ import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst } from '../../utils/textFormat.js';
+import { formatDate, formatStatus } from '../../utils/format.js';
 import { PATTERNS, sanitizePhoneInput, validatePassword, validatePhone } from '../../utils/validators.js';
 
 const ROLE_LABEL = { tenant: 'Tenant', landlord: 'Landlord', caretaker: 'Caretaker', admin: 'Administrator' };
@@ -25,8 +27,8 @@ function InfoRow({ label, value, hint }) {
     <div className="grid grid-cols-1 gap-0.5 border-b border-gray-100 py-2.5 last:border-b-0 sm:grid-cols-3 sm:gap-3">
       <dt className="text-sm text-gray-500">{label}</dt>
       <dd className="break-words text-sm font-medium text-gray-900 sm:col-span-2">
-        {value || <span className="font-normal text-gray-400">Not provided</span>}
-        {hint && <span className="mt-0.5 block text-xs font-normal text-gray-400">{hint}</span>}
+        {value || <span className="font-normal text-gray-500">Not provided</span>}
+        {hint && <span className="mt-0.5 block text-xs font-normal text-gray-500">{hint}</span>}
       </dd>
     </div>
   );
@@ -266,7 +268,7 @@ export default function ProfilePage() {
 
   return (
     <DashboardLayout>
-      <h1 className="mb-4 text-xl font-semibold text-gray-900">Profile</h1>
+      <PageHeader title="Profile" description="Your account details, password and sign-in security." />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title="Personal information">
           <dl className="mb-4">
@@ -283,9 +285,9 @@ export default function ProfilePage() {
               <InfoRow label="Service barangay" value={user?.serviceBarangay} hint="Set by your landlord; used to match you with boarding houses nearby." />
             )}
             {role === 'landlord' && (
-              <InfoRow label="Business verification" value={user?.businessVerificationStatus ? user.businessVerificationStatus.toLowerCase() : 'Not submitted'} />
+              <InfoRow label="Business verification" value={user?.businessVerificationStatus ? formatStatus(user.businessVerificationStatus) : 'Not submitted'} />
             )}
-            {user?.createdAt && <InfoRow label="Member since" value={new Date(user.createdAt).toLocaleDateString(undefined, { dateStyle: 'long' })} />}
+            {user?.createdAt && <InfoRow label="Member since" value={formatDate(user.createdAt)} />}
           </dl>
 
           <form onSubmit={savePhone} className="space-y-3" noValidate>
@@ -388,7 +390,7 @@ export default function ProfilePage() {
               </Button>
             </div>
           )}
-          {closeStep === 'checking' && <p className="text-sm text-gray-400">Checking for tenancies you can still review…</p>}
+          {closeStep === 'checking' && <p className="text-sm text-gray-500">Checking for tenancies you can still review…</p>}
           {closeStep === 'review' && (
             <div>
               <p className="mb-3 text-sm text-gray-700">

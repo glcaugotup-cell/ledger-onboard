@@ -11,6 +11,7 @@ const { FILE_CATEGORIES } = require('./FileStorageService');
 const UserRepository = require('../repositories/UserRepository');
 const ApiError = require('../utils/ApiError');
 const { ROLES, PAYMENT_METHOD, VERIFICATION_STATUS } = require('../utils/constants');
+const { withPaymentContext } = require('./displayContext');
 
 class PaymentService {
   /** Tenant uploads a GCash payment screenshot as proof. */
@@ -75,7 +76,12 @@ class PaymentService {
     }
   }
 
+  /** Payments visible to the requester, labeled with tenant, bill period, room and property for display. */
   async listForRequester(requester) {
+    return withPaymentContext(await this._listForRequester(requester));
+  }
+
+  async _listForRequester(requester) {
     if (requester.role === ROLES.TENANT) return PaymentTransactionRepository.findByTenant(requester.id);
 
     if (requester.role === ROLES.ADMIN) return PaymentTransactionRepository.find({}, { sort: { createdAt: -1 } });

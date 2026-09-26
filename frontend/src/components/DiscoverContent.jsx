@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MapIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, MapIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import PropertyApi from '../services/PropertyApi.js';
 import PropertyCard from './PropertyCard.jsx';
 import PropertyMap from './map/PropertyMap.jsx';
@@ -13,8 +13,10 @@ import { DAGUPAN_BARANGAYS } from '../data/dagupanBarangays.js';
  * below it, both fed by the same `properties` state so filters update cards
  * and markers together. Without it (landing page) the original toggle stays.
  */
+const EMPTY_FILTERS = { barangay: '', propertyType: '', tenantGenderPolicy: '', minRent: '', maxRent: '', text: '' };
+
 export default function DiscoverContent({ linkPrefix = '/tenant/properties', mapSection = false }) {
-  const [filters, setFilters] = useState({ barangay: '', propertyType: '', tenantGenderPolicy: '', minRent: '', maxRent: '', text: '' });
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -23,6 +25,7 @@ export default function DiscoverContent({ linkPrefix = '/tenant/properties', map
   const mapRef = useRef(null);
 
   useEffect(() => {
+    if (filters.minRent !== '' && filters.maxRent !== '' && Number(filters.minRent) > Number(filters.maxRent)) return undefined;
     const timeout = setTimeout(() => {
       setLoading(true);
       setError('');
@@ -39,6 +42,8 @@ export default function DiscoverContent({ linkPrefix = '/tenant/properties', map
   }, [filters]);
 
   const update = (key) => (e) => setFilters({ ...filters, [key]: e.target.value });
+  const activeFilters = Object.values(filters).filter((v) => v !== '').length;
+  const rentRangeInvalid = filters.minRent !== '' && filters.maxRent !== '' && Number(filters.minRent) > Number(filters.maxRent);
 
   const scrollToMap = () => mapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const showOnMap = (property) => {
@@ -51,46 +56,71 @@ export default function DiscoverContent({ linkPrefix = '/tenant/properties', map
   return (
     <div>
       <div
-        className={`mb-6 grid grid-cols-1 gap-3 border border-gray-200 bg-white sm:grid-cols-2 lg:grid-cols-5 ${
-          mapSection ? 'rounded-2xl p-4 shadow-sm sm:p-5' : 'rounded-xl p-4'
-        }`}
+        role="search"
+        aria-label="Filter boarding houses"
+        className={`mb-6 grid grid-cols-2 gap-3 border border-gray-200 bg-white lg:grid-cols-4 ${mapSection ? 'rounded-2xl p-4 shadow-sm sm:p-5' : 'rounded-xl p-4 shadow-sm'}`}
       >
-        <Field label="Search">
-          <TextInput placeholder="Name, description…" value={filters.text} onChange={update('text')} />
-        </Field>
-        <Field label="Barangay">
-          <Select value={filters.barangay} onChange={update('barangay')}>
-            <option value="">Any</option>
-            {DAGUPAN_BARANGAYS.map((b) => (
-              <option key={b.id} value={b.name}>
-                {b.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Property type">
-          <Select value={filters.propertyType} onChange={update('propertyType')}>
-            <option value="">Any</option>
-            {['Room Only', 'Apartment', 'Bedspace', 'Studio'].map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Gender policy">
-          <Select value={filters.tenantGenderPolicy} onChange={update('tenantGenderPolicy')}>
-            <option value="">Any</option>
-            {['Female Only', 'Male Only', 'Co-Ed'].map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </Select>
+        <div className="col-span-2">
+          <Field label="Search">
+            <div className="relative">
+              <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+              <TextInput placeholder="Name, description…" value={filters.text} onChange={update('text')} className="pl-9" />
+            </div>
+          </Field>
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <Field label="Barangay">
+            <Select value={filters.barangay} onChange={update('barangay')}>
+              <option value="">Any</option>
+              {DAGUPAN_BARANGAYS.map((b) => (
+                <option key={b.id} value={b.name}>
+                  {b.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <Field label="Property type">
+            <Select value={filters.propertyType} onChange={update('propertyType')}>
+              <option value="">Any</option>
+              {['Room Only', 'Apartment', 'Bedspace', 'Studio'].map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <Field label="Gender policy">
+            <Select value={filters.tenantGenderPolicy} onChange={update('tenantGenderPolicy')}>
+              <option value="">Any</option>
+              {['Female Only', 'Male Only', 'Co-Ed'].map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <Field label="Min rent (₱)" error={rentRangeInvalid ? 'Higher than max rent' : undefined}>
+          <TextInput type="number" min="0" inputMode="numeric" value={filters.minRent} onChange={update('minRent')} placeholder="e.g. 1500" error={rentRangeInvalid} />
         </Field>
         <Field label="Max rent (₱)">
-          <TextInput type="number" min="0" value={filters.maxRent} onChange={update('maxRent')} placeholder="e.g. 3000" />
+          <TextInput type="number" min="0" inputMode="numeric" value={filters.maxRent} onChange={update('maxRent')} placeholder="e.g. 3000" />
         </Field>
+        <div className="col-span-2 flex items-end sm:col-span-1">
+          <button
+            type="button"
+            onClick={() => setFilters(EMPTY_FILTERS)}
+            disabled={activeFilters === 0}
+            className="inline-flex min-h-[2.5rem] w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:text-gray-400"
+          >
+            <XMarkIcon className="h-4 w-4" aria-hidden="true" />
+            Clear filters{activeFilters > 0 ? ` (${activeFilters})` : ''}
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex items-center justify-between gap-3">

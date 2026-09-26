@@ -23,7 +23,8 @@ class ReservationRepository extends BaseRepository {
   }
 
   findByCaretaker(caretakerId) {
-    return this.model.find({ caretakerAssignedId: caretakerId }).populate('tenantId roomId').sort({ createdAt: -1 }).exec();
+    // Same shape as the tenant and landlord lists, so caretaker screens can name the property.
+    return this.model.find({ caretakerAssignedId: caretakerId }).populate('tenantId roomId propertyId').sort({ createdAt: -1 }).exec();
   }
 
   findActiveByTenantAndRoom(tenantId, roomId) {

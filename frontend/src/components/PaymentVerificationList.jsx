@@ -3,9 +3,37 @@ import PaymentApi from '../services/PaymentApi.js';
 import Card from './ui/Card.jsx';
 import Button from './ui/Button.jsx';
 import ReasonDialog from './ReasonDialog.jsx';
-import { Badge, EmptyState, ErrorBanner, LoadingState } from './ui/Feedback.jsx';
+import { CheckBadgeIcon, DevicePhoneMobileIcon, BanknotesIcon, PhotoIcon } from '@heroicons/react/24/outline';
+import { EmptyState, ErrorBanner, LoadingState, StatusBadge } from './ui/Feedback.jsx';
+import { formatDateTime, formatPeriod, formatPeso } from '../utils/format.js';
 
 const STATUS_TONE = { PENDING: 'yellow', VERIFIED: 'green', REJECTED: 'red' };
+const METHOD = {
+  GCASH_SCREENSHOT: { label: 'GCash', icon: DevicePhoneMobileIcon },
+  CASH_ON_SITE: { label: 'Cash on site', icon: BanknotesIcon },
+};
+
+/** Amount, method, who paid and which bill — the facts needed to decide on a payment. */
+function PaymentSummary({ payment: p }) {
+  const method = METHOD[p.paymentMethod] || { label: p.paymentMethod, icon: BanknotesIcon };
+  const context = [p.tenantName, p.billingPeriod && `${formatPeriod(p.billingPeriod)} bill`, [p.propertyName, p.roomNumber && `Room ${p.roomNumber}`].filter(Boolean).join(' · ')]
+    .filter(Boolean)
+    .join(' — ');
+  return (
+    <div className="flex min-w-0 gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+        <method.icon className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <p className="font-semibold text-gray-900">
+          {formatPeso(p.amount)} — {method.label}
+        </p>
+        {context && <p className="text-sm text-gray-600">{context}</p>}
+        <p className="text-xs text-gray-500">{formatDateTime(p.timestamp || p.createdAt)}</p>
+      </div>
+    </div>
+  );
+}
 
 function ProofImage({ paymentId }) {
   const [url, setUrl] = useState(null);
@@ -57,61 +85,71 @@ export default function PaymentVerificationList({ canVerify }) {
   const reviewed = payments.filter((p) => p.verificationStatus !== 'PENDING');
 
   return (
-    <div>
+    <div className="space-y-8">
       <ErrorBanner message={error} />
-      {loading && <LoadingState />}
+      {loading && <LoadingState label="Loading payments…" />}
 
       {!loading && (
         <>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-400">Awaiting verification</h2>
-          {pending.length === 0 && <EmptyState title="Nothing to verify" />}
-          <div className="mb-8 space-y-3">
-            {pending.map((p) => (
-              <Card key={p._id}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-gray-900">₱{p.amount.toLocaleString()} — {p.paymentMethod.replace('_', ' ')}</p>
-                    <p className="text-xs text-gray-400">{new Date(p.timestamp).toLocaleString()}</p>
-                    {p.proofImageURL && (
-                      <button className="mt-1 text-xs text-brand-600 hover:underline" onClick={() => setExpandedId(expandedId === p._id ? null : p._id)}>
-                        {expandedId === p._id ? 'Hide proof' : 'View proof'}
-                      </button>
+          <section aria-labelledby="awaiting-heading">
+            <h2 id="awaiting-heading" className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Awaiting verification
+              <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs normal-case tracking-normal text-gray-700">{pending.length}</span>
+            </h2>
+            {pending.length === 0 && <EmptyState icon={CheckBadgeIcon} title="Nothing to verify" description="New GCash proofs and cash collections appear here." />}
+            <div className="space-y-3">
+              {pending.map((p) => (
+                <Card key={p._id} className="border-l-4 border-l-amber-400">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <PaymentSummary payment={p} />
+                    {canVerify(p) && (
+                      <div className="grid grid-cols-2 gap-2 sm:flex">
+                        <Button loading={busyId === p._id} onClick={() => verify(p._id, true)}>
+                          Verify
+                        </Button>
+                        <Button variant="danger" loading={busyId === p._id} onClick={() => setRejecting(p._id)}>
+                          Reject
+                        </Button>
+                      </div>
                     )}
                   </div>
-                  {canVerify(p) && (
-                    <div className="flex gap-2">
-                      <Button loading={busyId === p._id} onClick={() => verify(p._id, true)}>
-                        Verify
-                      </Button>
-                      <Button variant="danger" loading={busyId === p._id} onClick={() => setRejecting(p._id)}>
-                        Reject
-                      </Button>
+                  {p.proofImageURL && (
+                    <button
+                      className="mt-3 inline-flex items-center gap-1 rounded text-sm font-medium text-brand-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                      onClick={() => setExpandedId(expandedId === p._id ? null : p._id)}
+                      aria-expanded={expandedId === p._id}
+                    >
+                      <PhotoIcon className="h-4 w-4" aria-hidden="true" />
+                      {expandedId === p._id ? 'Hide proof' : 'View proof'}
+                    </button>
+                  )}
+                  {expandedId === p._id && (
+                    <div className="mt-3">
+                      <ProofImage paymentId={p._id} />
                     </div>
                   )}
-                </div>
-                {expandedId === p._id && (
-                  <div className="mt-3">
-                    <ProofImage paymentId={p._id} />
-                  </div>
-                )}
-              </Card>
-            ))}
-          </div>
+                </Card>
+              ))}
+            </div>
+          </section>
 
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-400">History</h2>
-          <div className="space-y-2">
-            {reviewed.map((p) => (
-              <Card key={p._id}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">₱{p.amount.toLocaleString()} — {p.paymentMethod.replace('_', ' ')}</p>
-                    {p.rejectionReason && <p className="text-xs text-red-500">{p.rejectionReason}</p>}
+          <section aria-labelledby="payment-history-heading">
+            <h2 id="payment-history-heading" className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+              History
+            </h2>
+            {reviewed.length === 0 && <p className="text-sm text-gray-500">Verified and rejected payments appear here.</p>}
+            <div className="space-y-2">
+              {reviewed.map((p) => (
+                <Card key={p._id}>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <PaymentSummary payment={p} />
+                    <StatusBadge status={p.verificationStatus} tones={STATUS_TONE} />
                   </div>
-                  <Badge tone={STATUS_TONE[p.verificationStatus]}>{p.verificationStatus}</Badge>
-                </div>
-              </Card>
-            ))}
-          </div>
+                  {p.rejectionReason && <p className="mt-2 text-sm text-red-600">Reason: {p.rejectionReason}</p>}
+                </Card>
+              ))}
+            </div>
+          </section>
         </>
       )}
       {rejecting && (

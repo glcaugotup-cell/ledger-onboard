@@ -65,10 +65,26 @@ class PropertyService {
     return landlord?.accountStatus === ACCOUNT_STATUS.ACTIVE;
   }
 
-  /** Landlord's own listings regardless of moderation status (draft/pending/rejected/approved); deleted ones are left out. */
+  /**
+   * Landlord's own listings regardless of moderation status (draft/pending/rejected/approved); deleted ones are left out.
+   * Each carries display-only room figures: roomCount, availableRooms, occupiedSlots, totalSlots and startingRent.
+   */
   async listMine(landlordId) {
-    const properties = await PropertyRepository.findByLandlord(landlordId);
-    return properties.filter((p) => !p.deletedAt);
+    const properties = (await PropertyRepository.findByLandlord(landlordId)).filter((p) => !p.deletedAt);
+    if (!properties.length) return properties;
+    const rooms = await RoomRepository.find({ propertyId: { $in: properties.map((p) => p._id) } });
+    return properties.map((doc) => {
+      const own = rooms.filter((r) => String(r.propertyId) === String(doc._id));
+      const rents = own.map((r) => r.monthlyBaseRent);
+      return {
+        ...doc.toObject(),
+        roomCount: own.length,
+        availableRooms: own.filter((r) => r.status === 'available' && r.currentOccupancy < r.capacity).length,
+        occupiedSlots: own.reduce((sum, r) => sum + r.currentOccupancy, 0),
+        totalSlots: own.reduce((sum, r) => sum + r.capacity, 0),
+        startingRent: rents.length ? Math.min(...rents) : null,
+      };
+    });
   }
 
   async getPublicDetail(propertyId) {

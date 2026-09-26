@@ -81,7 +81,7 @@ function DocumentUploadCard({ label, file, onFileChange, inputId }) {
           Choose file
         </Button>
         <input id={inputId} type="file" accept={ACCEPTED_TYPES} className="hidden" onChange={(e) => pick(e.target.files)} />
-        <p className="text-xs text-gray-400">Accepted formats: PDF, JPG, PNG (Max 5MB)</p>
+        <p className="text-xs text-gray-500">Accepted formats: PDF, JPG, PNG (Max 5MB)</p>
       </label>
       {fileError && (
         <p className="mt-2 text-xs text-red-600" role="alert">
@@ -89,7 +89,7 @@ function DocumentUploadCard({ label, file, onFileChange, inputId }) {
         </p>
       )}
 
-      <p className="mt-3 flex items-center gap-1.5 text-xs text-gray-400">
+      <p className="mt-3 flex items-center gap-1.5 text-xs text-gray-500">
         <LockClosedIcon className="h-3.5 w-3.5" /> Your document will be kept private and secure.
       </p>
     </div>

@@ -39,7 +39,7 @@ describe('PropertyCard', () => {
         <PropertyCard property={{ ...property, images: [] }} />
       </MemoryRouter>
     );
-    expect(screen.getByText('No image')).toBeInTheDocument();
+    expect(screen.getByText('No photo yet')).toBeInTheDocument();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
@@ -50,5 +50,19 @@ describe('PropertyCard', () => {
       </MemoryRouter>
     );
     expect(screen.getByRole('link')).toHaveAttribute('href', '/tenant/properties/p1');
+  });
+  it('shows the starting monthly rent, or says there are no rooms yet', () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <PropertyCard property={{ ...property, startingRent: 2500 }} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('₱2,500')).toBeInTheDocument();
+    rerender(
+      <MemoryRouter>
+        <PropertyCard property={{ ...property, startingRent: null }} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('No rooms listed yet')).toBeInTheDocument();
   });
 });

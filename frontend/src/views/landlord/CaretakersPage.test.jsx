@@ -42,7 +42,7 @@ describe('CaretakersPage', () => {
     });
     renderPage();
     expect(await screen.findByText('Maria Santos')).toBeInTheDocument();
-    expect(screen.getByText('active')).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
   });
 
   it('blocks submission and shows custom messages when fields fail validation', async () => {

@@ -9,6 +9,8 @@ const { useAuthMock, useNotificationsMock } = vi.hoisted(() => ({ useAuthMock: v
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
 vi.mock('../../services/AnalyticsApi.js', () => ({ default: { getLandlordAnalytics: vi.fn() } }));
+vi.mock('../../services/ReservationApi.js', () => ({ default: { list: vi.fn().mockResolvedValue({ reservations: [{ _id: 'r1', status: 'pending' }] }) } }));
+vi.mock('../../services/PaymentApi.js', () => ({ default: { list: vi.fn().mockResolvedValue({ payments: [] }) } }));
 
 const analytics = {
   occupancyRate: 82,
@@ -58,6 +60,21 @@ describe('DashboardPage', () => {
     AnalyticsApi.getLandlordAnalytics.mockResolvedValue({ ...analytics, outstandingDebt: 0 });
     renderPage();
     expect(await screen.findByText('₱0')).toHaveClass('text-[#0ca30c]');
+  });
+
+  it('lists what needs attention, each linking to the page that handles it', async () => {
+    AnalyticsApi.getLandlordAnalytics.mockResolvedValue(analytics);
+    renderPage();
+    const request = await screen.findByRole('link', { name: /1 reservation request waiting for your answer/i });
+    expect(request).toHaveAttribute('href', '/landlord/reservations');
+    expect(screen.getByRole('link', { name: /₱8,000 still unpaid/i })).toHaveAttribute('href', '/landlord/billing');
+    expect(screen.queryByRole('link', { name: /to verify/i })).not.toBeInTheDocument();
+  });
+
+  it('greets the landlord by first name', async () => {
+    AnalyticsApi.getLandlordAnalytics.mockResolvedValue(analytics);
+    renderPage();
+    expect(await screen.findByRole('heading', { level: 1, name: /, Landlord$/ })).toBeInTheDocument();
   });
 
   it('shows an error banner when analytics fail to load', async () => {

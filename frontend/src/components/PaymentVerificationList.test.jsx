@@ -27,21 +27,28 @@ describe('PaymentVerificationList', () => {
     PaymentApi.list.mockResolvedValue({ payments: [reviewedPayment] });
     render(<PaymentVerificationList canVerify={() => true} />);
     expect(await screen.findByText(/nothing to verify/i)).toBeInTheDocument();
-    // paymentMethod.replace('_', ' ') only replaces the first underscore.
-    expect(screen.getByText('₱2,000 — CASH ON_SITE')).toBeInTheDocument();
+    expect(screen.getByText('₱2,000 — Cash on site')).toBeInTheDocument();
   });
 
   it('splits payments into pending and history sections', async () => {
     PaymentApi.list.mockResolvedValue({ payments: [pendingPayment, reviewedPayment] });
     render(<PaymentVerificationList canVerify={() => true} />);
-    expect(await screen.findByText('₱1,500 — GCASH SCREENSHOT')).toBeInTheDocument();
-    expect(screen.getByText('VERIFIED')).toBeInTheDocument();
+    expect(await screen.findByText('₱1,500 — GCash')).toBeInTheDocument();
+    expect(screen.getByText('Verified')).toBeInTheDocument();
+  });
+
+  it('shows who paid and which bill the payment is for', async () => {
+    PaymentApi.list.mockResolvedValue({
+      payments: [{ ...pendingPayment, tenantName: 'Tina Cruz', billingPeriod: '2026-09-01T00:00:00Z', propertyName: 'Sunrise', roomNumber: '101' }],
+    });
+    render(<PaymentVerificationList canVerify={() => true} />);
+    expect(await screen.findByText('Tina Cruz — September 2026 bill — Sunrise · Room 101')).toBeInTheDocument();
   });
 
   it('hides verify/reject actions when canVerify returns false', async () => {
     PaymentApi.list.mockResolvedValue({ payments: [pendingPayment] });
     render(<PaymentVerificationList canVerify={() => false} />);
-    await screen.findByText('₱1,500 — GCASH SCREENSHOT');
+    await screen.findByText('₱1,500 — GCash');
     expect(screen.queryByRole('button', { name: /^verify$/i })).not.toBeInTheDocument();
   });
 

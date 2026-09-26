@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
+import PageHeader from '../../components/layout/PageHeader.jsx';
 import BillingApi from '../../services/BillingApi.js';
 import PaymentApi from '../../services/PaymentApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Field, TextInput } from '../../components/ui/Field.jsx';
-import { Badge, EmptyState, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
+import { BanknotesIcon, CalendarDaysIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import StatTile from '../../components/charts/StatTile.jsx';
+import { EmptyState, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
+import { formatDate, formatPeriod, formatPeso } from '../../utils/format.js';
 import { describeApiError } from '../../utils/errors.js';
 import { validateImageFile, validatePaymentAmount } from '../../utils/validators.js';
 
@@ -86,53 +90,96 @@ export default function MyBillingPage() {
 
   useEffect(load, []);
 
+  const open = soas.filter((s) => s.remainingBalance > 0 && s.paymentStatus !== 'PAID');
+  const outstanding = open.reduce((sum, s) => sum + s.remainingBalance, 0);
+  const nextDue = [...open].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
+
   return (
     <DashboardLayout>
-      <h1 className="mb-4 text-xl font-semibold text-gray-900">Billing &amp; statements</h1>
-      <ErrorBanner message={error} />
-      <SuccessBanner message={successMsg} />
-      {loading && <LoadingState />}
-      {!loading && soas.length === 0 && <EmptyState title="No statements yet" description="Your monthly statement of account appears here once a caretaker logs a utility reading." />}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {soas.map((soa) => (
-          <Card key={soa._id}>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="font-medium text-gray-900">
-                {new Date(soa.billingPeriod).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-              </p>
-              <Badge tone={STATUS_TONE[soa.paymentStatus]}>{soa.paymentStatus}</Badge>
-            </div>
-            <dl className="space-y-1 text-sm text-gray-600">
-              <div className="flex justify-between"><dt>Base rent</dt><dd>₱{soa.baseRent.toLocaleString()}</dd></div>
-              <div className="flex justify-between"><dt>Electric share</dt><dd>₱{soa.electricShare.toLocaleString()}</dd></div>
-              <div className="flex justify-between"><dt>Water share</dt><dd>₱{soa.waterShare.toLocaleString()}</dd></div>
-              <div className="flex justify-between"><dt>Previous arrears</dt><dd>₱{soa.previousArrears.toLocaleString()}</dd></div>
-              <div className="flex justify-between font-semibold text-gray-900"><dt>Total due</dt><dd>₱{soa.totalAmountDue.toLocaleString()}</dd></div>
-              <div className="flex justify-between"><dt>Amount paid</dt><dd>₱{soa.amountPaid.toLocaleString()}</dd></div>
-              <div className="flex justify-between font-semibold text-gray-900"><dt>Remaining balance</dt><dd>₱{soa.remainingBalance.toLocaleString()}</dd></div>
-              <div className="flex justify-between text-xs text-gray-400"><dt>Due date</dt><dd>{new Date(soa.dueDate).toLocaleDateString()}</dd></div>
-            </dl>
+      <PageHeader title="Billing & statements" description="Your monthly statements of account and payments." />
+      <div className="space-y-4">
+        <ErrorBanner message={error} />
+        <SuccessBanner message={successMsg} />
+      </div>
+      {loading && <LoadingState label="Loading your statements…" />}
+      {!loading && soas.length === 0 && (
+        <EmptyState icon={DocumentTextIcon} title="No statements yet" description="Your monthly statement of account appears here once a caretaker logs a utility reading." />
+      )}
+      {!loading && soas.length > 0 && (
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+          <div className="col-span-2 sm:col-span-1">
+            <StatTile
+              icon={BanknotesIcon}
+              label="Total balance"
+              value={formatPeso(outstanding)}
+              tone={outstanding > 0 ? 'critical' : 'good'}
+              sublabel={open.length ? `across ${open.length} statement${open.length === 1 ? '' : 's'}` : 'Everything is paid'}
+            />
+          </div>
+          <StatTile
+            icon={CalendarDaysIcon}
+            label="Next due"
+            value={nextDue ? formatDate(nextDue.dueDate) : '—'}
+            sublabel={nextDue ? `${formatPeriod(nextDue.billingPeriod)} statement` : 'No upcoming bills'}
+          />
+          <StatTile icon={DocumentTextIcon} label="Statements" value={soas.length} sublabel="since you moved in" />
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {soas.map((soa) => {
+          const owed = soa.remainingBalance > 0 && soa.paymentStatus !== 'PAID';
+          return (
+            <Card key={soa._id} className={soa.paymentStatus === 'OVERDUE' ? 'border-red-200' : ''}>
+              <article aria-label={`${formatPeriod(soa.billingPeriod)} statement`}>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-gray-900">{formatPeriod(soa.billingPeriod)}</p>
+                    {(soa.propertyName || soa.roomNumber) && (
+                      <p className="text-xs text-gray-500">{[soa.propertyName, soa.roomNumber && `Room ${soa.roomNumber}`].filter(Boolean).join(' · ')}</p>
+                    )}
+                  </div>
+                  <StatusBadge status={soa.paymentStatus} tones={STATUS_TONE} />
+                </div>
+                <div className="mb-3 flex items-end justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2.5">
+                  <div>
+                    <p className="text-xs text-gray-500">Remaining balance</p>
+                    <p className={`text-xl font-bold tabular-nums ${owed ? 'text-gray-900' : 'text-green-700'}`}>{formatPeso(soa.remainingBalance)}</p>
+                  </div>
+                  <p className={`text-right text-xs ${soa.paymentStatus === 'OVERDUE' ? 'font-semibold text-red-600' : 'text-gray-500'}`}>
+                    Due {formatDate(soa.dueDate)}
+                  </p>
+                </div>
+                <dl className="space-y-1 text-sm text-gray-600">
+                  <div className="flex justify-between"><dt>Base rent</dt><dd className="tabular-nums">{formatPeso(soa.baseRent)}</dd></div>
+                  <div className="flex justify-between"><dt>Electric share</dt><dd className="tabular-nums">{formatPeso(soa.electricShare)}</dd></div>
+                  <div className="flex justify-between"><dt>Water share</dt><dd className="tabular-nums">{formatPeso(soa.waterShare)}</dd></div>
+                  <div className="flex justify-between"><dt>Previous arrears</dt><dd className="tabular-nums">{formatPeso(soa.previousArrears)}</dd></div>
+                  <div className="flex justify-between border-t border-gray-100 pt-1 font-semibold text-gray-900"><dt>Total due</dt><dd className="tabular-nums">{formatPeso(soa.totalAmountDue)}</dd></div>
+                  <div className="flex justify-between"><dt>Amount paid</dt><dd className="tabular-nums">{formatPeso(soa.amountPaid)}</dd></div>
+                </dl>
 
-            {soa.remainingBalance > 0 && soa.paymentStatus !== 'PAID' && (
-              <>
-                {payingId === soa._id ? (
-                  <PaySoaForm
-                    soa={soa}
-                    onDone={() => {
-                      setPayingId(null);
-                      setSuccessMsg('Payment proof submitted — awaiting verification.');
-                      load();
-                    }}
-                  />
-                ) : (
-                  <Button className="mt-3 w-full" variant="secondary" onClick={() => setPayingId(soa._id)}>
-                    Pay via GCash
-                  </Button>
+                {owed && (
+                  <>
+                    {payingId === soa._id ? (
+                      <PaySoaForm
+                        soa={soa}
+                        onDone={() => {
+                          setPayingId(null);
+                          setSuccessMsg('Payment proof submitted — awaiting verification.');
+                          load();
+                        }}
+                      />
+                    ) : (
+                      <Button className="mt-4 w-full" onClick={() => setPayingId(soa._id)}>
+                        Pay via GCash
+                      </Button>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </Card>
-        ))}
+              </article>
+            </Card>
+          );
+        })}
       </div>
     </DashboardLayout>
   );

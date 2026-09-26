@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
+import PageHeader from '../../components/layout/PageHeader.jsx';
 import BillingApi from '../../services/BillingApi.js';
 import PaymentApi from '../../services/PaymentApi.js';
 import PaymentVerificationList from '../../components/PaymentVerificationList.jsx';
@@ -9,6 +10,7 @@ import Button from '../../components/ui/Button.jsx';
 import { Field, Select, TextInput } from '../../components/ui/Field.jsx';
 import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
+import { formatPeriod, formatPeso } from '../../utils/format.js';
 import { validatePaymentAmount } from '../../utils/validators.js';
 
 export default function CashPaymentsPage() {
@@ -65,7 +67,7 @@ export default function CashPaymentsPage() {
 
   return (
     <DashboardLayout>
-      <h1 className="mb-4 text-xl font-semibold text-gray-900">Cash &amp; payments</h1>
+      <PageHeader title="Cash & payments" description="Record cash collected on-site and follow its verification." />
       <Card title="Record cash collected on-site" className="mb-6 max-w-xl">
         <form onSubmit={onSubmit} noValidate className="space-y-3">
           <ErrorBanner message={loadError} />
@@ -76,7 +78,7 @@ export default function CashPaymentsPage() {
               <option value="">Select a statement…</option>
               {soas.map((s) => (
                 <option key={s._id} value={s._id}>
-                  {new Date(s.billingPeriod).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} — balance ₱{s.remainingBalance.toLocaleString()}
+                  {formatPeriod(s.billingPeriod)} — balance {formatPeso(s.remainingBalance)}
                 </option>
               ))}
             </Select>

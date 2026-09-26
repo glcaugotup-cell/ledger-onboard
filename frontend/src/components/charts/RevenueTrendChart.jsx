@@ -10,7 +10,7 @@ function formatMonth(value) {
 
 export default function RevenueTrendChart({ data }) {
   if (!data || data.length === 0) {
-    return <p className="py-12 text-center text-sm text-gray-400">No revenue recorded yet.</p>;
+    return <p className="py-12 text-center text-sm text-gray-500">No revenue recorded yet.</p>;
   }
   return (
     <ResponsiveContainer width="100%" height={260}>

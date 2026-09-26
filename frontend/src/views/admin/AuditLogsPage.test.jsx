@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AuditLogsPage from './AuditLogsPage.jsx';
@@ -32,7 +32,7 @@ describe('AuditLogsPage', () => {
     expect(AdminApi.listAuditLogs).toHaveBeenCalledWith({ limit: 100 });
   });
 
-  it('renders a table row per log entry with success marker', async () => {
+  it('renders a table row per log entry with a readable action and result', async () => {
     AdminApi.listAuditLogs.mockResolvedValue({
       logs: [
         { _id: 'l1', createdAt: '2026-09-22T10:00:00Z', action: 'USER_LOGIN', actorRole: 'tenant', targetType: 'User', success: true },
@@ -41,11 +41,14 @@ describe('AuditLogsPage', () => {
     });
     renderPage();
 
-    expect(await screen.findAllByText('USER_LOGIN')).toHaveLength(2);
-    const rows = screen.getAllByRole('row');
+    const table = await screen.findByRole('table');
+    const rows = within(table).getAllByRole('row');
     expect(rows).toHaveLength(3); // header + 2 entries
-    expect(screen.getByText('✓')).toBeInTheDocument();
-    expect(screen.getByText('✗')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('User login')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('USER_LOGIN')).toBeInTheDocument(); // raw code kept for support
+    expect(within(rows[1]).getByText('Tenant')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Success')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('Failed')).toBeInTheDocument();
   });
 
   it('shows an error banner when logs fail to load', async () => {

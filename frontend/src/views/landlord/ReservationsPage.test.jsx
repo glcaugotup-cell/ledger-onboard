@@ -47,7 +47,7 @@ describe('ReservationsPage', () => {
     expect(await screen.findByText(/pending requests/i)).toBeInTheDocument();
     expect(screen.getByText(/history/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
-    expect(screen.getByText('approved')).toBeInTheDocument();
+    expect(screen.getByText('Approved')).toBeInTheDocument();
   });
 
   it('approves a pending reservation with an assigned caretaker', async () => {

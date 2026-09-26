@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
+import PageHeader from '../../components/layout/PageHeader.jsx';
 import PropertyApi from '../../services/PropertyApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { Field, TextInput } from '../../components/ui/Field.jsx';
-import { Badge, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
+import { Badge, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst } from '../../utils/textFormat.js';
+import { formatPeso } from '../../utils/format.js';
 
 const STATUS_TONE = { draft: 'gray', pending_moderation: 'yellow', approved: 'green', rejected: 'red', inactive: 'gray', available: 'green', occupied: 'red', maintenance: 'yellow' };
 
@@ -132,7 +135,7 @@ function CaretakerAssignment({ propertyId }) {
     <Card title="Caretakers" className="mb-6">
       <ErrorBanner message={error} />
       <SuccessBanner message={msg} />
-      {!data && !error && <p className="text-sm text-gray-400">Loading caretakers…</p>}
+      {!data && !error && <p className="text-sm text-gray-500">Loading caretakers…</p>}
       {data && (
         <>
           <p className="mb-3 text-sm text-gray-500">
@@ -140,7 +143,7 @@ function CaretakerAssignment({ propertyId }) {
             suggested first.
           </p>
           {data.caretakers.length === 0 && (
-            <p className="text-sm text-gray-400">You have no active caretakers yet. Invite one from the Caretakers page.</p>
+            <p className="text-sm text-gray-500">You have no active caretakers yet. Invite one from the Caretakers page.</p>
           )}
           <ul className="space-y-2">
             {data.caretakers.map((c) => (
@@ -253,29 +256,33 @@ export default function PropertyManagePage() {
 
   return (
     <DashboardLayout>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 flex items-center gap-2">
-            <h1 className="text-xl font-semibold text-gray-900">{property.propertyName}</h1>
-            <Badge tone={STATUS_TONE[property.listingStatus]}>{property.listingStatus.replace('_', ' ')}</Badge>
-          </div>
-          <p className="text-sm text-gray-500">
-            {property.address.street}, {property.address.barangay}, {property.address.city}
-          </p>
+      <Link to="/landlord/properties" className="mb-3 inline-flex items-center gap-1 rounded text-sm font-medium text-brand-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+        <ArrowLeftIcon className="h-4 w-4" aria-hidden="true" /> All properties
+      </Link>
+      <PageHeader
+        title={property.propertyName}
+        description={`${property.address.street}, ${property.address.barangay}, ${property.address.city}`}
+        actions={
+          <Button
+            variant="danger"
+            onClick={() => {
+              setDeleteError('');
+              setDeleteOpen(true);
+            }}
+          >
+            Delete property
+          </Button>
+        }
+      >
+        <div className="mt-2">
+          <StatusBadge status={property.listingStatus} tones={STATUS_TONE} />
         </div>
-        <Button
-          variant="danger"
-          onClick={() => {
-            setDeleteError('');
-            setDeleteOpen(true);
-          }}
-        >
-          Delete property
-        </Button>
-      </div>
+      </PageHeader>
 
-      <ErrorBanner message={error} />
-      <SuccessBanner message={msg} />
+      <div className="mb-4 space-y-3 empty:hidden">
+        <ErrorBanner message={error} />
+        <SuccessBanner message={msg} />
+      </div>
 
       <Card title="Rooms" className="mb-6">
         <div className="mb-4 space-y-2">
@@ -283,12 +290,12 @@ export default function PropertyManagePage() {
             <div key={room._id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3">
               <div>
                 <p className="font-medium text-gray-800">Room {room.roomNumber}</p>
-                <p className="text-xs text-gray-400">
-                  ₱{room.monthlyBaseRent.toLocaleString()}/slot · {room.currentOccupancy}/{room.capacity} occupied
+                <p className="text-xs text-gray-500">
+                  {formatPeso(room.monthlyBaseRent)}/slot · {room.currentOccupancy}/{room.capacity} occupied
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge tone={STATUS_TONE[room.status]}>{room.status}</Badge>
+                <StatusBadge status={room.status} tones={STATUS_TONE} />
                 {room.status !== 'maintenance' ? (
                   <Button variant="secondary" onClick={() => setRoomStatus(room._id, 'maintenance')}>
                     Mark maintenance
@@ -301,7 +308,7 @@ export default function PropertyManagePage() {
               </div>
             </div>
           ))}
-          {rooms.length === 0 && <p className="text-sm text-gray-400">No rooms yet — add one below.</p>}
+          {rooms.length === 0 && <p className="text-sm text-gray-500">No rooms yet — add one below.</p>}
         </div>
         <AddRoomForm
           propertyId={id}

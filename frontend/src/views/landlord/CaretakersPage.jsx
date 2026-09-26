@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
+import PageHeader from '../../components/layout/PageHeader.jsx';
 import CaretakerApi from '../../services/CaretakerApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Field, Select, TextInput } from '../../components/ui/Field.jsx';
-import { Badge, EmptyState, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
+import { EmptyState, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { DAGUPAN_BARANGAYS } from '../../data/dagupanBarangays.js';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
@@ -131,7 +132,7 @@ export default function CaretakersPage() {
 
   return (
     <DashboardLayout>
-      <h1 className="mb-4 text-xl font-semibold text-gray-900">Caretakers</h1>
+      <PageHeader title="Caretakers" description="Invite caretakers and set the barangay each one works in." />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card title="Invite a caretaker" className="lg:col-span-1">
           <form onSubmit={onCreate} className="space-y-3" noValidate>
@@ -155,7 +156,7 @@ export default function CaretakersPage() {
                 <BarangayOptions />
               </Select>
             </Field>
-            <p className="-mt-1 text-xs text-gray-400">Where this caretaker works. Used to suggest them for boarding houses in the same barangay.</p>
+            <p className="-mt-1 text-xs text-gray-500">Where this caretaker works. Used to suggest them for boarding houses in the same barangay.</p>
             <Button type="submit" loading={createLoading} className="w-full">
               Send activation invite
             </Button>
@@ -173,13 +174,13 @@ export default function CaretakersPage() {
                   <div className="min-w-0">
                     <p className="font-medium text-gray-900">{c.fullName}</p>
                     <p className="break-all text-sm text-gray-500">{c.email}</p>
-                    <p className="text-xs text-gray-400">{c.phone}</p>
+                    <p className="text-xs text-gray-500">{c.phone}</p>
                     <p className="mt-1 text-xs text-gray-500">
                       Works in: <span className="font-medium text-gray-700">{c.serviceBarangay || 'not set yet'}</span>
                     </p>
                     <ServiceAreaEditor caretaker={c} onSaved={(updated) => setCaretakers((prev) => prev.map((x) => (x._id === updated._id ? updated : x)))} />
                   </div>
-                  <Badge tone={STATUS_TONE[c.accountStatus]}>{c.accountStatus.replace('_', ' ')}</Badge>
+                  <StatusBadge status={c.accountStatus} tones={STATUS_TONE} />
                 </div>
               </Card>
             ))}

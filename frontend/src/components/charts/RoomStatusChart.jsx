@@ -11,7 +11,7 @@ export default function RoomStatusChart({ breakdown }) {
     { status: 'Maintenance', key: 'maintenance', count: breakdown.maintenance },
   ];
   const allZero = data.every((d) => d.count === 0);
-  if (allZero) return <p className="py-12 text-center text-sm text-gray-400">No rooms yet.</p>;
+  if (allZero) return <p className="py-12 text-center text-sm text-gray-500">No rooms yet.</p>;
 
   return (
     <ResponsiveContainer width="100%" height={220}>

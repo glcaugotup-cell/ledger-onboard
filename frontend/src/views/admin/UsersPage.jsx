@@ -4,8 +4,11 @@ import AdminApi from '../../services/AdminApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import ReasonDialog from '../../components/ReasonDialog.jsx';
-import { Select } from '../../components/ui/Field.jsx';
-import { Badge, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import PageHeader from '../../components/layout/PageHeader.jsx';
+import { Select, TextInput } from '../../components/ui/Field.jsx';
+import { formatStatus } from '../../utils/format.js';
+import { Badge, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { INACTIVITY_DEACTIVATION_DAYS, formatLastActive, isEligibleForInactivityDeactivation } from '../../utils/activity.js';
 
@@ -45,6 +48,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState([]);
   const [roleFilter, setRoleFilter] = useState('');
   const [inactiveOnly, setInactiveOnly] = useState(false);
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -107,13 +111,20 @@ export default function UsersPage() {
   };
 
   const now = new Date();
-  const visible = inactiveOnly ? users.filter((u) => isEligibleForInactivityDeactivation(u, now)) : users;
+  const q = query.trim().toLowerCase();
+  const visible = users
+    .filter((u) => !inactiveOnly || isEligibleForInactivityDeactivation(u, now))
+    .filter((u) => !q || u.fullName?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q));
   const config = pending && ACTIONS[pending.action];
 
   return (
     <DashboardLayout>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-gray-900">Users</h1>
+      <PageHeader title="Users" description="Every account on the platform, its status and when it was last active." />
+      <div className="mb-5 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative sm:w-72">
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+          <TextInput type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or email" aria-label="Search users" className="pl-9" />
+        </div>
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-gray-600">
             <input
@@ -124,11 +135,11 @@ export default function UsersPage() {
             />
             Inactive {INACTIVITY_DEACTIVATION_DAYS}+ days only
           </label>
-          <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="w-48" aria-label="Filter by role">
+          <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="sm:w-44" aria-label="Filter by role">
             <option value="">All roles</option>
             {['tenant', 'landlord', 'caretaker', 'admin'].map((r) => (
               <option key={r} value={r}>
-                {r}
+                {formatStatus(r)}
               </option>
             ))}
           </Select>
@@ -136,8 +147,8 @@ export default function UsersPage() {
       </div>
       <ErrorBanner message={error} />
       <SuccessBanner message={success} />
-      {loading && <LoadingState />}
-      {!loading && visible.length === 0 && <p className="py-8 text-center text-sm text-gray-400">No users match these filters.</p>}
+      {loading && <LoadingState label="Loading users…" />}
+      {!loading && visible.length === 0 && <p className="rounded-xl border border-dashed border-gray-300 bg-white py-10 text-center text-sm text-gray-500">No users match these filters.</p>}
       <div className="mt-2 space-y-2">
         {visible.map((u) => {
           const activity = formatLastActive(u, now);
@@ -147,7 +158,7 @@ export default function UsersPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-medium text-gray-900">
-                    {u.fullName} <span className="ml-1 text-xs font-normal capitalize text-gray-400">({u.role})</span>
+                    {u.fullName} <span className="ml-1 text-xs font-normal capitalize text-gray-500">({u.role})</span>
                   </p>
                   <p className="break-all text-sm text-gray-500">{u.email}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
@@ -160,7 +171,7 @@ export default function UsersPage() {
                   {u.statusReason && u.accountStatus !== 'active' && <p className="mt-1 text-xs text-gray-500">Reason: {u.statusReason}</p>}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={STATUS_TONE[u.accountStatus]}>{u.accountStatus.replace('_', ' ')}</Badge>
+                  <StatusBadge status={u.accountStatus} tones={STATUS_TONE} />
                   {u.role !== 'admin' && (
                     <>
                       {u.accountStatus !== 'active' && (

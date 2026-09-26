@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
+import PageHeader from '../../components/layout/PageHeader.jsx';
 import ReservationApi from '../../services/ReservationApi.js';
 import UtilityApi from '../../services/UtilityApi.js';
 import Card from '../../components/ui/Card.jsx';
@@ -108,7 +109,7 @@ export default function UtilityEntryPage() {
 
   return (
     <DashboardLayout>
-      <h1 className="mb-4 text-xl font-semibold text-gray-900">Log utility reading</h1>
+      <PageHeader title="Log utility reading" description="Enter a room's monthly bills and meter readings to generate each tenant's statement." />
       <Card className="max-w-2xl">
         <form onSubmit={onSubmit} noValidate className="space-y-4">
           <ErrorBanner message={error} />

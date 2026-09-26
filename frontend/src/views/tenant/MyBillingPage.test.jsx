@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -52,16 +52,26 @@ describe('MyBillingPage', () => {
     BillingApi.list.mockResolvedValue({ soas: [unpaidSoa] });
     renderPage();
 
-    expect(await screen.findByText('UNPAID')).toBeInTheDocument();
-    expect(screen.getByText('₱2,900')).toBeInTheDocument();
-    expect(screen.getByText('₱2,400')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /pay via gcash/i })).toBeInTheDocument();
+    const card = await screen.findByRole('article', { name: 'September 2026 statement' });
+    expect(within(card).getByText('Unpaid')).toBeInTheDocument();
+    expect(within(card).getByText('₱2,900')).toBeInTheDocument();
+    expect(within(card).getByText('₱2,400')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: /pay via gcash/i })).toBeInTheDocument();
+  });
+
+  it('summarizes the total balance and the next due date', async () => {
+    BillingApi.list.mockResolvedValue({ soas: [unpaidSoa, { ...unpaidSoa, _id: 's0', billingPeriod: '2026-08-01', paymentStatus: 'PAID', remainingBalance: 0 }] });
+    renderPage();
+    const tile = (await screen.findByText('Total balance')).closest('div.rounded-xl');
+    expect(within(tile).getByText('₱2,400')).toBeInTheDocument();
+    expect(within(tile).getByText('across 1 statement')).toBeInTheDocument();
+    expect(within(screen.getByText('Next due').closest('div.rounded-xl')).getByText('Sep 15, 2026')).toBeInTheDocument();
   });
 
   it('hides the payment button once the statement is fully paid', async () => {
     BillingApi.list.mockResolvedValue({ soas: [{ ...unpaidSoa, paymentStatus: 'PAID', remainingBalance: 0, amountPaid: 2900 }] });
     renderPage();
-    await screen.findByText('PAID');
+    await screen.findByText('Paid');
     expect(screen.queryByRole('button', { name: /pay via gcash/i })).not.toBeInTheDocument();
   });
 

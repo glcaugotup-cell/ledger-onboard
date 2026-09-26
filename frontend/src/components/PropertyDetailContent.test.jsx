@@ -130,6 +130,17 @@ describe('PropertyDetailContent', () => {
     expect(await screen.findByText(/reservation request submitted/i)).toBeInTheDocument();
   });
 
+  it('summarizes the starting rent and how many rooms are open near the title', async () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: null, status: 'unauthenticated' }));
+    PropertyApi.getPublicDetail.mockResolvedValue({
+      ...detail,
+      rooms: [...detail.rooms, { _id: 'r2', roomNumber: '102', status: 'occupied', monthlyBaseRent: 1800, currentOccupancy: 2, capacity: 2 }],
+    });
+    renderContent();
+    expect(await screen.findByText('From ₱1,800')).toBeInTheDocument();
+    expect(screen.getByText('1 of 2 rooms open')).toBeInTheDocument();
+  });
+
   it('disables past days in the picker and rejects a typed past date', async () => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated' }));
     PropertyApi.getPublicDetail.mockResolvedValue(detail);

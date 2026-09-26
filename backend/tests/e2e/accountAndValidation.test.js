@@ -446,6 +446,35 @@ describe('Objective 13 — closing your own account is a status change, never a 
   });
 });
 
+describe('Display labels for lists (additive fields only)', () => {
+  test('billing, payments, caretaker reservations and the landlord property list carry the names screens show', async () => {
+    const PaymentTransactionRepository = require('../../repositories/PaymentTransactionRepository');
+    const { user: landlord, token: landlordToken } = await makeUser('landlord', 'labels.landlord@gmail.com');
+    const { property, room } = await makeProperty(landlord._id, 'Tapuac');
+    await RoomRepository.create({ propertyId: property._id, roomNumber: '102', capacity: 2, monthlyBaseRent: 2200 });
+    const { user: tenant } = await makeUser('tenant', 'labels.tenant@gmail.com', { fullName: 'Lana Label' });
+    const { user: ct, token: ctToken } = await makeUser('caretaker', 'labels.caretaker@gmail.com', { assignedLandlordId: landlord._id });
+    await ReservationRepository.create({ tenantId: tenant._id, roomId: room._id, propertyId: property._id, status: 'approved', moveInDate: new Date(), caretakerAssignedId: ct._id });
+    const soa = await BillingSOARepository.create({
+      tenantId: tenant._id, roomId: room._id, billingPeriod: new Date('2026-08-01'), baseRent: 3000, totalAmountDue: 3000, remainingBalance: 3000, paymentStatus: 'UNPAID', dueDate: new Date('2030-08-11'),
+    });
+    await PaymentTransactionRepository.create({ soaId: soa._id, tenantId: tenant._id, paymentMethod: 'CASH_ON_SITE', amount: 500, cashCollectedByCaretakerId: ct._id });
+
+    const bills = await request(app).get('/api/billing/soa').set(auth(landlordToken));
+    const bill = bills.body.data.soas.find((s) => s._id === String(soa._id));
+    expect(bill).toMatchObject({ tenantName: 'Lana Label', roomNumber: '101', propertyName: 'Tapuac House', tenantId: String(tenant._id), roomId: String(room._id) });
+
+    const payments = await request(app).get('/api/payments').set(auth(landlordToken));
+    expect(payments.body.data.payments[0]).toMatchObject({ tenantName: 'Lana Label', roomNumber: '101', propertyName: 'Tapuac House', soaId: String(soa._id) });
+
+    const reservations = await request(app).get('/api/reservations').set(auth(ctToken));
+    expect(reservations.body.data.reservations[0].propertyId.propertyName).toBe('Tapuac House');
+
+    const mine = await request(app).get('/api/properties/mine').set(auth(landlordToken));
+    expect(mine.body.data.properties[0]).toMatchObject({ roomCount: 2, availableRooms: 2, occupiedSlots: 0, totalSlots: 4, startingRent: 2200 });
+  });
+});
+
 describe('Objective 14 — server-side validation gaps closed', () => {
   test('a payment cannot exceed the remaining balance', async () => {
     const { user: landlord } = await makeUser('landlord', 'pay.landlord@gmail.com');

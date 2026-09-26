@@ -42,7 +42,7 @@ describe('PropertiesPage', () => {
     renderPage();
 
     expect(await screen.findByText('Dagupan Demo Boarding House')).toBeInTheDocument();
-    expect(screen.getByText('approved')).toBeInTheDocument();
+    expect(screen.getByText('Approved')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Dagupan Demo Boarding House/i })).toHaveAttribute('href', '/landlord/properties/p1');
   });
 

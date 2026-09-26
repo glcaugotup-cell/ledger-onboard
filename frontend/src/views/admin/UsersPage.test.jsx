@@ -49,12 +49,12 @@ describe('UsersPage', () => {
     expect(await screen.findByText('Juan Tenant')).toBeInTheDocument();
     expect(within(cardOf('Juan Tenant')).getByText('Active now')).toBeInTheDocument();
     expect(within(cardOf('Ana Landlord')).getByText('Active 1 day ago')).toBeInTheDocument();
-    expect(within(cardOf('Ana Landlord')).getByText('suspended')).toBeInTheDocument();
+    expect(within(cardOf('Ana Landlord')).getByText('Suspended')).toBeInTheDocument();
     expect(within(cardOf('Ana Landlord')).getByText('Reason: Policy violation')).toBeInTheDocument();
     expect(within(cardOf('Old Caretaker')).getByText('Active 2 months ago')).toBeInTheDocument();
     expect(within(cardOf('New Invitee')).getByText('Never active')).toBeInTheDocument();
     // Activity never replaces the account status.
-    expect(within(cardOf('New Invitee')).getByText('pending activation')).toBeInTheDocument();
+    expect(within(cardOf('New Invitee')).getByText('Pending activation')).toBeInTheDocument();
   });
 
   it('re-fetches with the selected role filter', async () => {
@@ -140,6 +140,18 @@ describe('UsersPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Deactivate account' }));
     await waitFor(() => expect(AdminApi.deactivateInactive).toHaveBeenCalledWith('u3', 'No activity for over 60 days'));
     expect(await screen.findByText('Old Caretaker has been deactivated for inactivity.')).toBeInTheDocument();
+  });
+
+  it('searches by name or email', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Juan Tenant');
+    await user.type(screen.getByRole('searchbox', { name: /search users/i }), 'ana@');
+    expect(screen.getByText('Ana Landlord')).toBeInTheDocument();
+    expect(screen.queryByText('Juan Tenant')).not.toBeInTheDocument();
+    await user.clear(screen.getByRole('searchbox', { name: /search users/i }));
+    await user.type(screen.getByRole('searchbox', { name: /search users/i }), 'nobody');
+    expect(screen.getByText('No users match these filters.')).toBeInTheDocument();
   });
 
   it('can show only the 60+ day inactive accounts', async () => {

@@ -1,10 +1,11 @@
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
+import PageHeader from '../../components/layout/PageHeader.jsx';
 import PaymentVerificationList from '../../components/PaymentVerificationList.jsx';
 
 export default function PaymentsPage() {
   return (
     <DashboardLayout>
-      <h1 className="mb-4 text-xl font-semibold text-gray-900">Payments</h1>
+      <PageHeader title="Payments" description="Check GCash proofs and cash collections before they count toward a bill." />
       <PaymentVerificationList canVerify={() => true} />
     </DashboardLayout>
   );
