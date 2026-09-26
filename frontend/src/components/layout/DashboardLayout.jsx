@@ -132,9 +132,13 @@ export default function DashboardLayout({ children }) {
   const [loggingOut, setLoggingOut] = useState(false);
 
   const links = NAV_BY_ROLE[user?.role] || [];
-  // Long nav lists (landlord: 8 links) only fit inline from xl; shorter ones from lg.
+  // The inline menu needs room for its labels: short menus (tenant) fit from lg (1024px);
+  // longer label sets (caretaker, admin) and the 8-link landlord menu only from xl (1280px).
   // Below that, the menu button opens the same links in a panel.
-  const wideNav = links.length > 5;
+  const labelChars = links.reduce((sum, link) => sum + link.label.length, 0);
+  const wideNav = links.length > 5 || labelChars > 40;
+  // The header is capped at max-w-7xl, so the 8-link landlord menu never has room for icons or the user's name.
+  const compactNav = links.length > 5;
 
   // Runs only after the user confirms in the dialog; Cancel keeps them signed in.
   const handleLogout = async () => {
@@ -163,8 +167,8 @@ export default function DashboardLayout({ children }) {
       </a>
       <header className="sticky top-0 z-20 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-4 2xl:gap-6">
-            <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex shrink-0 items-center gap-2.5">
               <img src={logo} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-sm" />
               <span className="whitespace-nowrap text-lg font-bold text-brand-700">Ledger OnBoard</span>
             </div>
@@ -179,8 +183,7 @@ export default function DashboardLayout({ children }) {
                     }`
                   }
                 >
-                  {/* The 8-link landlord menu only has room for icons on very wide screens. */}
-                  <link.icon className={`h-4 w-4 ${wideNav ? 'hidden 2xl:block' : ''}`} aria-hidden="true" />
+                  <link.icon className={`h-4 w-4 ${compactNav ? 'hidden' : ''}`} aria-hidden="true" />
                   {link.label}
                 </NavLink>
               ))}
@@ -198,8 +201,8 @@ export default function DashboardLayout({ children }) {
               >
                 {initials(user?.fullName)}
               </span>
-              {/* With the long landlord menu, the name only fits beside the avatar on very wide screens. */}
-              <div className={`whitespace-nowrap text-sm leading-tight ${wideNav ? 'xl:hidden 2xl:block' : ''}`}>
+              {/* With the long landlord menu inline (xl and up), only the avatar fits; the name is its tooltip. */}
+              <div className={`whitespace-nowrap text-sm leading-tight ${compactNav ? 'xl:hidden' : ''}`}>
                 <p className="font-medium text-gray-800">{user?.fullName}</p>
                 <p className="text-xs text-gray-500">{formatStatus(user?.role)}</p>
               </div>
