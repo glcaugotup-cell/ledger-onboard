@@ -30,6 +30,13 @@ import { DAGUPAN_BARANGAYS } from '../../data/dagupanBarangays.js';
 const PROPERTY_TYPES = ['Room Only', 'Apartment', 'Bedspace', 'Studio'];
 const GENDER_POLICIES = ['Female Only', 'Male Only', 'Co-Ed'];
 const MAX_PHOTOS = 5;
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_TAGS = 30;
+const MAX_TAG_LENGTH = 200;
+const MAX_HOUSE_RULES = 30;
+const MAX_HOUSE_RULE_LENGTH = 200;
 const VIDEO_MIME_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
 
 const initialForm = {
@@ -48,10 +55,15 @@ const initialForm = {
  */
 function TagInput({ label, hint, values, onAdd, onRemove, placeholder, format = (v) => v }) {
   const [text, setText] = useState('');
+  const [error, setError] = useState('');
 
   function commit() {
     const cleaned = format(text.trim());
-    if (cleaned && !values.includes(cleaned)) onAdd(cleaned);
+    if (!cleaned) return setText('');
+    if (cleaned.length > MAX_TAG_LENGTH) return setError(`Keep each entry to ${MAX_TAG_LENGTH} characters or fewer.`);
+    if (values.length >= MAX_TAGS) return setError(`You can add up to ${MAX_TAGS} entries.`);
+    if (!values.includes(cleaned)) onAdd(cleaned);
+    setError('');
     setText('');
   }
 
@@ -63,7 +75,7 @@ function TagInput({ label, hint, values, onAdd, onRemove, placeholder, format = 
   }
 
   return (
-    <Field label={label} hint={hint}>
+    <Field label={label} error={error} hint={hint || `${values.length}/${MAX_TAGS} entries · up to ${MAX_TAG_LENGTH} characters each`}>
       <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-gray-300 bg-white p-2 focus-within:ring-2 focus-within:ring-brand-400">
         {values.map((v) => (
           <span key={v} className="flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
@@ -75,7 +87,9 @@ function TagInput({ label, hint, values, onAdd, onRemove, placeholder, format = 
         ))}
         <input
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          maxLength={MAX_TAG_LENGTH}
+          disabled={values.length >= MAX_TAGS}
+          onChange={(e) => { setText(e.target.value); setError(''); }}
           onKeyDown={onKeyDown}
           onBlur={commit}
           placeholder={values.length ? 'Add more…' : placeholder}
@@ -133,9 +147,21 @@ export default function PropertyFormPage() {
     const incoming = Array.from(e.target.files || []);
     e.target.value = ''; // allow re-selecting the same file later
     if (incoming.length === 0) return;
+    if (incoming.some((file) => !PHOTO_MIME_TYPES.includes(file.type))) {
+      setPhotoError('Photos must be JPG, PNG, or WEBP files.');
+      return;
+    }
+    if (incoming.some((file) => file.size > MAX_PHOTO_BYTES)) {
+      setPhotoError('Each photo must be 5 MB or smaller.');
+      return;
+    }
     const combined = [...images, ...incoming];
-    setPhotoError(combined.length > MAX_PHOTOS ? 'You can upload a maximum of 5 photos.' : '');
-    setImages(combined.slice(0, MAX_PHOTOS));
+    if (combined.length > MAX_PHOTOS) {
+      setPhotoError(`You can upload a maximum of ${MAX_PHOTOS} photos.`);
+      return;
+    }
+    setPhotoError('');
+    setImages(combined);
   }
 
   function removePhoto(index) {
@@ -149,6 +175,10 @@ export default function PropertyFormPage() {
     if (!file) return;
     if (!VIDEO_MIME_TYPES.includes(file.type)) {
       setVideoError('Please choose an MP4, WEBM, or MOV video.');
+      return;
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      setVideoError('The video must be 50 MB or smaller.');
       return;
     }
     setVideoError('');
@@ -208,6 +238,9 @@ export default function PropertyFormPage() {
     if (!form.street.trim()) nextErrors.street = 'Street is required.';
     else if (form.street.trim().length > 200) nextErrors.street = 'Street must be at most 200 characters.';
     if (form.description.length > 4000) nextErrors.description = 'Description must be at most 4000 characters.';
+    const rules = form.houseRules.split(/[\n,]/).map((rule) => rule.trim()).filter(Boolean);
+    if (rules.length > MAX_HOUSE_RULES) nextErrors.houseRules = `You can add up to ${MAX_HOUSE_RULES} house rules.`;
+    else if (rules.some((rule) => rule.length > MAX_HOUSE_RULE_LENGTH)) nextErrors.houseRules = `Each house rule must be ${MAX_HOUSE_RULE_LENGTH} characters or fewer.`;
     if (!selectedBarangay) nextErrors.barangay = 'Select the exact barangay from the list.';
     if (!form.propertyType) nextErrors.propertyType = 'Choose a property type.';
     if (!form.tenantGenderPolicy) nextErrors.tenantGenderPolicy = 'Choose a gender policy.';
@@ -383,13 +416,13 @@ export default function PropertyFormPage() {
                   placeholder="e.g., WiFi, Aircon, CCTV, Parking"
                 />
 
-                <Field label="House rules" hint="One per line, or comma-separated">
+                <Field label="House rules" error={errors.houseRules} hint={`One per line or comma-separated · up to ${MAX_HOUSE_RULES} rules, ${MAX_HOUSE_RULE_LENGTH} characters each`}>
                   <TextArea
                     rows={3}
                     value={form.houseRules}
                     onChange={update('houseRules')}
                     onBlur={onHouseRulesBlur}
-                    maxLength={500}
+                    maxLength={MAX_HOUSE_RULES * MAX_HOUSE_RULE_LENGTH + MAX_HOUSE_RULES - 1}
                     placeholder="e.g., No visitors after 10 PM, No smoking"
                   />
                 </Field>
@@ -407,6 +440,7 @@ export default function PropertyFormPage() {
                   <div className="relative">
                     <TextInput
                       value={form.street}
+                      maxLength={200}
                       onChange={update('street')}
                       onBlur={onStreetBlur}
                       placeholder="e.g., Arellano Street"
@@ -437,6 +471,7 @@ export default function PropertyFormPage() {
                       <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                       <TextInput
                         value={barangayQuery}
+                        maxLength={100}
                         onChange={onBarangayInputChange}
                         onFocus={() => setBarangayOpen(true)}
                         placeholder="Search or select a barangay"

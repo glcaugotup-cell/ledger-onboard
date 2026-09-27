@@ -47,8 +47,9 @@ app.get(
   MediaController.getPropertyMedia
 );
 
+// Simple root health check; /api/health is registered in the API router.
 app.get('/health', (req, res) => {
-  res.status(200).json({ success: true, data: { status: 'ok', env: env.nodeEnv }, error: null });
+  res.status(200).json({ status: 'OK', message: 'Server is healthy' });
 });
 
 app.use('/api', apiRouter);

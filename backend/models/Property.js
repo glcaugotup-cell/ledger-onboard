@@ -10,10 +10,10 @@ const propertySchema = new Schema(
     propertyName: { type: String, required: true, trim: true, minlength: 2, maxlength: 120 },
     description: { type: String, trim: true, maxlength: 4000, default: '' },
     address: {
-      street: { type: String, trim: true, required: true },
+      street: { type: String, trim: true, required: true, maxlength: 200 },
       barangay: { type: String, trim: true, required: true },
-      city: { type: String, trim: true, required: true, default: 'Dagupan City' },
-      province: { type: String, trim: true, required: true, default: 'Pangasinan' },
+      city: { type: String, trim: true, required: true, maxlength: 100, default: 'Dagupan City' },
+      province: { type: String, trim: true, required: true, maxlength: 100, default: 'Pangasinan' },
     },
     locationCoordinates: {
       lat: { type: Number, min: -90, max: 90, required: true },

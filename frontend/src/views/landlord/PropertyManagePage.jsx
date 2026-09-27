@@ -23,7 +23,9 @@ function validateRoom({ roomNumber, capacity, monthlyBaseRent }) {
   const cap = Number(capacity);
   if (!Number.isInteger(cap) || cap < 1 || cap > 50) errors.capacity = 'Capacity must be a whole number from 1 to 50';
   const rent = Number(monthlyBaseRent);
-  if (monthlyBaseRent === '' || Number.isNaN(rent) || rent < 0 || rent > 1000000) errors.monthlyBaseRent = 'Rent must be a number from 0 to 1,000,000';
+  if (monthlyBaseRent === '' || !Number.isFinite(rent) || !/^\d+(\.\d{1,2})?$/.test(monthlyBaseRent) || rent < 0 || rent > 1000000) {
+    errors.monthlyBaseRent = 'Enter an amount from ₱0 to ₱1,000,000 with up to 2 decimal places';
+  }
   return errors;
 }
 
@@ -64,27 +66,36 @@ function AddRoomForm({ propertyId, onAdded }) {
   };
 
   return (
-    <form onSubmit={submit} noValidate className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:items-start">
-      <div className="sm:col-span-4">
+    <form onSubmit={submit} noValidate className="grid grid-cols-1 gap-4 rounded-xl border border-gray-100 bg-gray-50/70 p-4 sm:grid-cols-2 sm:items-end xl:grid-cols-4">
+      <div className="sm:col-span-2 xl:col-span-4">
         <ErrorBanner message={error} />
       </div>
-      <Field label="Room #" error={fieldErrors.roomNumber}>
+      <Field label="Room number" hint="Use a unique room label" error={fieldErrors.roomNumber}>
         <TextInput value={form.roomNumber} maxLength={20} onChange={(e) => setField('roomNumber', capitalizeFirst(e.target.value))} error={fieldErrors.roomNumber} />
       </Field>
-      <Field label="Capacity" error={fieldErrors.capacity}>
-        <TextInput type="number" min="1" max="50" step="1" value={form.capacity} onChange={(e) => setField('capacity', e.target.value)} error={fieldErrors.capacity} />
+      <Field label="Capacity" hint="1–50 occupants" error={fieldErrors.capacity}>
+        <TextInput type="number" min="1" max="50" step="1" inputMode="numeric" value={form.capacity} onChange={(e) => setField('capacity', e.target.value)} error={fieldErrors.capacity} />
       </Field>
-      <Field label="Rent / slot (₱)" error={fieldErrors.monthlyBaseRent}>
-        <TextInput
-          type="number"
-          min="0"
-          step="0.01"
-          value={form.monthlyBaseRent}
-          onChange={(e) => setField('monthlyBaseRent', e.target.value)}
-          error={fieldErrors.monthlyBaseRent}
-        />
+      <Field label="Rent per slot" hint="Monthly · up to ₱1,000,000 · 2 decimal places" error={fieldErrors.monthlyBaseRent}>
+        <div className="relative">
+          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center rounded-l-lg border-r border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-600">₱</span>
+          <TextInput
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
+            maxLength={10}
+            value={form.monthlyBaseRent}
+            className="pl-12 tabular-nums"
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === '' || (/^\d{1,7}(\.\d{0,2})?$/.test(value) && Number(value) <= 1000000)) setField('monthlyBaseRent', value);
+            }}
+            error={fieldErrors.monthlyBaseRent}
+            aria-label="Monthly rent per slot in Philippine pesos"
+          />
+        </div>
       </Field>
-      <div className="sm:pt-6">
+      <div>
         <Button type="submit" loading={loading} className="w-full">
           Add room
         </Button>
@@ -203,6 +214,9 @@ export default function PropertyManagePage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [roomToDelete, setRoomToDelete] = useState(null);
+  const [deletingRoom, setDeletingRoom] = useState(false);
+  const [deleteRoomError, setDeleteRoomError] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -237,6 +251,21 @@ export default function PropertyManagePage() {
       setRooms((prev) => prev.map((r) => (r._id === roomId ? room : r)));
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const deleteRoom = async () => {
+    if (!roomToDelete) return;
+    setDeletingRoom(true);
+    setDeleteRoomError('');
+    try {
+      await PropertyApi.removeRoom(roomToDelete._id);
+      setRooms((prev) => prev.filter((room) => room._id !== roomToDelete._id));
+      setRoomToDelete(null);
+    } catch (err) {
+      setDeleteRoomError(describeApiError(err).message || 'Could not delete room.');
+    } finally {
+      setDeletingRoom(false);
     }
   };
 
@@ -284,17 +313,18 @@ export default function PropertyManagePage() {
         <SuccessBanner message={msg} />
       </div>
 
-      <Card title="Rooms" className="mb-6">
+      <Card title="Rooms & pricing" className="mb-6">
         <div className="mb-4 space-y-2">
           {rooms.map((room) => (
-            <div key={room._id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3">
+            <div key={room._id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-shadow hover:shadow-sm">
               <div>
-                <p className="font-medium text-gray-800">Room {room.roomNumber}</p>
-                <p className="text-xs text-gray-500">
-                  {formatPeso(room.monthlyBaseRent)}/slot · {room.currentOccupancy}/{room.capacity} occupied
+                <p className="font-semibold text-gray-900">Room {room.roomNumber}</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  <span className="font-semibold tabular-nums text-gray-800">{formatPeso(room.monthlyBaseRent)}</span> / slot / month
+                  <span className="mx-2 text-gray-300">·</span>{room.currentOccupancy} of {room.capacity} occupied
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={room.status} tones={STATUS_TONE} />
                 {room.status !== 'maintenance' ? (
                   <Button variant="secondary" onClick={() => setRoomStatus(room._id, 'maintenance')}>
@@ -305,6 +335,9 @@ export default function PropertyManagePage() {
                     Mark available
                   </Button>
                 )}
+                <Button variant="danger" onClick={() => { setDeleteRoomError(''); setRoomToDelete(room); }}>
+                  Delete
+                </Button>
               </div>
             </div>
           ))}
@@ -318,6 +351,18 @@ export default function PropertyManagePage() {
           }}
         />
       </Card>
+
+      <ConfirmDialog
+        open={Boolean(roomToDelete)}
+        tone="danger"
+        title={roomToDelete ? `Delete Room ${roomToDelete.roomNumber}?` : ''}
+        message="Are you sure you want to continue? A room with reservation records or current occupants cannot be deleted, so its history stays intact."
+        confirmLabel="Delete room"
+        loading={deletingRoom}
+        error={deleteRoomError}
+        onConfirm={deleteRoom}
+        onCancel={() => setRoomToDelete(null)}
+      />
 
       <CaretakerAssignment propertyId={id} />
 

@@ -56,7 +56,7 @@ export default function AccountRecoveryPage() {
         <ErrorBanner message={error} />
         <SuccessBanner message={success} />
         <Field label="Registered email">
-          <TextInput type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+          <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         </Field>
         <div>
           <Field label="New password">

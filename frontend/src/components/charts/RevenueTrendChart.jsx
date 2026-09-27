@@ -1,4 +1,6 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { BanknotesIcon } from '@heroicons/react/24/outline';
+import { Link } from 'react-router-dom';
 
 // Validated categorical slot 1 (blue) from the dataviz reference palette — single series.
 const SERIES_COLOR = '#2a78d6';
@@ -10,7 +12,16 @@ function formatMonth(value) {
 
 export default function RevenueTrendChart({ data }) {
   if (!data || data.length === 0) {
-    return <p className="py-12 text-center text-sm text-gray-500">No revenue recorded yet.</p>;
+    return (
+      <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl bg-gradient-to-b from-gray-50/80 to-white px-5 py-8 text-center">
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-brand-700 shadow-sm ring-1 ring-gray-200">
+          <BanknotesIcon className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <p className="mt-3 text-sm font-semibold text-gray-800">No revenue recorded yet.</p>
+        <p className="mt-1 max-w-sm text-xs leading-5 text-gray-500">Verified payments will build your monthly revenue trend here.</p>
+        <Link to="/landlord/payments" className="mt-3 rounded-lg px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">View payments</Link>
+      </div>
+    );
   }
   return (
     <ResponsiveContainer width="100%" height={260}>

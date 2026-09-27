@@ -13,10 +13,11 @@ import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
+import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst } from '../../utils/textFormat.js';
 import { formatDate, formatStatus } from '../../utils/format.js';
-import { PATTERNS, sanitizePhoneInput, validatePassword, validatePhone } from '../../utils/validators.js';
+import { PATTERNS, validatePassword, validatePhone } from '../../utils/validators.js';
 
 const ROLE_LABEL = { tenant: 'Tenant', landlord: 'Landlord', caretaker: 'Caretaker', admin: 'Administrator' };
 const MAX_REVIEW_COMMENT = 2000;
@@ -294,15 +295,13 @@ export default function ProfilePage() {
             <ErrorBanner message={profileError} />
             <SuccessBanner message={profileMsg} />
             <Field label="Phone" error={phoneError}>
-              <TextInput
-                inputMode="tel"
-                placeholder="09XXXXXXXXX or +639XXXXXXXXX"
-                maxLength={13}
+              <PhoneInput
                 value={phone}
-                onChange={(e) => {
-                  setPhone(sanitizePhoneInput(e.target.value));
+                onChange={(value) => {
+                  setPhone(value);
                   if (phoneError) setPhoneError('');
                 }}
+                placeholder="917 123 4567"
                 error={phoneError}
               />
             </Field>

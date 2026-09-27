@@ -10,5 +10,6 @@ const { ROLES } = require('../utils/constants');
 const router = express.Router();
 
 router.patch('/:id', authenticate, requireRole(ROLES.LANDLORD, ROLES.ADMIN), objectIdParam('id'), updateRoomValidators, validate, RoomController.update);
+router.delete('/:id', authenticate, requireRole(ROLES.LANDLORD, ROLES.ADMIN), objectIdParam('id'), validate, RoomController.remove);
 
 module.exports = router;

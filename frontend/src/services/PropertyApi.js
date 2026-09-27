@@ -41,6 +41,10 @@ class PropertyApi extends BaseApiClient {
     return this.patch(`/rooms/${roomId}`, payload);
   }
 
+  removeRoom(roomId) {
+    return this.delete(`/rooms/${roomId}`);
+  }
+
   /** The landlord's caretakers, ranked by whether they work in this property's barangay. */
   listCaretakerSuggestions(id) {
     return this.get(`/properties/${id}/caretakers`);

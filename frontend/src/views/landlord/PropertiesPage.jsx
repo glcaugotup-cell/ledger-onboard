@@ -78,30 +78,30 @@ export default function PropertiesPage() {
       {!loading && properties.length === 0 && (
         <EmptyState icon={BuildingOffice2Icon} title="No properties yet" description="Create your first listing to start accepting reservations." />
       )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid auto-rows-fr grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {properties.map((p) => (
           <Link
             key={p._id}
             to={`/landlord/properties/${p._id}`}
-            className="group flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="group flex h-full min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
           >
-            <PropertyImage property={p} className="h-36 w-full" />
-            <div className="flex flex-1 flex-col gap-3 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold text-gray-900 group-hover:text-brand-700">{p.propertyName}</p>
-                <StatusBadge status={p.listingStatus} tones={STATUS_TONE} />
+            <PropertyImage property={p} className="h-44 w-full shrink-0" />
+            <div className="flex flex-1 flex-col gap-2.5 p-4">
+              <div className="flex min-h-11 items-start justify-between gap-3">
+                <p className="line-clamp-2 min-w-0 flex-1 font-semibold leading-5 text-gray-900 group-hover:text-brand-700">{p.propertyName}</p>
+                <span className="shrink-0"><StatusBadge status={p.listingStatus} tones={STATUS_TONE} /></span>
               </div>
-              <p className="-mt-2 flex items-center gap-1 text-sm text-gray-500">
+              <p className="flex min-h-5 items-center gap-1 truncate text-sm text-gray-500">
                 <MapPinIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {p.address?.barangay}, {p.address?.city}
+                <span className="truncate">{p.address?.barangay}, {p.address?.city}</span>
               </p>
               {p.roomCount !== undefined && (
                 <div className="mt-auto space-y-3 border-t border-gray-100 pt-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">
+                  <div className="flex min-h-5 items-center justify-between gap-3 text-sm">
+                    <span className="truncate text-gray-500">
                       {p.roomCount} room{p.roomCount === 1 ? '' : 's'} · {p.availableRooms} available
                     </span>
-                    {p.startingRent !== null && <span className="font-semibold text-gray-900">From {formatPeso(p.startingRent)}</span>}
+                    {p.startingRent != null && <span className="shrink-0 font-semibold text-gray-900">From {formatPeso(p.startingRent)}</span>}
                   </div>
                   <OccupancyBar occupied={p.occupiedSlots} total={p.totalSlots} />
                 </div>

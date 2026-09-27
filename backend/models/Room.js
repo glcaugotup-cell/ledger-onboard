@@ -10,7 +10,7 @@ const roomSchema = new Schema(
     description: { type: String, trim: true, default: '' },
     capacity: { type: Number, required: true, min: 1 },
     currentOccupancy: { type: Number, required: true, min: 0, default: 0 },
-    monthlyBaseRent: { type: Number, required: true, min: 0 },
+    monthlyBaseRent: { type: Number, required: true, min: 0, max: 1000000 },
     status: {
       type: String,
       enum: Object.values(ROOM_STATUS),

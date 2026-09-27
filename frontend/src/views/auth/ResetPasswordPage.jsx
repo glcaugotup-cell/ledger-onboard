@@ -57,7 +57,7 @@ export default function ResetPasswordPage() {
         <ErrorBanner message={error} />
         <SuccessBanner message={success} />
         <Field label="Email">
-          <TextInput type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+          <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         </Field>
         <Field label="Verification code">
           <TextInput

@@ -13,9 +13,9 @@ export function NotificationProvider({ children }) {
   const refresh = useCallback(async () => {
     if (status !== 'authenticated') return;
     try {
-      const { notifications: list } = await NotificationApi.list({ limit: 20 });
+      const { notifications: list, unreadCount: totalUnreadCount } = await NotificationApi.list({ limit: 20 });
       setNotifications(list);
-      setUnreadCount(list.filter((n) => !n.read).length);
+      setUnreadCount(Number.isFinite(totalUnreadCount) ? totalUnreadCount : list.filter((n) => !n.read).length);
     } catch {
       // Notifications are a convenience layer — a fetch failure shouldn't break the page.
     }

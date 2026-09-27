@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
+import { UserPlusIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import PageHeader from '../../components/layout/PageHeader.jsx';
 import CaretakerApi from '../../services/CaretakerApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Field, Select, TextInput } from '../../components/ui/Field.jsx';
+import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import { EmptyState, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { DAGUPAN_BARANGAYS } from '../../data/dagupanBarangays.js';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
-import { sanitizePhoneInput, validateGmail, validateName, validatePhone } from '../../utils/validators.js';
+import { validateGmail, validateName, validatePhone } from '../../utils/validators.js';
+import { initials } from '../../utils/format.js';
 
 const STATUS_TONE = { active: 'green', pending_activation: 'yellow', suspended: 'red', deactivated: 'gray', archived: 'gray' };
 const EMPTY_FORM = { firstName: '', lastName: '', email: '', phone: '', serviceBarangay: '' };
@@ -55,7 +58,7 @@ function ServiceAreaEditor({ caretaker, onSaved }) {
           setError('');
         }}
         aria-label={`Service barangay for ${caretaker.fullName}`}
-        className="w-52"
+        className="w-full sm:w-52"
       >
         <option value="">Service barangay…</option>
         <BarangayOptions />
@@ -133,22 +136,28 @@ export default function CaretakersPage() {
   return (
     <DashboardLayout>
       <PageHeader title="Caretakers" description="Invite caretakers and set the barangay each one works in." />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card title="Invite a caretaker" className="lg:col-span-1">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(19rem,0.95fr)_minmax(0,1.65fr)]">
+        <Card className="rounded-2xl border-gray-200/80 shadow-sm">
+          <div className="mb-5 flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100"><UserPlusIcon className="h-5 w-5" aria-hidden="true" /></span>
+            <div><h2 className="font-semibold text-gray-900">Invite a caretaker</h2><p className="mt-0.5 text-xs text-gray-500">Send an activation link to a trusted team member.</p></div>
+          </div>
           <form onSubmit={onCreate} className="space-y-3" noValidate>
             <ErrorBanner message={createError} />
             <SuccessBanner message={successMsg} />
-            <Field label="First name" error={formErrors.firstName}>
-              <TextInput value={form.firstName} onChange={(e) => setField('firstName', capitalizeFirst(e.target.value))} error={formErrors.firstName} />
-            </Field>
-            <Field label="Last name" error={formErrors.lastName}>
-              <TextInput value={form.lastName} onChange={(e) => setField('lastName', capitalizeFirst(e.target.value))} error={formErrors.lastName} />
-            </Field>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="First name" error={formErrors.firstName}>
+                <TextInput maxLength={80} value={form.firstName} onChange={(e) => setField('firstName', capitalizeFirst(e.target.value))} error={formErrors.firstName} />
+              </Field>
+              <Field label="Last name" error={formErrors.lastName}>
+                <TextInput maxLength={80} value={form.lastName} onChange={(e) => setField('lastName', capitalizeFirst(e.target.value))} error={formErrors.lastName} />
+              </Field>
+            </div>
             <Field label="Email (Gmail only)" error={formErrors.email}>
-              <TextInput type="email" value={form.email} onChange={(e) => setField('email', e.target.value)} error={formErrors.email} />
+              <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setField('email', e.target.value)} error={formErrors.email} />
             </Field>
-            <Field label="Phone" error={formErrors.phone}>
-              <TextInput inputMode="tel" maxLength={13} value={form.phone} onChange={(e) => setField('phone', sanitizePhoneInput(e.target.value))} error={formErrors.phone} />
+            <Field label="Phone (+63)" error={formErrors.phone}>
+              <PhoneInput value={form.phone} onChange={(value) => setField('phone', value)} error={formErrors.phone} placeholder="917 123 4567" />
             </Field>
             <Field label="Service barangay" error={formErrors.serviceBarangay}>
               <Select value={form.serviceBarangay} onChange={(e) => setField('serviceBarangay', e.target.value)} error={formErrors.serviceBarangay}>
@@ -163,29 +172,48 @@ export default function CaretakersPage() {
           </form>
         </Card>
 
-        <div className="lg:col-span-2">
+        <section aria-labelledby="caretaker-list-heading" className="min-w-0">
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-gray-200/80 bg-white px-4 py-3 shadow-sm sm:px-5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <UserGroupIcon className="h-5 w-5 shrink-0 text-brand-700" aria-hidden="true" />
+              <div className="min-w-0"><h2 id="caretaker-list-heading" className="font-semibold text-gray-900">Your caretakers</h2><p className="truncate text-xs text-gray-500">Manage access and service areas</p></div>
+            </div>
+            <span className="shrink-0 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800">{loading ? '…' : caretakers.length}</span>
+          </div>
           <ErrorBanner message={error} />
           {loading && <LoadingState />}
-          {!loading && caretakers.length === 0 && <EmptyState title="No caretakers yet" description="Invite one using the form on the left." />}
+          {!loading && caretakers.length === 0 && <EmptyState title="No caretakers yet" description="Your invited team members will appear here." />}
           <div className="space-y-3">
             {caretakers.map((c) => (
-              <Card key={c._id}>
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900">{c.fullName}</p>
-                    <p className="break-all text-sm text-gray-500">{c.email}</p>
-                    <p className="text-xs text-gray-500">{c.phone}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Works in: <span className="font-medium text-gray-700">{c.serviceBarangay || 'not set yet'}</span>
-                    </p>
-                    <ServiceAreaEditor caretaker={c} onSaved={(updated) => setCaretakers((prev) => prev.map((x) => (x._id === updated._id ? updated : x)))} />
+              <Card key={c._id} className="overflow-hidden rounded-2xl border-gray-200/80 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800" aria-hidden="true">{initials(c.fullName)}</span>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-gray-900">{c.fullName}</p>
+                      <p className="truncate text-sm text-gray-500">{c.email}</p>
+                    </div>
                   </div>
                   <StatusBadge status={c.accountStatus} tones={STATUS_TONE} />
+                </div>
+                <div className="mt-4 grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 xl:grid-cols-[minmax(8rem,0.8fr)_minmax(10rem,1fr)_minmax(14rem,1.4fr)]">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Phone</p>
+                    <p className="mt-1 truncate text-sm font-medium text-gray-700">{c.phone || 'Not provided'}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Service area</p>
+                    <p className="mt-1 truncate text-sm font-medium text-gray-700">{c.serviceBarangay || 'Not assigned'}</p>
+                  </div>
+                  <div className="min-w-0 sm:col-span-2 xl:col-span-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Update service area</p>
+                    <ServiceAreaEditor caretaker={c} onSaved={(updated) => setCaretakers((prev) => prev.map((x) => (x._id === updated._id ? updated : x)))} />
+                  </div>
                 </div>
               </Card>
             ))}
           </div>
-        </div>
+        </section>
       </div>
     </DashboardLayout>
   );

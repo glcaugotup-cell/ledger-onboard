@@ -159,6 +159,7 @@ export default function LoginPage() {
         <Field label="Email" error={touched.email ? errors.email : undefined}>
           <TextInput
             type="email"
+            maxLength={254}
             value={form.email}
             onChange={(e) => updateField('email', e.target.value)}
             onBlur={() => onFieldBlur('email')}
@@ -169,6 +170,7 @@ export default function LoginPage() {
         <Field label="Password" error={touched.password ? errors.password : undefined}>
           <TextInput
             type="password"
+            maxLength={256}
             value={form.password}
             onChange={(e) => updateField('password', e.target.value)}
             onBlur={() => onFieldBlur('password')}

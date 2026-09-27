@@ -123,7 +123,7 @@ export default function UsersPage() {
       <div className="mb-5 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="relative sm:w-72">
           <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
-          <TextInput type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or email" aria-label="Search users" className="pl-9" />
+          <TextInput type="search" maxLength={254} value={query} onChange={(e) => setQuery(e.target.value.slice(0, 254))} placeholder="Search name or email" aria-label="Search users" className="pl-9" />
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-gray-600">

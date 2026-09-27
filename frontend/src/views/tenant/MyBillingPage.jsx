@@ -56,8 +56,9 @@ function PaySoaForm({ soa, onDone }) {
         <TextInput
           type="number"
           min="0.01"
-          max={soa.remainingBalance}
+          max={Math.min(100000000, soa.remainingBalance)}
           step="0.01"
+          inputMode="decimal"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           error={fieldErrors.amount}

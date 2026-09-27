@@ -7,10 +7,11 @@ import Button from '../../components/ui/Button.jsx';
 import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
+import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import PrivacyPolicyModal from '../../components/PrivacyPolicyModal.jsx';
 import { describeApiError } from '../../utils/errors.js';
-import { normalizePhToE164, sanitizePhoneInput, validateGmail, validateName, validatePassword, validatePhone } from '../../utils/validators.js';
+import { normalizePhToE164, validateGmail, validateName, validatePassword, validatePhone } from '../../utils/validators.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
 import { useAuthedRedirect } from '../../routes/useAuthedRedirect.js';
 
@@ -320,6 +321,7 @@ export default function RegisterPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="First name" error={touched.firstName ? errors.firstName : undefined} hint="Starts with an uppercase letter — letters, spaces, hyphens, and periods only">
             <TextInput
+              maxLength={80}
               value={form.firstName}
               onChange={(e) => updateField('firstName', e.target.value)}
               onBlur={() => onBlur('firstName')}
@@ -330,6 +332,7 @@ export default function RegisterPage() {
 
           <Field label="Last name" error={touched.lastName ? errors.lastName : undefined} hint="Starts with an uppercase letter — letters, spaces, hyphens, and periods only">
             <TextInput
+              maxLength={80}
               value={form.lastName}
               onChange={(e) => updateField('lastName', e.target.value)}
               onBlur={() => onBlur('lastName')}
@@ -342,6 +345,7 @@ export default function RegisterPage() {
         <Field label="Email (Gmail only)" error={touched.email ? errors.email : undefined}>
           <TextInput
             type="email"
+            maxLength={254}
             value={form.email}
             onChange={(e) => updateField('email', e.target.value)}
             onBlur={() => onBlur('email')}
@@ -351,16 +355,15 @@ export default function RegisterPage() {
         </Field>
 
         <Field
-          label="Phone (Philippines, +63)"
+          label="Phone number"
           error={touched.phone ? errors.phone : undefined}
           hint="Enter as 09171234567 or +639171234567 — we'll store it as +639171234567"
         >
-          <TextInput
-            inputMode="tel"
+          <PhoneInput
             value={form.phone}
-            onChange={(e) => updateField('phone', sanitizePhoneInput(e.target.value))}
+            onChange={(value) => updateField('phone', value)}
             onBlur={() => onBlur('phone')}
-            placeholder="+63 917 123 4567"
+            placeholder="917 123 4567"
             error={touched.phone ? errors.phone : undefined}
           />
         </Field>
@@ -417,12 +420,11 @@ export default function RegisterPage() {
             </Field>
 
             <Field label="Emergency contact CP number" error={touched.emergencyContactPhone ? errors.emergencyContactPhone : undefined}>
-              <TextInput
-                inputMode="tel"
+              <PhoneInput
                 value={form.emergencyContactPhone}
-                onChange={(e) => updateField('emergencyContactPhone', sanitizePhoneInput(e.target.value))}
+                onChange={(value) => updateField('emergencyContactPhone', value)}
                 onBlur={() => onBlur('emergencyContactPhone')}
-                placeholder="09171234567"
+                placeholder="917 123 4567"
                 error={touched.emergencyContactPhone ? errors.emergencyContactPhone : undefined}
               />
             </Field>

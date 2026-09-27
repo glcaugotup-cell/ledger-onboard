@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import logo from '../../assets/logo.webp';
+import logo from '../../assets/Logo.png';
 import houseWelcome from '../../assets/housedesign1.webp';
 import houseExplore from '../../assets/housedesign2.webp';
 
@@ -43,12 +43,12 @@ export default function AuthSplitLayout() {
       <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/5 blur-2xl" />
       <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-amber-400/10 blur-3xl" />
 
-      <div className="relative z-10 flex items-center justify-end gap-2 text-xs font-medium tracking-wide text-brand-100">
+      <div className="relative z-10 mx-auto flex w-full max-w-xl items-center justify-start gap-2 text-xs font-medium tracking-wide text-brand-100">
         <ShieldIcon className="h-4 w-4" />
         <span>Safe · Trusted · For You</span>
       </div>
 
-      <div key={location.pathname} className={`relative z-10 ${isRegister ? 'animate-auth-slide-in-right' : 'animate-auth-slide-in-left'}`}>
+      <div key={location.pathname} className={`relative z-10 mx-auto w-full max-w-xl ${isRegister ? 'animate-auth-slide-in-right' : 'animate-auth-slide-in-left'}`}>
         <span className="mb-3 block h-1 w-10 rounded-full bg-amber-400" />
         {isRegister ? (
           <>
@@ -98,8 +98,8 @@ export default function AuthSplitLayout() {
         )}
       </div>
 
-      <div key={`${location.pathname}-illustration`} className={`relative z-10 mx-auto -mb-4 w-full max-w-sm ${isRegister ? 'animate-auth-slide-in-right' : 'animate-auth-slide-in-left'}`}>
-        <img src={isRegister ? houseWelcome : houseExplore} alt="" className="w-full drop-shadow-2xl" />
+      <div key={`${location.pathname}-illustration`} className={`relative z-10 mx-auto -mb-4 w-full max-w-xl ${isRegister ? 'animate-auth-slide-in-right' : 'animate-auth-slide-in-left'}`}>
+        <img src={isRegister ? houseWelcome : houseExplore} alt="" className="w-full max-w-sm drop-shadow-2xl" />
       </div>
     </div>
   );

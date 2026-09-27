@@ -14,6 +14,11 @@ const adminRoutes = require('./adminRoutes');
 
 const router = express.Router();
 
+// Public uptime-monitor endpoint. This router is mounted at /api in app.js.
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'Server is healthy' });
+});
+
 router.use('/auth', authRoutes);
 router.use('/users', userRouter);
 router.use('/notifications', notificationsRouter);

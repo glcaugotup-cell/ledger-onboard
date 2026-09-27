@@ -11,20 +11,23 @@ import { describeApiError } from '../../utils/errors.js';
 
 const today = new Date();
 const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+const MAX_BILL_AMOUNT = 1_000_000;
+const MAX_METER_READING = 10_000_000;
 
-const isNonNegativeNumber = (v) => v !== '' && v !== undefined && Number.isFinite(Number(v)) && Number(v) >= 0;
+const isBoundedDecimal = (value, max) => value !== '' && value !== undefined && /^\d+(\.\d{1,2})?$/.test(String(value)) && Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= max;
 
-/** Same rules as the backend: amounts and readings are 0 or more, and usage can't be negative. */
+/** Same rules as the backend: bounded bills/readings, current billing month or earlier, and nonnegative usage. */
 function validateReading({ roomId, readingMonth, totalElectricBill, totalWaterBill, tenants, readings }) {
   const errors = {};
   if (!roomId) errors.roomId = 'Select a room.';
   if (!readingMonth) errors.readingMonth = 'Choose the billing month.';
-  if (!isNonNegativeNumber(totalElectricBill)) errors.totalElectricBill = 'Enter the electric bill (0 or more).';
-  if (!isNonNegativeNumber(totalWaterBill)) errors.totalWaterBill = 'Enter the water bill (0 or more).';
+  else if (readingMonth.slice(0, 7) > defaultMonth.slice(0, 7)) errors.readingMonth = 'Billing month cannot be in the future.';
+  if (!isBoundedDecimal(totalElectricBill, MAX_BILL_AMOUNT)) errors.totalElectricBill = 'Enter an electric bill from ₱0 to ₱1,000,000 (up to 2 decimal places).';
+  if (!isBoundedDecimal(totalWaterBill, MAX_BILL_AMOUNT)) errors.totalWaterBill = 'Enter a water bill from ₱0 to ₱1,000,000 (up to 2 decimal places).';
   for (const t of tenants) {
     const r = readings[t._id] || {};
-    if (!isNonNegativeNumber(r.previousReading) || !isNonNegativeNumber(r.currentReading)) {
-      errors[t._id] = 'Enter both readings (0 or more).';
+    if (!isBoundedDecimal(r.previousReading, MAX_METER_READING) || !isBoundedDecimal(r.currentReading, MAX_METER_READING)) {
+      errors[t._id] = 'Enter both readings from 0 to 10,000,000 (up to 2 decimal places).';
     } else if (Number(r.currentReading) < Number(r.previousReading)) {
       errors[t._id] = 'Current reading cannot be less than the previous reading.';
     }
@@ -132,21 +135,23 @@ export default function UtilityEntryPage() {
           {selected && (
             <>
               <Field label="Billing month" error={fieldErrors.readingMonth}>
-                <TextInput type="date" value={readingMonth} onChange={(e) => setReadingMonth(e.target.value)} error={fieldErrors.readingMonth} />
+                <TextInput type="date" max={defaultMonth} value={readingMonth} onChange={(e) => setReadingMonth(e.target.value)} error={fieldErrors.readingMonth} />
               </Field>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Total electric bill (₱)" error={fieldErrors.totalElectricBill}>
                   <TextInput
                     type="number"
                     min="0"
+                    max={MAX_BILL_AMOUNT}
                     step="0.01"
+                    inputMode="decimal"
                     value={totalElectricBill}
                     onChange={(e) => setTotalElectricBill(e.target.value)}
                     error={fieldErrors.totalElectricBill}
                   />
                 </Field>
                 <Field label="Total water bill (₱)" error={fieldErrors.totalWaterBill}>
-                  <TextInput type="number" min="0" step="0.01" value={totalWaterBill} onChange={(e) => setTotalWaterBill(e.target.value)} error={fieldErrors.totalWaterBill} />
+                  <TextInput type="number" min="0" max={MAX_BILL_AMOUNT} step="0.01" inputMode="decimal" value={totalWaterBill} onChange={(e) => setTotalWaterBill(e.target.value)} error={fieldErrors.totalWaterBill} />
                 </Field>
               </div>
 
@@ -159,7 +164,9 @@ export default function UtilityEntryPage() {
                       <TextInput
                         type="number"
                         min="0"
+                        max={MAX_METER_READING}
                         step="0.01"
+                        inputMode="decimal"
                         placeholder="Previous reading"
                         value={readings[t._id]?.previousReading || ''}
                         onChange={(e) => updateReading(t._id, 'previousReading', e.target.value)}
@@ -167,7 +174,9 @@ export default function UtilityEntryPage() {
                       <TextInput
                         type="number"
                         min="0"
+                        max={MAX_METER_READING}
                         step="0.01"
+                        inputMode="decimal"
                         placeholder="Current reading"
                         value={readings[t._id]?.currentReading || ''}
                         onChange={(e) => updateReading(t._id, 'currentReading', e.target.value)}

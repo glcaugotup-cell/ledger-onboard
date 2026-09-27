@@ -41,7 +41,15 @@ export default function DiscoverContent({ linkPrefix = '/tenant/properties', map
     return () => clearTimeout(timeout);
   }, [filters]);
 
-  const update = (key) => (e) => setFilters({ ...filters, [key]: e.target.value });
+  const update = (key) => (e) => {
+    const value = e.target.value;
+    if (key === 'minRent' || key === 'maxRent') {
+      // Keep rent filters as whole-number strings for the API, and reject
+      // exponent notation, decimals, negatives, and values above the limit.
+      if (value !== '' && (!/^\d{1,7}$/.test(value) || Number(value) > 1000000)) return;
+    }
+    setFilters((current) => ({ ...current, [key]: value }));
+  };
   const activeFilters = Object.values(filters).filter((v) => v !== '').length;
   const rentRangeInvalid = filters.minRent !== '' && filters.maxRent !== '' && Number(filters.minRent) > Number(filters.maxRent);
 
@@ -64,7 +72,7 @@ export default function DiscoverContent({ linkPrefix = '/tenant/properties', map
           <Field label="Search">
             <div className="relative">
               <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
-              <TextInput placeholder="Name, description…" value={filters.text} onChange={update('text')} className="pl-9" />
+              <TextInput placeholder="Name, description…" maxLength={200} value={filters.text} onChange={update('text')} className="pl-9" />
             </div>
           </Field>
         </div>
@@ -105,10 +113,10 @@ export default function DiscoverContent({ linkPrefix = '/tenant/properties', map
           </Field>
         </div>
         <Field label="Min rent (₱)" error={rentRangeInvalid ? 'Higher than max rent' : undefined}>
-          <TextInput type="number" min="0" inputMode="numeric" value={filters.minRent} onChange={update('minRent')} placeholder="e.g. 1500" error={rentRangeInvalid} />
+          <TextInput type="number" min="0" max="1000000" step="1" inputMode="numeric" value={filters.minRent} onChange={update('minRent')} placeholder="e.g. 1500" error={rentRangeInvalid} />
         </Field>
         <Field label="Max rent (₱)">
-          <TextInput type="number" min="0" inputMode="numeric" value={filters.maxRent} onChange={update('maxRent')} placeholder="e.g. 3000" />
+          <TextInput type="number" min="0" max="1000000" step="1" inputMode="numeric" value={filters.maxRent} onChange={update('maxRent')} placeholder="e.g. 3000" />
         </Field>
         <div className="col-span-2 flex items-end sm:col-span-1">
           <button

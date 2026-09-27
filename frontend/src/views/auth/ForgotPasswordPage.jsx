@@ -36,7 +36,7 @@ export default function ForgotPasswordPage() {
         <ErrorBanner message={error} />
         <SuccessBanner message={message} />
         <Field label="Email">
-          <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <TextInput type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} required />
         </Field>
         <Button type="submit" className="w-full" loading={loading}>
           Send verification code

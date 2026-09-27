@@ -6,7 +6,6 @@ import {
   EnvelopeIcon,
   LockClosedIcon,
   UserIcon,
-  PhoneIcon,
   CheckCircleIcon,
   ShieldCheckIcon,
   MapPinIcon,
@@ -20,11 +19,11 @@ import { ROLE_HOME } from '../../routes/roleHome.js';
 import Button from '../../components/ui/Button.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
+import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import PrivacyPolicyModal from '../../components/PrivacyPolicyModal.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import {
   normalizePhToE164,
-  sanitizePhoneInput,
   validateGmail,
   validateLoginEmail,
   validateLoginPassword,
@@ -33,7 +32,7 @@ import {
   validatePhone,
 } from '../../utils/validators.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
-import logo from '../../assets/logo.webp';
+import logo from '../../assets/Logo.png';
 import houseWelcome from '../../assets/housedesign1.webp';
 import houseExplore from '../../assets/housedesign2.webp';
 
@@ -221,6 +220,7 @@ function HeroLoginForm({ onSwitch }) {
               <EnvelopeIcon className="absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="email"
+                maxLength={254}
                 placeholder="Email address"
                 value={form.email}
                 onChange={(e) => updateField('email', e.target.value)}
@@ -659,6 +659,7 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
                 <UserIcon className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
+                  maxLength={80}
                   placeholder="First name"
                   value={form.firstName}
                   onChange={(e) => updateField('firstName', e.target.value)}
@@ -673,6 +674,7 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
                 <UserIcon className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
+                  maxLength={80}
                   placeholder="Last name"
                   value={form.lastName}
                   onChange={(e) => updateField('lastName', e.target.value)}
@@ -689,6 +691,7 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
               <EnvelopeIcon className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
               <input
                 type="email"
+                maxLength={254}
                 placeholder="yourname@gmail.com"
                 value={form.email}
                 onChange={(e) => updateField('email', e.target.value)}
@@ -700,19 +703,13 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
           </div>
 
           <div>
-            <div className="relative">
-              <PhoneIcon className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={13}
-                placeholder="+639171234567"
-                value={form.phone}
-                onChange={(e) => updateField('phone', sanitizePhoneInput(e.target.value))}
-                onBlur={() => onBlur('phone')}
-                className={`${smallInput} ${touched.phone && errors.phone ? errorInputClass : ''}`}
-              />
-            </div>
+            <PhoneInput
+              placeholder="917 123 4567"
+              value={form.phone}
+              onChange={(value) => updateField('phone', value)}
+              onBlur={() => onBlur('phone')}
+              className={`rounded-xl border-gray-200 bg-gray-50/60 ${touched.phone && errors.phone ? 'border-red-500' : ''}`}
+            />
             <FieldError message={touched.phone ? errors.phone : ''} />
           </div>
 
@@ -783,15 +780,12 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
                 <FieldError message={touched.emergencyContactName ? errors.emergencyContactName : ''} />
               </div>
               <div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={13}
-                  placeholder="CP number"
+                <PhoneInput
+                  placeholder="917 123 4567"
                   value={form.emergencyContactPhone}
-                  onChange={(e) => updateField('emergencyContactPhone', sanitizePhoneInput(e.target.value))}
+                  onChange={(value) => updateField('emergencyContactPhone', value)}
                   onBlur={() => onBlur('emergencyContactPhone')}
-                  className={`w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 ${touched.emergencyContactPhone && errors.emergencyContactPhone ? errorInputClass : ''}`}
+                  className={`rounded-xl border-gray-200 ${touched.emergencyContactPhone && errors.emergencyContactPhone ? 'border-red-500' : ''}`}
                 />
                 <FieldError message={touched.emergencyContactPhone ? errors.emergencyContactPhone : ''} />
               </div>

@@ -7,8 +7,15 @@ const searchValidators = [
   query('barangay').optional().trim().isLength({ max: 100 }),
   query('propertyType').optional().isIn(Object.values(PROPERTY_TYPE)),
   query('tenantGenderPolicy').optional().isIn(Object.values(GENDER_POLICY)),
-  query('minRent').optional().isFloat({ min: 0 }).toFloat(),
-  query('maxRent').optional().isFloat({ min: 0 }).toFloat(),
+  query('minRent').optional().isInt({ min: 0, max: 1000000 }).withMessage('Minimum rent must be a whole number from 0 to 1,000,000').toInt(),
+  query('maxRent')
+    .optional()
+    .isInt({ min: 0, max: 1000000 })
+    .withMessage('Maximum rent must be a whole number from 0 to 1,000,000')
+    .bail()
+    .custom((max, { req }) => !req.query.minRent || Number(max) >= Number(req.query.minRent))
+    .withMessage('Maximum rent must be at least the minimum rent')
+    .toInt(),
   query('university').optional().trim().isLength({ max: 100 }),
   query('text').optional().trim().isLength({ max: 200 }),
 ];
@@ -56,8 +63,8 @@ const createPropertyValidators = [
   body('address.street').trim().notEmpty().withMessage('Street address is required').bail().isLength({ max: 200 }).withMessage('Street address must be at most 200 characters'),
   // Must be one of the 31 Dagupan City barangays (re-checked here so the API can't bypass the picker).
   barangayChain(),
-  body('address.city').optional().trim(),
-  body('address.province').optional().trim(),
+  body('address.city').optional().trim().isLength({ max: 100 }).withMessage('City must be at most 100 characters'),
+  body('address.province').optional().trim().isLength({ max: 100 }).withMessage('Province must be at most 100 characters'),
   body('locationCoordinates.lat').isFloat({ min: -90, max: 90 }).withMessage('Invalid latitude').toFloat(),
   body('locationCoordinates.lng').isFloat({ min: -180, max: 180 }).withMessage('Invalid longitude').toFloat(),
   coordinatesMatchChain(),
@@ -80,6 +87,8 @@ const updatePropertyValidators = [
     .bail()
     .isLength({ max: 200 })
     .withMessage('Street address must be at most 200 characters'),
+  body('address.city').optional().trim().isLength({ max: 100 }).withMessage('City must be at most 100 characters'),
+  body('address.province').optional().trim().isLength({ max: 100 }).withMessage('Province must be at most 100 characters'),
   barangayChain(body('address').exists()),
   body('locationCoordinates.lat').optional().isFloat({ min: -90, max: 90 }).withMessage('Invalid latitude').toFloat(),
   body('locationCoordinates.lng').optional().isFloat({ min: -180, max: 180 }).withMessage('Invalid longitude').toFloat(),

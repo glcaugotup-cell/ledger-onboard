@@ -19,7 +19,7 @@ const lastNameChain = body('lastName')
   .matches(FULL_NAME)
   .withMessage('Last name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes (min 2 characters)');
 
-const emailChain = body('email').trim().toLowerCase().matches(GMAIL).withMessage('Email must be a valid @gmail.com address');
+const emailChain = body('email').trim().isLength({ max: 254 }).withMessage('Email must be at most 254 characters').bail().toLowerCase().matches(GMAIL).withMessage('Email must be a valid @gmail.com address');
 
 const buildPhoneChain = () =>
   body('phone')
@@ -39,6 +39,9 @@ const strongPasswordChain = (field = 'password') =>
     .not()
     .matches(WHITESPACE)
     .withMessage('Password must not contain spaces.')
+    .bail()
+    .isLength({ min: 8, max: 128 })
+    .withMessage('Password must be 8-128 characters long')
     .bail()
     .matches(STRONG_PASSWORD)
     .withMessage('Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character');
@@ -74,7 +77,7 @@ const registerValidators = [
   emergencyContactPhoneChain,
 ];
 
-const loginValidators = [emailChain, body('password').notEmpty().withMessage('Password is required')];
+const loginValidators = [emailChain, body('password').isString().notEmpty().withMessage('Password is required').bail().isLength({ max: 256 }).withMessage('Password must be 256 characters or fewer')];
 
 const forgotPasswordValidators = [emailChain];
 

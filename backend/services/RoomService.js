@@ -1,5 +1,6 @@
 const RoomRepository = require('../repositories/RoomRepository');
 const PropertyRepository = require('../repositories/PropertyRepository');
+const ReservationRepository = require('../repositories/ReservationRepository');
 const ApiError = require('../utils/ApiError');
 const { ROLES, ROOM_STATUS } = require('../utils/constants');
 
@@ -42,6 +43,25 @@ class RoomService {
       if (updates[key] !== undefined) safeUpdates[key] = updates[key];
     }
     return RoomRepository.updateById(roomId, safeUpdates);
+  }
+
+  async delete(roomId, requester) {
+    const room = await RoomRepository.findById(roomId);
+    if (!room) throw ApiError.notFound('Room not found', 'ROOM_NOT_FOUND');
+    const property = await PropertyRepository.findById(room.propertyId);
+    if (!property || property.deletedAt) throw ApiError.notFound('Room not found', 'ROOM_NOT_FOUND');
+    this._assertLandlordOwnsOrAdmin(property, requester);
+
+    if (room.currentOccupancy > 0) {
+      throw ApiError.conflict('This room still has current occupants. Resolve the tenancies before deleting it.', 'ROOM_HAS_TENANTS');
+    }
+    const reservations = await ReservationRepository.count({ roomId });
+    if (reservations > 0) {
+      throw ApiError.conflict('This room has reservation history and cannot be deleted.', 'ROOM_HAS_RESERVATION_HISTORY');
+    }
+
+    await RoomRepository.deleteById(roomId);
+    return { deleted: true };
   }
 
   /** Occupies a room by 1 tenant; flips to 'occupied' once at capacity. Never exceeds capacity. */

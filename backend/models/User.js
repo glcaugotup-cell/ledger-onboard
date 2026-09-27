@@ -15,12 +15,14 @@ const userSchema = new Schema(
       type: String,
       required: true,
       trim: true,
+      maxlength: 80,
       match: [NAME_REGEX, 'First name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes'],
     },
     lastName: {
       type: String,
       required: true,
       trim: true,
+      maxlength: 80,
       match: [NAME_REGEX, 'Last name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes'],
     },
     // Derived from firstName + lastName by the service layer; stored because it's read widely.
@@ -28,6 +30,7 @@ const userSchema = new Schema(
       type: String,
       required: true,
       trim: true,
+      maxlength: 161,
     },
     email: {
       type: String,
@@ -35,6 +38,7 @@ const userSchema = new Schema(
       unique: true,
       lowercase: true,
       trim: true,
+      maxlength: 254,
       immutable: true, // cannot be changed by the user post-registration
       match: [GMAIL_REGEX, 'Email must be a valid @gmail.com address'],
     },
@@ -46,6 +50,7 @@ const userSchema = new Schema(
     phone: {
       type: String,
       trim: true,
+      maxlength: 13,
       match: [PH_PHONE_REGEX, 'Phone must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX)'],
     },
     role: {
@@ -129,11 +134,13 @@ const userSchema = new Schema(
       name: {
         type: String,
         trim: true,
+        maxlength: 80,
         match: [NAME_REGEX, 'Emergency contact name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes'],
       },
       phone: {
         type: String,
         trim: true,
+        maxlength: 13,
         match: [PH_PHONE_REGEX, 'Emergency contact phone must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX)'],
       },
     },

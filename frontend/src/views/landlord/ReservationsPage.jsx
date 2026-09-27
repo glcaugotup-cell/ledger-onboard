@@ -6,7 +6,7 @@ import CaretakerApi from '../../services/CaretakerApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Select } from '../../components/ui/Field.jsx';
-import { CalendarDaysIcon } from '@heroicons/react/24/outline';
+import { CalendarDaysIcon, CheckCircleIcon, ClockIcon, HomeModernIcon } from '@heroicons/react/24/outline';
 import { EmptyState, ErrorBanner, LoadingState, StatusBadge } from '../../components/ui/Feedback.jsx';
 import { formatDate } from '../../utils/format.js';
 
@@ -14,10 +14,10 @@ const STATUS_TONE = { pending: 'yellow', approved: 'green', rejected: 'red', can
 
 function SectionTitle({ id, count, children }) {
   return (
-    <h2 id={id} className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
-      {children}
-      <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold normal-case tracking-normal text-gray-700">{count}</span>
-    </h2>
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <h2 id={id} className="text-base font-semibold text-gray-900">{children}</h2>
+      <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold tabular-nums text-gray-700">{count}</span>
+    </div>
   );
 }
 
@@ -94,16 +94,21 @@ export default function ReservationsPage() {
   const past = reservations.filter((r) => !['pending', 'approved'].includes(r.status));
 
   const who = (r) => (
-    <div className="min-w-0">
-      <p className="font-semibold text-gray-900">{r.tenantId?.fullName}</p>
-      <p className="text-sm text-gray-600">
+    <div className="flex min-w-0 items-start gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-800 ring-1 ring-brand-100">
+        {(r.tenantId?.fullName || 'Tenant').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}
+      </span>
+      <div className="min-w-0">
+      <p className="font-semibold text-gray-900">{r.tenantId?.fullName || 'Tenant'}</p>
+      <p className="mt-0.5 text-sm text-gray-600">
         {r.propertyId?.propertyName} · Room {r.roomId?.roomNumber}
       </p>
-      <p className="mt-0.5 text-xs text-gray-500">
+      <p className="mt-1 text-xs text-gray-500">
         Move-in {formatDate(r.moveInDate)}
         {r.moveOutDate ? ` · Move-out ${formatDate(r.moveOutDate)}` : ''}
         {r.status === 'rejected' && r.rejectionReason ? ` · Reason: ${r.rejectionReason}` : ''}
       </p>
+      </div>
     </div>
   );
 
@@ -115,6 +120,18 @@ export default function ReservationsPage() {
 
       {!loading && (
         <div className="space-y-8">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {[
+              { label: 'Awaiting review', value: pending.length, Icon: ClockIcon, tone: 'amber' },
+              { label: 'Current tenants', value: current.length, Icon: HomeModernIcon, tone: 'green' },
+              { label: 'Past reservations', value: past.length, Icon: CheckCircleIcon, tone: 'slate' },
+            ].map(({ label, value, Icon, tone }) => (
+              <div key={label} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${tone === 'amber' ? 'bg-amber-50 text-amber-700' : tone === 'green' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}><Icon className="h-5 w-5" /></span>
+                <div><p className="text-2xl font-semibold leading-none tabular-nums text-gray-900">{value}</p><p className="mt-1 text-xs font-medium text-gray-500">{label}</p></div>
+              </div>
+            ))}
+          </div>
           <section aria-labelledby="pending-heading">
             <SectionTitle id="pending-heading" count={pending.length}>
               Pending requests
@@ -122,10 +139,10 @@ export default function ReservationsPage() {
             {pending.length === 0 && <EmptyState icon={CalendarDaysIcon} title="No pending requests" description="New reservation requests from tenants appear here." />}
             <div className="space-y-3">
               {pending.map((r) => (
-                <Card key={r._id} className="border-l-4 border-l-amber-400">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <Card key={r._id} className="border-l-4 border-l-amber-400 transition-shadow hover:shadow-md">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     {who(r)}
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <div className="flex flex-col gap-2 border-t border-gray-100 pt-3 sm:flex-row sm:items-center xl:border-0 xl:pt-0">
                       <Select
                         aria-label={`Assign a caretaker to ${r.tenantId?.fullName || 'this tenant'}`}
                         value={assignments[r._id] || ''}
@@ -159,10 +176,10 @@ export default function ReservationsPage() {
             <SectionTitle id="current-heading" count={current.length}>
               Current tenants
             </SectionTitle>
-            {current.length === 0 && <p className="text-sm text-gray-500">No one is currently staying through an approved reservation.</p>}
+            {current.length === 0 && <p className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-5 text-sm text-gray-500">No one is currently staying through an approved reservation.</p>}
             <div className="space-y-2">
               {current.map((r) => (
-                <Card key={r._id}>
+              <Card key={r._id} className="transition-shadow hover:shadow-md">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     {who(r)}
                     <div className="flex items-center justify-between gap-2 sm:justify-end">
@@ -181,10 +198,10 @@ export default function ReservationsPage() {
             <SectionTitle id="history-heading" count={past.length}>
               History
             </SectionTitle>
-            {past.length === 0 && <p className="text-sm text-gray-500">Completed, rejected and cancelled reservations appear here.</p>}
+            {past.length === 0 && <p className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-5 text-sm text-gray-500">Completed, rejected and cancelled reservations appear here.</p>}
             <div className="space-y-2">
               {past.map((r) => (
-                <Card key={r._id}>
+              <Card key={r._id} className="transition-shadow hover:shadow-md">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     {who(r)}
                     <StatusBadge status={r.status} tones={STATUS_TONE} />

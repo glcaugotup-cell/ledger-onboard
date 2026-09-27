@@ -7,6 +7,11 @@ class RoomController {
     const room = await RoomService.update(req.params.id, req.user, req.body);
     sendSuccess(res, { data: { room } });
   });
+
+  remove = asyncHandler(async (req, res) => {
+    const result = await RoomService.delete(req.params.id, req.user);
+    sendSuccess(res, { data: result });
+  });
 }
 
 module.exports = new RoomController();

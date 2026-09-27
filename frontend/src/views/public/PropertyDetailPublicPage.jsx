@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import PropertyDetailContent from '../../components/PropertyDetailContent.jsx';
-import logo from '../../assets/logo.webp';
+import logo from '../../assets/Logo.png';
 
 export default function PropertyDetailPublicPage() {
   return (

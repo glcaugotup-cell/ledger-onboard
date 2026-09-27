@@ -27,6 +27,35 @@ body {
    remounts on each /login <-> /register navigation, so instead of an
    instant pop-in it plays a short directional slide+fade keyed to which
    way the user is moving between the two forms. */
+@keyframes roles-marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.roles-marquee {
+  overflow: hidden;
+  width: 100%;
+  padding: 0.25rem 0 0.75rem;
+}
+
+.roles-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: roles-marquee-scroll 34s linear infinite;
+}
+
+.roles-marquee-group {
+  display: flex;
+  flex: none;
+  gap: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roles-marquee { overflow-x: auto; }
+  .roles-marquee-track { animation: none; }
+}
+
 @keyframes auth-slide-in-right {
   from {
     opacity: 0;

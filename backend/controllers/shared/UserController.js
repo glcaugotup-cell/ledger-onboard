@@ -16,12 +16,15 @@ class UserController {
 
   listNotifications = asyncHandler(async (req, res) => {
     const { onlyUnread, skip, limit } = req.query;
-    const notifications = await NotificationService.listForUser(req.user.id, {
-      onlyUnread: onlyUnread === 'true',
-      skip,
-      limit,
-    });
-    sendSuccess(res, { data: { notifications } });
+    const [notifications, unreadCount] = await Promise.all([
+      NotificationService.listForUser(req.user.id, {
+        onlyUnread: onlyUnread === 'true',
+        skip,
+        limit,
+      }),
+      NotificationService.unreadCount(req.user.id),
+    ]);
+    sendSuccess(res, { data: { notifications, unreadCount } });
   });
 
   markNotificationRead = asyncHandler(async (req, res) => {

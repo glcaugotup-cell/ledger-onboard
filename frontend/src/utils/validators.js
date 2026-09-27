@@ -12,6 +12,7 @@ export const PATTERNS = {
 
 export function validateName(value) {
   if (!value) return 'This field is required';
+  if (value.length > 80) return 'Must be 80 characters or fewer';
   if (!PATTERNS.NAME.test(value)) {
     return 'Must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes (min 2 characters)';
   }
@@ -20,6 +21,7 @@ export function validateName(value) {
 
 export function validateGmail(value) {
   if (!value) return 'Email is required';
+  if (value.length > 254) return 'Email must be 254 characters or fewer';
   if (!PATTERNS.GMAIL.test(value)) return 'Must be a valid @gmail.com address';
   return null;
 }
@@ -27,6 +29,7 @@ export function validateGmail(value) {
 /** Same Gmail rule as registration, with login-specific wording. */
 export function validateLoginEmail(value) {
   if (!value) return 'Email is required.';
+  if (value.length > 254) return 'Email must be 254 characters or fewer.';
   if (!PATTERNS.GMAIL.test(value)) return 'Please enter a valid email address.';
   return null;
 }
@@ -110,6 +113,7 @@ export const PASSWORD_SPACES_MESSAGE = 'Password must not contain spaces.';
 
 export function validatePassword(value) {
   if (!value) return 'Password is required';
+  if (value.length > 128) return 'Password must be 128 characters or fewer';
   if (/\s/.test(value)) return PASSWORD_SPACES_MESSAGE;
   const unmet = getPasswordChecklist(value).filter((r) => !r.met);
   if (unmet.length === 0) return null;
@@ -137,6 +141,7 @@ export function validatePaymentAmount(value, remainingBalance) {
   if (value === '' || value === null || value === undefined) return 'Enter the amount.';
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount <= 0) return 'Amount must be greater than 0.';
+  if (amount > 100_000_000) return 'Amount cannot be more than ₱100,000,000.';
   if (!/^\d+(\.\d{1,2})?$/.test(String(value).trim())) return 'Use at most 2 decimal places.';
   if (remainingBalance !== undefined && amount > remainingBalance) {
     return `Amount cannot be more than the remaining balance of ₱${Number(remainingBalance).toLocaleString()}.`;

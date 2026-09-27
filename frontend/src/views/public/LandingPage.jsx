@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CheckCircleIcon, XCircleIcon, ChevronDownIcon, ChevronUpIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import DiscoverContent from '../../components/DiscoverContent.jsx';
 import HeroAuthCard from './HeroAuthCard.jsx';
-import logo from '../../assets/logo.webp';
+import logo from '../../assets/Logo.png';
 import { capitalizeFirst } from '../../utils/textFormat.js';
 import { validateName } from '../../utils/validators.js';
 
@@ -216,7 +216,8 @@ export default function LandingPage() {
     const errors = {};
     const nameError = validateName(contactForm.fullName.trim());
     if (nameError) errors.fullName = nameError === 'This field is required' ? 'Enter your name.' : nameError;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactForm.email.trim())) errors.email = 'Enter a valid email address.';
+    if (contactForm.email.trim().length > 254) errors.email = 'Email must be 254 characters or fewer.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactForm.email.trim())) errors.email = 'Enter a valid email address.';
     const message = contactForm.message.trim();
     if (message.length < 10) errors.message = 'Please write at least 10 characters.';
     else if (message.length > 2000) errors.message = 'Please keep your message under 2000 characters.';
@@ -323,20 +324,26 @@ export default function LandingPage() {
       {/* WHO IS IT FOR? (ROLES) */}
       <Section id="roles" className="bg-slate-100/70">
         <SectionLabel>Platform Roles</SectionLabel>
-        <h2 className="mb-12 text-3xl font-black tracking-tight text-brand-800 md:text-4xl">Designed for all stakeholders</h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {ROLES.map((role) => (
-            <div
-              key={role.title}
-              className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-brand-200 hover:shadow-lg"
-            >
-              <div>
-                <span className="mb-4 block text-3xl">{role.icon}</span>
-                <h3 className="mb-2 text-lg font-bold text-slate-900">{role.title}</h3>
-                <p className="text-xs leading-relaxed text-slate-600">{role.desc}</p>
+        <h2 className="mb-7 text-3xl font-black tracking-tight text-brand-800 md:text-4xl">Designed for all stakeholders</h2>
+        <div className="roles-marquee group/roles" role="region" aria-label="Platform roles">
+          <div className="roles-marquee-track group-hover/roles:[animation-play-state:paused] group-focus-within/roles:[animation-play-state:paused]">
+            {[false, true].map((duplicate) => (
+              <div key={duplicate ? 'duplicate' : 'original'} className="roles-marquee-group" aria-hidden={duplicate || undefined}>
+                {ROLES.map((role) => (
+                  <article
+                    key={`${duplicate ? 'duplicate-' : ''}${role.title}`}
+                    className="flex min-h-[12.25rem] w-[min(17rem,82vw)] shrink-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-brand-200 hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:w-[17rem]"
+                  >
+                    <div>
+                      <span className="mb-4 block text-3xl">{role.icon}</span>
+                      <h3 className="mb-2 text-lg font-bold text-slate-900">{role.title}</h3>
+                      <p className="text-xs leading-relaxed text-slate-600">{role.desc}</p>
+                    </div>
+                  </article>
+                ))}
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </Section>
 
@@ -431,6 +438,7 @@ export default function LandingPage() {
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">Full Name</label>
                 <input
                   type="text"
+                  maxLength={80}
                   placeholder="Juan Dela Cruz"
                   aria-label="Full Name"
                   value={contactForm.fullName}
@@ -443,6 +451,7 @@ export default function LandingPage() {
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">Email Address</label>
                 <input
                   type="email"
+                  maxLength={254}
                   placeholder="juan@gmail.com"
                   aria-label="Email Address"
                   value={contactForm.email}
