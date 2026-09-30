@@ -38,6 +38,7 @@ const NAV_BY_ROLE = {
     { to: '/tenant/discover', label: 'Discover', icon: MagnifyingGlassIcon },
     { to: '/tenant/reservations', label: 'My Reservations', icon: CalendarDaysIcon },
     { to: '/tenant/billing', label: 'Billing', icon: DocumentTextIcon },
+    { to: '/tenant/issues', label: 'Maintenance Issues', icon: ClipboardDocumentListIcon },
   ],
   landlord: [
     { to: '/landlord/dashboard', label: 'Dashboard', icon: ChartBarIcon },
@@ -46,12 +47,14 @@ const NAV_BY_ROLE = {
     { to: '/landlord/caretakers', label: 'Caretakers', icon: UserGroupIcon },
     { to: '/landlord/billing', label: 'Billing', icon: DocumentTextIcon },
     { to: '/landlord/payments', label: 'Payments', icon: CreditCardIcon },
+    { to: '/landlord/issues', label: 'Maintenance Issues', icon: ClipboardDocumentListIcon },
     { to: '/landlord/verification', label: 'Verification', icon: ShieldCheckIcon },
   ],
   caretaker: [
     { to: '/caretaker/rooms', label: 'Assigned Rooms', icon: HomeModernIcon },
     { to: '/caretaker/utilities', label: 'Utility Entry', icon: BoltIcon },
     { to: '/caretaker/payments', label: 'Cash & Payments', icon: CreditCardIcon },
+    { to: '/caretaker/issues', label: 'Maintenance Tasks', icon: ClipboardDocumentListIcon },
   ],
   admin: [
     { to: '/admin/users', label: 'Users', icon: UsersIcon },
@@ -79,6 +82,11 @@ function useDismiss(open, ref, onClose) {
 }
 
 function notificationPath(notification, role) {
+  if (notification.relatedType === 'MaintenanceIssue' || notification.type?.startsWith('MAINTENANCE_ISSUE_')) {
+    if (role === 'landlord') return '/landlord/issues';
+    if (role === 'caretaker') return '/caretaker/issues';
+    return '/tenant/issues';
+  }
   if (notification.relatedType === 'Reservation' || notification.type?.startsWith('RESERVATION_')) {
     if (role === 'landlord') return '/landlord/reservations';
     if (role === 'caretaker') return '/caretaker/rooms';

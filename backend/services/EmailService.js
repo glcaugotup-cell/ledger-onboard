@@ -63,6 +63,15 @@ class EmailService {
     });
   }
 
+  sendCaretakerCreatedEmail(to, fullName, activationUrl, landlordName, temporaryPassword) {
+    const invitedBy = landlordName ? ` by ${landlordName}` : '';
+    return this.send({
+      to,
+      subject: 'Ledger OnBoard Caretaker Invitation',
+      text: `Hi ${fullName},\n\nYou have been invited${invitedBy} to become a caretaker on Ledger OnBoard.\n\nTemporary password: ${temporaryPassword}\n\nOpen this activation link and choose a strong personal password before you can access your account:\n${activationUrl}\n\nThis link expires in 3 days.\n\nRegards,\nLedger OnBoard`,
+    });
+  }
+
   sendArchiveWarningEmail(to, fullName, daysRemaining) {
     return this.send({
       to,

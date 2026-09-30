@@ -34,6 +34,32 @@ class BillingService {
     return soas;
   }
 
+  /** Generates monthly base-rent statements for fixed-rate room-only and bedspace properties. */
+  async generateFixedRateSOAs(roomId, billingPeriod) {
+    const room = await RoomRepository.findById(roomId);
+    if (!room) throw ApiError.notFound('Room not found', 'ROOM_NOT_FOUND');
+    const property = await PropertyRepository.findById(room.propertyId);
+    if (!property || !['Room Only', 'Bedspace'].includes(property.propertyType)) {
+      throw ApiError.badRequest('Fixed-rate billing is only for Room Only and Bedspace properties', 'PROPERTY_REQUIRES_METER_READINGS');
+    }
+    const ReservationRepository = require('../repositories/ReservationRepository');
+    const occupants = await ReservationRepository.findActiveTenantIdsForRoom(roomId);
+    if (!occupants.length) throw ApiError.badRequest('This room has no active tenants to bill', 'NO_OCCUPANTS');
+    const soas = [];
+    for (const occupant of occupants) {
+      // eslint-disable-next-line no-await-in-loop
+      soas.push(await this._generateSOAForTenant({
+        tenantId: occupant.tenantId,
+        roomId,
+        billingPeriod,
+        baseRent: room.monthlyBaseRent,
+        electricShare: 0,
+        waterShare: 0,
+      }));
+    }
+    return soas;
+  }
+
   async _generateSOAForTenant({ tenantId, roomId, billingPeriod, baseRent, electricShare, waterShare }) {
     const existing = await BillingSOARepository.findByTenantAndPeriod(tenantId, billingPeriod);
     if (existing) return existing; // idempotent — a reading is only ever logged once per room/month anyway
@@ -81,6 +107,17 @@ class BillingService {
     else if (amountPaid <= 0) paymentStatus = this._isOverdue(soa) ? PAYMENT_STATUS.OVERDUE : PAYMENT_STATUS.UNPAID;
 
     return BillingSOARepository.updateById(soaId, { amountPaid, remainingBalance, paymentStatus });
+  }
+
+  /** Sets a landlord-confirmed outstanding balance after a partial payment. */
+  async setRemainingBalance(soaId, remainingBalance) {
+    const soa = await BillingSOARepository.findById(soaId);
+    if (!soa) throw ApiError.notFound('Statement of account not found', 'SOA_NOT_FOUND');
+    const amountPaid = roundMoney(soa.totalAmountDue - remainingBalance);
+    let paymentStatus = PAYMENT_STATUS.PARTIAL;
+    if (remainingBalance <= 0) paymentStatus = PAYMENT_STATUS.PAID;
+    else if (amountPaid <= 0) paymentStatus = this._isOverdue(soa) ? PAYMENT_STATUS.OVERDUE : PAYMENT_STATUS.UNPAID;
+    return BillingSOARepository.updateById(soaId, { amountPaid, remainingBalance: roundMoney(remainingBalance), paymentStatus });
   }
 
   _isOverdue(soa) {

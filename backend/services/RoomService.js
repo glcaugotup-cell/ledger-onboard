@@ -18,16 +18,21 @@ class RoomService {
     if (!property || property.deletedAt) throw ApiError.notFound('Property not found', 'PROPERTY_NOT_FOUND');
     this._assertLandlordOwnsOrAdmin(property, requester);
 
-    return RoomRepository.create({
-      propertyId,
-      roomNumber: data.roomNumber,
-      description: data.description,
-      capacity: data.capacity,
-      monthlyBaseRent: data.monthlyBaseRent,
-      amenities: data.amenities || [],
-      currentOccupancy: 0,
-      status: ROOM_STATUS.AVAILABLE,
-    });
+    try {
+      return await RoomRepository.create({
+        propertyId,
+        roomNumber: data.roomNumber,
+        description: data.description,
+        capacity: data.capacity,
+        monthlyBaseRent: data.monthlyBaseRent,
+        amenities: data.amenities || [],
+        currentOccupancy: 0,
+        status: ROOM_STATUS.AVAILABLE,
+      });
+    } catch (err) {
+      if (err.code === 11000) throw ApiError.conflict('A room with this number already exists in this property.', 'ROOM_NUMBER_EXISTS');
+      throw err;
+    }
   }
 
   async update(roomId, requester, updates) {
@@ -41,6 +46,9 @@ class RoomService {
     const safeUpdates = {};
     for (const key of allowed) {
       if (updates[key] !== undefined) safeUpdates[key] = updates[key];
+    }
+    if (safeUpdates.status === ROOM_STATUS.AVAILABLE && room.currentOccupancy >= room.capacity) {
+      throw ApiError.conflict('This room is full. Complete or cancel a tenancy before marking it available.', 'ROOM_IS_FULL');
     }
     return RoomRepository.updateById(roomId, safeUpdates);
   }

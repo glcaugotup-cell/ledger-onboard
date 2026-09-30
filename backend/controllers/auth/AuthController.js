@@ -85,7 +85,7 @@ class AuthController {
   });
 
   deactivateAccount = asyncHandler(async (req, res) => {
-    const result = await AuthService.deactivateOwnAccount(req.user.id);
+    const result = await AuthService.deactivateOwnAccount(req.user.id, req.body.reason);
     sendSuccess(res, { data: result });
   });
 

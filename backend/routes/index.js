@@ -11,6 +11,7 @@ const billingRoutes = require('./billingRoutes');
 const paymentRoutes = require('./paymentRoutes');
 const reviewRoutes = require('./reviewRoutes');
 const adminRoutes = require('./adminRoutes');
+const maintenanceIssueRoutes = require('./maintenanceIssueRoutes');
 
 const router = express.Router();
 
@@ -32,6 +33,7 @@ router.use('/utilities', utilityRoutes);
 router.use('/billing', billingRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/reviews', reviewRoutes);
+router.use('/maintenance-issues', maintenanceIssueRoutes);
 router.use('/admin', adminRoutes);
 
 module.exports = router;

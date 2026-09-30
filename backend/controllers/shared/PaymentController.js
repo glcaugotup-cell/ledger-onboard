@@ -11,6 +11,10 @@ class PaymentController {
   // Dispatches on the authenticated role, never a client-supplied identity.
   submit = asyncHandler(async (req, res) => {
     if (req.user.role === ROLES.TENANT) {
+      if (req.body.paymentMethod === 'GCASH_QR') {
+        const payment = await PaymentService.submitGcashQr(req.user.id, req.body);
+        return sendSuccess(res, { statusCode: 201, data: { payment } });
+      }
       const payment = await PaymentService.submitGcashProof(req.user.id, req.body, req.file);
       return sendSuccess(res, { statusCode: 201, data: { payment } });
     }

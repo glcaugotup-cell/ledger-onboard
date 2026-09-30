@@ -13,7 +13,10 @@ const paymentTransactionSchema = new Schema(
       required: true,
     },
     amount: { type: Number, required: true, min: 0.01 },
+    amountVerified: { type: Number, default: null, min: 0 },
+    balanceAfter: { type: Number, default: null, min: 0 },
     proofImageURL: { type: String, default: null },
+    referenceNumber: { type: String, trim: true, maxlength: 100, default: null },
     cashCollectedByCaretakerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     verificationStatus: {
       type: String,
@@ -35,6 +38,9 @@ paymentTransactionSchema.index({ verificationStatus: 1 });
 paymentTransactionSchema.pre('validate', function guardEvidence(next) {
   if (this.paymentMethod === 'GCASH_SCREENSHOT' && !this.proofImageURL) {
     return next(new Error('proofImageURL is required for GCASH_SCREENSHOT payments'));
+  }
+  if (this.paymentMethod === 'GCASH_QR' && !this.referenceNumber) {
+    return next(new Error('referenceNumber is required for GCASH_QR payments'));
   }
   if (this.paymentMethod === 'CASH_ON_SITE' && !this.cashCollectedByCaretakerId) {
     return next(new Error('cashCollectedByCaretakerId is required for CASH_ON_SITE payments'));

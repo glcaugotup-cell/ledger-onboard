@@ -1,4 +1,4 @@
-import { BaseApiClient } from './apiClient';
+import { BaseApiClient, UPLOAD_CONFIG } from './apiClient';
 
 class AuthApi extends BaseApiClient {
   register(payload) {
@@ -53,8 +53,8 @@ class AuthApi extends BaseApiClient {
     return this.post('/auth/account-recovery', payload);
   }
 
-  deactivateAccount() {
-    return this.post('/auth/deactivate');
+  deactivateAccount(reason) {
+    return this.post('/auth/deactivate', { reason });
   }
 
   getMe() {
@@ -63,6 +63,15 @@ class AuthApi extends BaseApiClient {
 
   updateMe(payload) {
     return this.patch('/users/me', payload);
+  }
+
+  uploadPaymentQr(formData) {
+    return this.patch('/users/me/payment-qr', formData, UPLOAD_CONFIG);
+  }
+
+  async fetchPaymentQrObjectUrl() {
+    const res = await this.http.get('/users/me/payment-qr', { responseType: 'blob' });
+    return URL.createObjectURL(res.data);
   }
 
   setMfaPreference(enabled) {

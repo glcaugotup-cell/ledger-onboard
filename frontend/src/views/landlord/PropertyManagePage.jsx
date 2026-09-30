@@ -114,6 +114,7 @@ function CaretakerAssignment({ propertyId }) {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [confirming, setConfirming] = useState(null); // caretaker awaiting confirmation
+  const [removing, setRemoving] = useState(null);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState('');
 
@@ -134,6 +135,21 @@ function CaretakerAssignment({ propertyId }) {
       await PropertyApi.assignCaretaker(propertyId, confirming._id);
       setMsg(`${confirming.fullName} is now assigned to this property.`);
       setConfirming(null);
+      await load();
+    } catch (err) {
+      setAssignError(describeApiError(err).message);
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const unassign = async () => {
+    setAssigning(true);
+    setAssignError('');
+    try {
+      await PropertyApi.unassignCaretaker(propertyId, removing._id);
+      setMsg(`${removing.fullName} is no longer assigned to this property.`);
+      setRemoving(null);
       await load();
     } catch (err) {
       setAssignError(describeApiError(err).message);
@@ -167,7 +183,11 @@ function CaretakerAssignment({ propertyId }) {
                   </p>
                   <p className="text-xs text-gray-500">{c.matchReason}</p>
                 </div>
-                {!c.assigned && (
+                {c.assigned ? (
+                  <Button variant="danger" onClick={() => { setAssignError(''); setRemoving(c); }}>
+                    Reassign
+                  </Button>
+                ) : (
                   <Button
                     variant={c.suitable ? 'primary' : 'secondary'}
                     onClick={() => {
@@ -198,6 +218,17 @@ function CaretakerAssignment({ propertyId }) {
         error={assignError}
         onConfirm={assign}
         onCancel={() => setConfirming(null)}
+      />
+      <ConfirmDialog
+        open={Boolean(removing)}
+        tone="danger"
+        title={removing ? `Remove ${removing.fullName} from this property?` : ''}
+        message="They will no longer be able to log readings or record cash payments for this property. You can assign a replacement afterwards."
+        confirmLabel="Remove caretaker"
+        loading={assigning}
+        error={assignError}
+        onConfirm={unassign}
+        onCancel={() => setRemoving(null)}
       />
     </Card>
   );
@@ -326,13 +357,13 @@ export default function PropertyManagePage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={room.status} tones={STATUS_TONE} />
-                {room.status !== 'maintenance' ? (
-                  <Button variant="secondary" onClick={() => setRoomStatus(room._id, 'maintenance')}>
-                    Mark maintenance
+                {room.status === 'maintenance' ? (
+                  <Button variant="secondary" disabled={room.currentOccupancy >= room.capacity} title={room.currentOccupancy >= room.capacity ? 'A full room cannot be marked available' : 'Return this room to the available list'} onClick={() => setRoomStatus(room._id, 'available')}>
+                    Mark available
                   </Button>
                 ) : (
-                  <Button variant="secondary" onClick={() => setRoomStatus(room._id, 'available')}>
-                    Mark available
+                  <Button variant="secondary" onClick={() => setRoomStatus(room._id, 'maintenance')}>
+                    Mark maintenance
                   </Button>
                 )}
                 <Button variant="danger" onClick={() => { setDeleteRoomError(''); setRoomToDelete(room); }}>

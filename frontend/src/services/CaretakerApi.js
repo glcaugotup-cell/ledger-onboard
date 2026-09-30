@@ -12,6 +12,10 @@ class CaretakerApi extends BaseApiClient {
   update(id, payload) {
     return this.patch(`/landlord/caretakers/${id}`, payload);
   }
+
+  remove(id, reason) {
+    return this.delete(`/landlord/caretakers/${id}`, { data: { reason } });
+  }
 }
 
 export default new CaretakerApi();

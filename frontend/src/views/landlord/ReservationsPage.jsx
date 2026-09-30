@@ -69,6 +69,7 @@ export default function ReservationsPage() {
       .then(([r, c]) => {
         setReservations(r.reservations);
         setCaretakers(c.caretakers.filter((ct) => ct.accountStatus === 'active'));
+        setAssignments((prev) => Object.fromEntries(r.reservations.filter((x) => x.status === 'approved').map((x) => [x._id, prev[x._id] || x.caretakerAssignedId?._id || x.caretakerAssignedId || ''])));
       })
       .catch(() => setError('Could not load reservations.'))
       .finally(() => setLoading(false));
@@ -84,6 +85,20 @@ export default function ReservationsPage() {
       load();
     } catch (err) {
       setError(err.message || 'Could not update reservation.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const reassign = async (reservationId) => {
+    if (!assignments[reservationId]) return;
+    setBusyId(reservationId);
+    setError('');
+    try {
+      await ReservationApi.reassignCaretaker(reservationId, assignments[reservationId]);
+      load();
+    } catch (err) {
+      setError(err.message || 'Could not reassign caretaker.');
     } finally {
       setBusyId(null);
     }
@@ -184,6 +199,11 @@ export default function ReservationsPage() {
                     {who(r)}
                     <div className="flex items-center justify-between gap-2 sm:justify-end">
                       <StatusBadge status={r.status} tones={STATUS_TONE} />
+                      <Select aria-label={`Reassign caretaker for ${r.tenantId?.fullName || 'tenant'}`} value={assignments[r._id] || ''} onChange={(e) => setAssignments({ ...assignments, [r._id]: e.target.value })} className="sm:w-56">
+                        <option value="">Select caretaker</option>
+                        <CaretakerOptions caretakers={caretakers} barangay={r.propertyId?.address?.barangay} />
+                      </Select>
+                      <Button variant="secondary" loading={busyId === r._id} disabled={!assignments[r._id]} onClick={() => reassign(r._id)}>Reassign</Button>
                       <Button variant="secondary" loading={busyId === r._id} onClick={() => act(r._id, 'completed')}>
                         Mark completed
                       </Button>

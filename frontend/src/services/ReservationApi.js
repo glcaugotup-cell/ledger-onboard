@@ -12,6 +12,10 @@ class ReservationApi extends BaseApiClient {
   updateStatus(id, payload) {
     return this.patch(`/reservations/${id}/status`, payload);
   }
+
+  reassignCaretaker(id, caretakerId) {
+    return this.patch(`/reservations/${id}/caretaker`, { caretakerId });
+  }
 }
 
 export default new ReservationApi();

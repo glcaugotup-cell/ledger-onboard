@@ -54,8 +54,18 @@ const env = {
 
   authRateLimitWindowMinutes: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MINUTES) || 15,
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,
+  loginRateLimitMax: Number(process.env.LOGIN_RATE_LIMIT_MAX) || 30,
+  sensitiveAuthRateLimitWindowMinutes: Number(process.env.SENSITIVE_AUTH_RATE_LIMIT_WINDOW_MINUTES) || 15,
+  sensitiveAuthRateLimitMax: Number(process.env.SENSITIVE_AUTH_RATE_LIMIT_MAX) || 8,
+  apiRateLimitWindowMinutes: Number(process.env.API_RATE_LIMIT_WINDOW_MINUTES) || 15,
+  apiRateLimitMax: Number(process.env.API_RATE_LIMIT_MAX) || 900,
   paymentRateLimitWindowMinutes: Number(process.env.PAYMENT_RATE_LIMIT_WINDOW_MINUTES) || 15,
   paymentRateLimitMax: Number(process.env.PAYMENT_RATE_LIMIT_MAX) || 20,
+  paymentSubmissionRateLimitMax: Number(process.env.PAYMENT_SUBMISSION_RATE_LIMIT_MAX) || 10,
+  uploadRateLimitWindowMinutes: Number(process.env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES) || 15,
+  uploadRateLimitMax: Number(process.env.UPLOAD_RATE_LIMIT_MAX) || 30,
+  utilityRateLimitWindowMinutes: Number(process.env.UTILITY_RATE_LIMIT_WINDOW_MINUTES) || 15,
+  utilityRateLimitMax: Number(process.env.UTILITY_RATE_LIMIT_MAX) || 30,
 
   uploadDir: process.env.UPLOAD_DIR || 'uploads',
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB) || 5,

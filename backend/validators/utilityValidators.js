@@ -36,4 +36,20 @@ const logReadingValidators = [
   decimalNumber('occupantReadings.*.currentReading', 'Current meter reading', MAX_METER_READING),
 ];
 
-module.exports = { logReadingValidators };
+const logFixedRateValidators = [
+  body('roomId').custom((v) => mongoose.isValidObjectId(v)).withMessage('Invalid roomId'),
+  body('readingMonth')
+    .isISO8601().withMessage('Enter a valid billing month')
+    .bail()
+    .custom((value) => {
+      const date = new Date(value);
+      const now = new Date();
+      if (date.getUTCFullYear() > now.getUTCFullYear() || (date.getUTCFullYear() === now.getUTCFullYear() && date.getUTCMonth() > now.getUTCMonth())) {
+        throw new Error('Billing month cannot be in the future');
+      }
+      return true;
+    })
+    .toDate(),
+];
+
+module.exports = { logReadingValidators, logFixedRateValidators };

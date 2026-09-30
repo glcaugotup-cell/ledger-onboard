@@ -65,6 +65,11 @@ class PropertyController {
     sendSuccess(res, { data: { property } });
   });
 
+  unassignCaretaker = asyncHandler(async (req, res) => {
+    const property = await PropertyService.unassignCaretaker(req.params.id, req.user, req.params.caretakerId);
+    sendSuccess(res, { data: { property } });
+  });
+
   listRooms = asyncHandler(async (req, res) => {
     const rooms = await RoomService.listByProperty(req.params.id);
     sendSuccess(res, { data: { rooms } });

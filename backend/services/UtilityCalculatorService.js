@@ -3,6 +3,8 @@ const RoomRepository = require('../repositories/RoomRepository');
 const ReservationRepository = require('../repositories/ReservationRepository');
 const ApiError = require('../utils/ApiError');
 const { roundMoney, safeDivide } = require('../utils/money');
+const PropertyRepository = require('../repositories/PropertyRepository');
+const { PROPERTY_TYPE, ROLES } = require('../utils/constants');
 
 /**
  * Utility-splitting formulas and the caretaker "log utility readings" workflow.
@@ -56,6 +58,10 @@ class UtilityCalculatorService {
   async logReading(caretaker, { roomId, readingMonth, totalElectricBill, totalWaterBill, occupantReadings }) {
     const room = await RoomRepository.findById(roomId);
     if (!room) throw ApiError.notFound('Room not found', 'ROOM_NOT_FOUND');
+    const property = await PropertyRepository.findById(room.propertyId);
+    if (![PROPERTY_TYPE.APARTMENT, PROPERTY_TYPE.STUDIO].includes(property?.propertyType)) {
+      throw ApiError.badRequest('Room Only and Bedspace properties use fixed-rate billing without utility readings', 'FIXED_RATE_BILLING');
+    }
 
     // Caretakers may only log readings for rooms they are assigned to.
     const hasAssignment = await ReservationRepository.caretakerIsAssignedToRoom(caretaker.id, roomId);
@@ -100,8 +106,36 @@ class UtilityCalculatorService {
     return { reading, soas };
   }
 
-  async listByRoom(roomId) {
+  async logFixedRate(caretaker, { roomId, readingMonth }) {
+    const room = await RoomRepository.findById(roomId);
+    if (!room) throw ApiError.notFound('Room not found', 'ROOM_NOT_FOUND');
+    const property = await PropertyRepository.findById(room.propertyId);
+    if (![PROPERTY_TYPE.ROOM_ONLY, PROPERTY_TYPE.BEDSPACE].includes(property?.propertyType)) {
+      throw ApiError.badRequest('Apartment and Studio properties require electricity and water readings', 'METER_READINGS_REQUIRED');
+    }
+    const hasAssignment = await ReservationRepository.caretakerIsAssignedToRoom(caretaker.id, roomId);
+    if (!hasAssignment) throw ApiError.forbidden('You are not assigned to this room', 'NOT_ASSIGNED_TO_ROOM');
+    const normalizedMonth = normalizeToMonthStart(readingMonth);
+    const BillingService = require('./BillingService');
+    const soas = await BillingService.generateFixedRateSOAs(roomId, normalizedMonth);
+    return { room, soas };
+  }
+
+  async listByRoom(roomId, requester) {
+    const room = await RoomRepository.findById(roomId);
+    if (!room) throw ApiError.notFound('Room not found', 'ROOM_NOT_FOUND');
+    if (requester.role !== ROLES.ADMIN) {
+      const property = await PropertyRepository.findById(room.propertyId);
+      const ownsProperty = requester.role === ROLES.LANDLORD && String(property?.landlordId) === String(requester.id);
+      const assignedCaretaker = requester.role === ROLES.CARETAKER
+        && await ReservationRepository.caretakerIsAssignedToRoom(requester.id, roomId);
+      if (!ownsProperty && !assignedCaretaker) throw ApiError.forbidden('You do not have access to readings for this room', 'FORBIDDEN_ROOM_READINGS');
+    }
     return UtilityReadingRepository.findByRoom(roomId);
+  }
+
+  async listForCaretaker(caretakerId) {
+    return UtilityReadingRepository.findByCaretaker(caretakerId);
   }
 }
 

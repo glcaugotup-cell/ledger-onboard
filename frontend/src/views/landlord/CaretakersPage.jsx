@@ -5,7 +5,8 @@ import PageHeader from '../../components/layout/PageHeader.jsx';
 import CaretakerApi from '../../services/CaretakerApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
-import { Field, Select, TextInput } from '../../components/ui/Field.jsx';
+import { Field, Select, TextArea, TextInput } from '../../components/ui/Field.jsx';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import { EmptyState, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { DAGUPAN_BARANGAYS } from '../../data/dagupanBarangays.js';
@@ -82,6 +83,27 @@ export default function CaretakersPage() {
   const [createError, setCreateError] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [createdTemporaryPassword, setCreatedTemporaryPassword] = useState('');
+  const [removing, setRemoving] = useState(null);
+  const [removeReason, setRemoveReason] = useState('');
+  const [removeError, setRemoveError] = useState('');
+  const [removeLoading, setRemoveLoading] = useState(false);
+
+  const removeCaretaker = async () => {
+    setRemoveLoading(true);
+    setRemoveError('');
+    try {
+      await CaretakerApi.remove(removing._id, removeReason.trim());
+      setCaretakers((items) => items.filter((item) => item._id !== removing._id));
+      setRemoving(null);
+      setRemoveReason('');
+      setSuccessMsg(`${removing.fullName}'s account has been deactivated.`);
+    } catch (err) {
+      setRemoveError(describeApiError(err).message);
+    } finally {
+      setRemoveLoading(false);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -102,6 +124,7 @@ export default function CaretakersPage() {
     e.preventDefault();
     setCreateError('');
     setSuccessMsg('');
+    setCreatedTemporaryPassword('');
 
     const payload = { ...form, firstName: toNameCase(form.firstName.trim()), lastName: toNameCase(form.lastName.trim()), email: form.email.trim().toLowerCase() };
     setForm(payload);
@@ -119,8 +142,9 @@ export default function CaretakersPage() {
 
     setCreateLoading(true);
     try {
-      await CaretakerApi.create(payload);
-      setSuccessMsg(`Invitation sent to ${payload.email}. They'll receive an activation email.`);
+      const created = await CaretakerApi.create(payload);
+      setSuccessMsg(`Caretaker account created for ${payload.email}. They must activate it and change the temporary password before accessing the dashboard.`);
+      setCreatedTemporaryPassword(created.temporaryPassword || 'caretaker1234');
       setForm(EMPTY_FORM);
       setFormErrors({});
       load();
@@ -145,6 +169,7 @@ export default function CaretakersPage() {
           <form onSubmit={onCreate} className="space-y-3" noValidate>
             <ErrorBanner message={createError} />
             <SuccessBanner message={successMsg} />
+            {createdTemporaryPassword && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-semibold">Temporary password</p><p className="mt-1 font-mono text-base">{createdTemporaryPassword}</p><p className="mt-1 text-xs">Share it with the caretaker. The activation page requires them to set a new password before they can use the account.</p></div>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="First name" error={formErrors.firstName}>
                 <TextInput maxLength={80} value={form.firstName} onChange={(e) => setField('firstName', capitalizeFirst(e.target.value))} error={formErrors.firstName} />
@@ -195,6 +220,8 @@ export default function CaretakersPage() {
                     </div>
                   </div>
                   <StatusBadge status={c.accountStatus} tones={STATUS_TONE} />
+                  {c.accountStatus === 'pending_activation' && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Must set password</span>}
+                  {c.accountStatus === 'active' && <Button variant="danger" onClick={() => { setRemoving(c); setRemoveReason(''); setRemoveError(''); }}>Remove</Button>}
                 </div>
                 <div className="mt-4 grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 xl:grid-cols-[minmax(8rem,0.8fr)_minmax(10rem,1fr)_minmax(14rem,1.4fr)]">
                   <div className="min-w-0">
@@ -215,6 +242,11 @@ export default function CaretakersPage() {
           </div>
         </section>
       </div>
+      <ConfirmDialog open={Boolean(removing)} tone="danger" title={removing ? `Remove ${removing.fullName}?` : ''} message="Their sign-in access will end. Existing readings, payments, and audit records will remain on file." confirmLabel="Remove caretaker" loading={removeLoading} confirmDisabled={removeReason.trim().length < 3} error={removeError} onConfirm={removeCaretaker} onCancel={() => setRemoving(null)}>
+        <Field label="Reason for removal">
+          <TextArea rows={3} maxLength={500} value={removeReason} onChange={(e) => setRemoveReason(e.target.value)} placeholder="Explain why this caretaker is being removed" />
+        </Field>
+      </ConfirmDialog>
     </DashboardLayout>
   );
 }

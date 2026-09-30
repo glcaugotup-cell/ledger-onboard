@@ -6,7 +6,7 @@ export default function PaymentsPage() {
   return (
     <DashboardLayout>
       <PageHeader title="Payments" description="Check GCash proofs and cash collections before they count toward a bill." />
-      <PaymentVerificationList canVerify={() => true} />
+      <PaymentVerificationList canVerify={() => true} landlordMode />
     </DashboardLayout>
   );
 }

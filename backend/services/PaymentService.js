@@ -14,6 +14,20 @@ const { ROLES, PAYMENT_METHOD, VERIFICATION_STATUS } = require('../utils/constan
 const { withPaymentContext } = require('./displayContext');
 
 class PaymentService {
+  /** Tenant records the GCash transaction reference after paying with the landlord's QR. */
+  async submitGcashQr(tenantId, { soaId, amount, referenceNumber }) {
+    const soa = await BillingSOARepository.findById(soaId);
+    if (!soa) throw ApiError.notFound('Statement of account not found', 'SOA_NOT_FOUND');
+    if (String(soa.tenantId) !== String(tenantId)) throw ApiError.forbidden('This statement of account does not belong to you', 'FORBIDDEN_SOA_ACCESS');
+    this._assertAmountWithinBalance(soa, amount);
+    const reference = String(referenceNumber || '').trim();
+    if (reference.length < 5 || reference.length > 100) throw ApiError.badRequest('Enter a valid GCash reference number', 'INVALID_REFERENCE_NUMBER');
+    return PaymentTransactionRepository.create({
+      soaId, tenantId, paymentMethod: PAYMENT_METHOD.GCASH_QR, amount,
+      referenceNumber: reference, verificationStatus: VERIFICATION_STATUS.PENDING, timestamp: new Date(),
+    });
+  }
+
   /** Tenant uploads a GCash payment screenshot as proof. */
   async submitGcashProof(tenantId, { soaId, amount }, proofFile) {
     const soa = await BillingSOARepository.findById(soaId);
@@ -100,7 +114,7 @@ class PaymentService {
     return [];
   }
 
-  async verifyPayment(paymentId, requester, { approve, rejectionReason }) {
+  async verifyPayment(paymentId, requester, { approve, decision, remainingBalance, rejectionReason }) {
     const payment = await PaymentTransactionRepository.findById(paymentId);
     if (!payment) throw ApiError.notFound('Payment not found', 'PAYMENT_NOT_FOUND');
     if (payment.verificationStatus !== VERIFICATION_STATUS.PENDING) {
@@ -109,31 +123,54 @@ class PaymentService {
 
     await this._assertCanVerify(payment, requester);
 
-    const verificationStatus = approve ? VERIFICATION_STATUS.VERIFIED : VERIFICATION_STATUS.REJECTED;
+    const isBalanceAdjustment = decision === 'SET_BALANCE';
+    const isApproved = decision ? true : Boolean(approve);
+    const verificationStatus = isApproved ? VERIFICATION_STATUS.VERIFIED : VERIFICATION_STATUS.REJECTED;
+    let verifiedAmount = null;
+    let adjustedBalance = null;
+    if (isBalanceAdjustment) {
+      if (requester.role !== ROLES.LANDLORD && requester.role !== ROLES.ADMIN) {
+        throw ApiError.forbidden('Only the landlord can set a remaining balance', 'FORBIDDEN_BALANCE_ADJUSTMENT');
+      }
+      const soa = await BillingSOARepository.findById(payment.soaId);
+      const nextBalance = Number(remainingBalance);
+      const minimumBalance = Math.max(0, soa.remainingBalance - payment.amount);
+      if (!Number.isFinite(nextBalance) || nextBalance < minimumBalance || nextBalance >= soa.remainingBalance) {
+        throw ApiError.badRequest('Remaining balance must reflect a payment between zero and the submitted amount', 'INVALID_REMAINING_BALANCE');
+      }
+      adjustedBalance = nextBalance;
+      verifiedAmount = Number((soa.remainingBalance - nextBalance).toFixed(2));
+    } else if (isApproved) {
+      verifiedAmount = payment.amount;
+    }
     const updated = await PaymentTransactionRepository.updateById(paymentId, {
       verificationStatus,
+      amountVerified: verifiedAmount,
+      balanceAfter: adjustedBalance,
       verifiedBy: requester.id,
       verifiedAt: new Date(),
-      rejectionReason: approve ? null : rejectionReason || 'Not specified',
+      rejectionReason: isApproved ? null : rejectionReason || 'Not specified',
     });
 
-    if (approve) {
-      await BillingService.applyVerifiedPayment(payment.soaId, payment.amount);
+    if (isBalanceAdjustment) {
+      await BillingService.setRemainingBalance(payment.soaId, adjustedBalance);
+    } else if (isApproved) {
+      await BillingService.applyVerifiedPayment(payment.soaId, verifiedAmount);
     }
 
     const tenant = await UserRepository.findById(payment.tenantId);
     await NotificationService.notify({
       userId: payment.tenantId,
-      type: approve ? 'PAYMENT_VERIFIED' : 'PAYMENT_REJECTED',
-      title: approve ? 'Payment verified' : 'Payment not verified',
-      message: approve
-        ? `Your payment of PHP ${payment.amount} was verified.`
+      type: isApproved ? 'PAYMENT_VERIFIED' : 'PAYMENT_REJECTED',
+      title: isApproved ? 'Payment verified' : 'Payment not verified',
+      message: isApproved
+        ? `Your payment was reviewed. Confirmed amount: PHP ${verifiedAmount}.${adjustedBalance !== null ? ` Current balance: PHP ${adjustedBalance}.` : ''}`
         : `Your payment of PHP ${payment.amount} could not be verified: ${updated.rejectionReason}`,
       relatedType: 'PaymentTransaction',
       relatedId: payment._id,
     });
     if (tenant) {
-      if (approve) await EmailService.sendPaymentVerifiedEmail(tenant.email, tenant.fullName, payment.amount);
+      if (isApproved) await EmailService.sendPaymentVerifiedEmail(tenant.email, tenant.fullName, verifiedAmount);
       else await EmailService.sendPaymentRejectedEmail(tenant.email, tenant.fullName, updated.rejectionReason);
     }
 
@@ -143,7 +180,7 @@ class PaymentService {
       actorRole: requester.role,
       targetType: 'PaymentTransaction',
       targetId: payment._id,
-      metadata: { approved: approve },
+      metadata: { approved: isApproved, amountVerified: verifiedAmount, balanceAfter: adjustedBalance },
     });
 
     return updated;

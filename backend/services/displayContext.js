@@ -18,11 +18,12 @@ async function lookup(tenantIds, roomIds) {
     roomIds.length ? RoomRepository.find({ _id: { $in: roomIds } }, { select: '_id roomNumber propertyId' }) : [],
   ]);
   const propertyIds = unique(rooms.map((r) => r.propertyId));
-  const properties = propertyIds.length ? await PropertyRepository.find({ _id: { $in: propertyIds } }, { select: '_id propertyName' }) : [];
+  const properties = propertyIds.length ? await PropertyRepository.find({ _id: { $in: propertyIds } }, { select: '_id propertyName propertyType' }) : [];
   return {
     tenantName: new Map(tenants.map((t) => [String(t._id), t.fullName])),
     room: new Map(rooms.map((r) => [String(r._id), r])),
     propertyName: new Map(properties.map((p) => [String(p._id), p.propertyName])),
+    propertyType: new Map(properties.map((p) => [String(p._id), p.propertyType])),
   };
 }
 
@@ -38,6 +39,7 @@ async function withSoaContext(soas) {
       tenantName: names.tenantName.get(String(plain.tenantId)) || null,
       roomNumber: room?.roomNumber || null,
       propertyName: room ? names.propertyName.get(String(room.propertyId)) || null : null,
+      propertyType: room ? names.propertyType.get(String(room.propertyId)) || null : null,
     };
   });
 }
@@ -45,7 +47,7 @@ async function withSoaContext(soas) {
 /** Adds tenantName, billingPeriod, roomNumber and propertyName to payments. */
 async function withPaymentContext(payments) {
   if (!payments.length) return payments;
-  const soas = await BillingSOARepository.find({ _id: { $in: unique(payments.map((p) => p.soaId)) } }, { select: '_id roomId billingPeriod' });
+  const soas = await BillingSOARepository.find({ _id: { $in: unique(payments.map((p) => p.soaId)) } }, { select: '_id roomId billingPeriod remainingBalance' });
   const soaById = new Map(soas.map((s) => [String(s._id), s]));
   const names = await lookup(unique(payments.map((p) => p.tenantId)), unique(soas.map((s) => s.roomId)));
   return payments.map((payment) => {
@@ -56,6 +58,7 @@ async function withPaymentContext(payments) {
       ...plain,
       tenantName: names.tenantName.get(String(plain.tenantId)) || null,
       billingPeriod: soa?.billingPeriod || null,
+      remainingBalance: soa?.remainingBalance ?? null,
       roomNumber: room?.roomNumber || null,
       propertyName: room ? names.propertyName.get(String(room.propertyId)) || null : null,
     };

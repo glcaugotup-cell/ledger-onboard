@@ -38,6 +38,7 @@ import UtilityEntryPage from './views/caretaker/UtilityEntryPage.jsx';
 import CashPaymentsPage from './views/caretaker/CashPaymentsPage.jsx';
 
 import ProfilePage from './views/shared/ProfilePage.jsx';
+import MaintenanceIssuesPage from './views/shared/MaintenanceIssuesPage.jsx';
 
 import UsersPage from './views/admin/UsersPage.jsx';
 import ReviewModerationPage from './views/admin/ReviewModerationPage.jsx';
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="/tenant/properties/:id" element={<TenantPropertyDetailPage />} />
               <Route path="/tenant/reservations" element={<MyReservationsPage />} />
               <Route path="/tenant/billing" element={<MyBillingPage />} />
+              <Route path="/tenant/issues" element={<MaintenanceIssuesPage />} />
               <Route path="/tenant/profile" element={<ProfilePage />} />
               {/* The page was called "Account" before every role got a Profile; keep old links working. */}
               <Route path="/tenant/account" element={<Navigate to="/tenant/profile" replace />} />
@@ -88,6 +90,7 @@ export default function App() {
               <Route path="/landlord/reservations" element={<LandlordReservationsPage />} />
               <Route path="/landlord/billing" element={<LandlordBillingPage />} />
               <Route path="/landlord/payments" element={<LandlordPaymentsPage />} />
+              <Route path="/landlord/issues" element={<MaintenanceIssuesPage />} />
               <Route path="/landlord/verification" element={<BusinessVerificationPage />} />
               <Route path="/landlord/profile" element={<ProfilePage />} />
             </Route>
@@ -97,6 +100,7 @@ export default function App() {
               <Route path="/caretaker/rooms" element={<AssignedRoomsPage />} />
               <Route path="/caretaker/utilities" element={<UtilityEntryPage />} />
               <Route path="/caretaker/payments" element={<CashPaymentsPage />} />
+              <Route path="/caretaker/issues" element={<MaintenanceIssuesPage />} />
               <Route path="/caretaker/profile" element={<ProfilePage />} />
             </Route>
 
