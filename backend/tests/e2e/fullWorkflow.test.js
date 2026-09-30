@@ -8,6 +8,8 @@ let app;
 
 // Move-in dates must be today or later, so tests reserve a month ahead.
 const futureDate = (days = 30) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+// Billing months can't be in the future, so readings use the current (UTC) month.
+const currentMonth = () => `${new Date().toISOString().slice(0, 7)}-01`;
 
 beforeAll(async () => {
   await startTestDb();
@@ -273,7 +275,7 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     const res = await request(app)
       .post('/api/utilities/readings')
       .set('Authorization', `Bearer ${login.body.data.accessToken}`)
-      .send({ roomId, readingMonth: '2026-10-01', totalElectricBill: 500, totalWaterBill: 200, occupantReadings: [{ tenantId, previousReading: 0, currentReading: 40 }] });
+      .send({ roomId, readingMonth: currentMonth(), totalElectricBill: 500, totalWaterBill: 200, occupantReadings: [{ tenantId, previousReading: 0, currentReading: 40 }] });
     expect(res.status).toBe(403);
     void rogue;
   });
@@ -282,7 +284,7 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     const res = await request(app)
       .post('/api/utilities/readings')
       .set('Authorization', `Bearer ${caretakerToken}`)
-      .send({ roomId, readingMonth: '2026-10-01', totalElectricBill: 500, totalWaterBill: 200, occupantReadings: [{ tenantId, previousReading: 50, currentReading: 10 }] });
+      .send({ roomId, readingMonth: currentMonth(), totalElectricBill: 500, totalWaterBill: 200, occupantReadings: [{ tenantId, previousReading: 50, currentReading: 10 }] });
     expect(res.status).toBe(400);
   });
 
@@ -290,7 +292,7 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     const res = await request(app)
       .post('/api/utilities/readings')
       .set('Authorization', `Bearer ${caretakerToken}`)
-      .send({ roomId, readingMonth: '2026-10-01', totalElectricBill: 500, totalWaterBill: 200, occupantReadings: [{ tenantId, previousReading: 0, currentReading: 40 }] });
+      .send({ roomId, readingMonth: currentMonth(), totalElectricBill: 500, totalWaterBill: 200, occupantReadings: [{ tenantId, previousReading: 0, currentReading: 40 }] });
     expect(res.status).toBe(201);
     expect(res.body.data.soas.length).toBe(1);
     soaId = res.body.data.soas[0]._id;
@@ -301,14 +303,16 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     const res = await request(app)
       .post('/api/utilities/readings')
       .set('Authorization', `Bearer ${caretakerToken}`)
-      .send({ roomId, readingMonth: '2026-10-01', totalElectricBill: 500, totalWaterBill: 200, occupantReadings: [{ tenantId, previousReading: 40, currentReading: 60 }] });
+      .send({ roomId, readingMonth: currentMonth(), totalElectricBill: 500, totalWaterBill: 200, occupantReadings: [{ tenantId, previousReading: 40, currentReading: 60 }] });
     expect(res.status).toBe(409);
   });
 
   test('tenant views their SOA', async () => {
     const res = await request(app).get(`/api/billing/soa/${soaId}`).set('Authorization', `Bearer ${tenantToken}`);
     expect(res.status).toBe(200);
-    expect(res.body.data.soa.paymentStatus).toBe('UNPAID');
+    // Due 10 days into the billing month, so a current-month bill is already overdue after the 10th.
+    const { soa } = res.body.data;
+    expect(soa.paymentStatus).toBe(new Date(soa.dueDate) < new Date() ? 'OVERDUE' : 'UNPAID');
   });
 
   test('assigned caretaker can list SOAs for their rooms', async () => {

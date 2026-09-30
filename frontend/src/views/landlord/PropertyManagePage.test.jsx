@@ -77,10 +77,11 @@ describe('PropertyManagePage', () => {
     renderPage();
 
     await screen.findByText(/no rooms yet/i);
-    await user.type(screen.getByLabelText('Room #'), '102');
-    await user.clear(screen.getByLabelText('Capacity'));
-    await user.type(screen.getByLabelText('Capacity'), '2');
-    await user.type(screen.getByLabelText(/rent \/ slot/i), '3000');
+    // Labels carry a hint line, so match on how they start.
+    await user.type(screen.getByLabelText(/^room number/i), '102');
+    await user.clear(screen.getByLabelText(/^capacity/i));
+    await user.type(screen.getByLabelText(/^capacity/i), '2');
+    await user.type(screen.getByLabelText(/rent per slot/i), '3000');
     await user.click(screen.getByRole('button', { name: /add room/i }));
 
     await waitFor(() => {
@@ -96,14 +97,14 @@ describe('PropertyManagePage', () => {
     renderPage();
 
     await screen.findByText(/no rooms yet/i);
-    await user.clear(screen.getByLabelText('Capacity'));
-    await user.type(screen.getByLabelText('Capacity'), '0');
+    await user.clear(screen.getByLabelText(/^capacity/i));
+    await user.type(screen.getByLabelText(/^capacity/i), '0');
     await user.click(screen.getByRole('button', { name: /add room/i }));
 
     expect(PropertyApi.createRoom).not.toHaveBeenCalled();
     expect(screen.getByText('Room number is required')).toBeInTheDocument();
     expect(screen.getByText('Capacity must be a whole number from 1 to 50')).toBeInTheDocument();
-    expect(screen.getByText('Rent must be a number from 0 to 1,000,000')).toBeInTheDocument();
+    expect(screen.getByText('Enter an amount from ₱0 to ₱1,000,000 with up to 2 decimal places')).toBeInTheDocument();
   });
 
   it('deletes the property only after confirming in the dialog, then navigates away', async () => {

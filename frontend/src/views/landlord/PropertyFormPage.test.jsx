@@ -272,7 +272,7 @@ describe('PropertyFormPage', () => {
     expect(screen.queryByText(/\+ add photos/i)).not.toBeInTheDocument();
   });
 
-  it('caps at 5 photos and shows "You can upload a maximum of 5 photos." when more are selected at once', async () => {
+  it('rejects a selection that would go over 5 photos and shows "You can upload a maximum of 5 photos."', async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -280,7 +280,8 @@ describe('PropertyFormPage', () => {
     const files = [1, 2, 3, 4, 5, 6].map((n) => makeImageFile(`photo${n}.png`));
     await user.upload(input, files);
 
-    expect(screen.getAllByRole('img', { name: /^property photo/i })).toHaveLength(5);
+    // The whole over-limit selection is refused rather than silently trimmed.
+    expect(screen.queryAllByRole('img', { name: /^property photo/i })).toHaveLength(0);
     expect(screen.getByText('You can upload a maximum of 5 photos.')).toBeInTheDocument();
   });
 

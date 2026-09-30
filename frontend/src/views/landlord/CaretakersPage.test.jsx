@@ -112,11 +112,13 @@ describe('CaretakersPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    expect(await screen.findByText('not set yet')).toBeInTheDocument();
+    expect(await screen.findByText('Not assigned')).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Service barangay for Carlo Cruz'), 'Lucao');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(CaretakerApi.update).toHaveBeenCalledWith('c1', { serviceBarangay: 'Lucao' }));
-    expect(await screen.findByText('Lucao', { selector: 'span' })).toBeInTheDocument();
+    // The saved barangay replaces "Not assigned" (the <option> also says Lucao, hence the selector).
+    expect(await screen.findByText('Lucao', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.queryByText('Not assigned')).not.toBeInTheDocument();
   });
 
   it('surfaces a server-side duplicate-email error', async () => {

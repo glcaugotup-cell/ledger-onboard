@@ -509,7 +509,7 @@ describe('Objective 14 — server-side validation gaps closed', () => {
     expect(room.body.error.details.map((d) => d.message)).toEqual([
       'Room number is required (at most 20 characters)',
       'Capacity must be a whole number from 1 to 50',
-      'Rent must be a number from 0 to 1,000,000',
+      'Rent must be from 0 to 1,000,000',
     ]);
   });
 

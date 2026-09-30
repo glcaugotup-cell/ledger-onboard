@@ -72,7 +72,8 @@ describe('ProfilePage', () => {
     AuthApi.updateMe.mockResolvedValue({});
     const user = userEvent.setup();
     renderPage();
-    const phone = screen.getByLabelText('Phone');
+    // The +63 badge is aria-hidden, so the field's accessible name is just "Phone".
+    const phone = screen.getByRole('textbox', { name: 'Phone' });
     await user.clear(phone);
     await user.type(phone, '09991234567');
     await user.click(screen.getByRole('button', { name: /save phone number/i }));
@@ -83,7 +84,7 @@ describe('ProfilePage', () => {
   it('rejects an invalid phone number before sending', async () => {
     const user = userEvent.setup();
     renderPage();
-    const phone = screen.getByLabelText('Phone');
+    const phone = screen.getByRole('textbox', { name: 'Phone' });
     await user.clear(phone);
     await user.type(phone, '123');
     await user.click(screen.getByRole('button', { name: /save phone number/i }));

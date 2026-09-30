@@ -181,11 +181,11 @@ describe('LandingPage', () => {
     await user.type(registerPanel.getByPlaceholderText('First name'), 'Juan');
     await user.type(registerPanel.getByPlaceholderText('Last name'), 'Dela Cruz');
     await user.type(registerPanel.getByPlaceholderText('yourname@gmail.com'), 'juan.delacruz@gmail.com');
-    await user.type(registerPanel.getByPlaceholderText('+639171234567'), '09171234567');
+    await user.type(registerPanel.getAllByPlaceholderText('917 123 4567')[0], '09171234567');
     await user.type(registerPanel.getByPlaceholderText('Password'), 'Str0ng!Pass');
     await user.type(registerPanel.getByPlaceholderText('Confirm password'), 'Str0ng!Pass');
     await user.type(registerPanel.getByPlaceholderText('Contact person'), 'Maria Dela Cruz');
-    await user.type(registerPanel.getByPlaceholderText('CP number'), '09181234567');
+    await user.type(registerPanel.getAllByPlaceholderText('917 123 4567')[1], '09181234567');
     await user.click(registerPanel.getByRole('checkbox'));
     await user.click(registerPanel.getByRole('button', { name: /^register$/i }));
 
@@ -228,11 +228,11 @@ describe('LandingPage', () => {
     await user.type(registerPanel.getByPlaceholderText('First name'), 'Juan');
     await user.type(registerPanel.getByPlaceholderText('Last name'), 'Dela Cruz');
     await user.type(registerPanel.getByPlaceholderText('yourname@gmail.com'), 'juan.delacruz@gmail.com');
-    await user.type(registerPanel.getByPlaceholderText('+639171234567'), '09171234567');
+    await user.type(registerPanel.getAllByPlaceholderText('917 123 4567')[0], '09171234567');
     await user.type(registerPanel.getByPlaceholderText('Password'), 'Str0ng!Pass');
     await user.type(registerPanel.getByPlaceholderText('Confirm password'), 'Str0ng!Pass');
     await user.type(registerPanel.getByPlaceholderText('Contact person'), 'Maria Dela Cruz');
-    await user.type(registerPanel.getByPlaceholderText('CP number'), '09181234567');
+    await user.type(registerPanel.getAllByPlaceholderText('917 123 4567')[1], '09181234567');
     await user.click(registerPanel.getByRole('checkbox'));
     await user.click(registerPanel.getByRole('button', { name: /^register$/i }));
 

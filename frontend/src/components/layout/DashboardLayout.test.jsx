@@ -41,7 +41,8 @@ describe('DashboardLayout', () => {
     expect(screen.getAllByRole('link', { name: 'Caretakers' }).length).toBeGreaterThan(0);
     expect(screen.queryAllByRole('link', { name: 'Assigned Rooms' })).toHaveLength(0);
     expect(screen.getByText('Page content')).toBeInTheDocument();
-    expect(screen.getByText('Landlord Cruz')).toBeInTheDocument();
+    // The name shows on both the sidebar and the header account menus.
+    expect(screen.getAllByText('Landlord Cruz').length).toBeGreaterThan(0);
   });
 
   it('renders no nav links for an unknown role', () => {
@@ -77,7 +78,10 @@ describe('DashboardLayout', () => {
     expect(document.getElementById('mobile-menu')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
     const menu = document.getElementById('mobile-menu');
-    expect(within(menu).getAllByRole('link')).toHaveLength(8);
+    expect(within(menu).getAllByRole('link')).toHaveLength(7);
+
+    // Log out lives in the account menu at the bottom of the mobile menu.
+    await user.click(within(menu).getByRole('button', { name: 'Open account menu' }));
     expect(within(menu).getByRole('button', { name: /log out/i })).toBeInTheDocument();
 
     await user.click(within(menu).getByRole('button', { name: /log out/i }));
@@ -97,11 +101,11 @@ describe('DashboardLayout', () => {
     expect(screen.queryByText("You're all caught up.")).not.toBeInTheDocument();
   });
 
-  it('caps the unread badge at "9+"', () => {
+  it('caps the unread badge at "99+"', () => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Tenant Cruz', role: 'tenant' } }));
-    useNotificationsMock.mockReturnValue(mockNotificationsValue({ unreadCount: 15 }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue({ unreadCount: 150 }));
     renderLayout();
-    expect(screen.getByText('9+')).toBeInTheDocument();
+    expect(screen.getByText('99+')).toBeInTheDocument();
   });
 
   it('marks all notifications read from the dropdown', async () => {
@@ -124,6 +128,7 @@ describe('DashboardLayout', () => {
     const user = userEvent.setup();
     renderLayout();
 
+    await user.click(screen.getAllByRole('button', { name: 'Open account menu' })[0]);
     await user.click(screen.getByRole('button', { name: /log out/i }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Are you sure you want to log out?')).toBeInTheDocument();
@@ -141,6 +146,7 @@ describe('DashboardLayout', () => {
     const user = userEvent.setup();
     renderLayout();
 
+    await user.click(screen.getAllByRole('button', { name: 'Open account menu' })[0]);
     await user.click(screen.getByRole('button', { name: /log out/i }));
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Log Out' }));
 
@@ -148,10 +154,12 @@ describe('DashboardLayout', () => {
     expect(navigateMock).toHaveBeenCalledWith('/');
   });
 
-  it.each(['tenant', 'landlord', 'caretaker', 'admin'])('shows a Profile link for the %s dashboard', (role) => {
+  it.each(['tenant', 'landlord', 'caretaker', 'admin'])('links the account menu to the profile page for the %s dashboard', async (role) => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Someone', role } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    const user = userEvent.setup();
     renderLayout();
-    expect(screen.getAllByRole('link', { name: 'Profile' })[0]).toHaveAttribute('href', `/${role}/profile`);
+    await user.click(screen.getAllByRole('button', { name: 'Open account menu' })[0]);
+    expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute('href', `/${role}/profile`);
   });
 });

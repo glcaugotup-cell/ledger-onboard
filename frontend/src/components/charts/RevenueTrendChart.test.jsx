@@ -1,15 +1,18 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import RevenueTrendChart from './RevenueTrendChart.jsx';
 
 describe('RevenueTrendChart', () => {
+  // The empty state links to the payments page, so it needs a router.
   it('shows a placeholder message when there is no data', () => {
-    render(<RevenueTrendChart data={[]} />);
+    render(<MemoryRouter><RevenueTrendChart data={[]} /></MemoryRouter>);
     expect(screen.getByText('No revenue recorded yet.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View payments' })).toHaveAttribute('href', '/landlord/payments');
   });
 
   it('shows a placeholder message when data is undefined', () => {
-    render(<RevenueTrendChart />);
+    render(<MemoryRouter><RevenueTrendChart /></MemoryRouter>);
     expect(screen.getByText('No revenue recorded yet.')).toBeInTheDocument();
   });
 

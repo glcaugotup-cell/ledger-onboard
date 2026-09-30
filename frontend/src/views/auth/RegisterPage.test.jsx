@@ -133,7 +133,8 @@ describe('RegisterPage', () => {
 
     const phone = screen.getByLabelText(/phone/i);
     await user.type(phone, '09a17b1234567');
-    expect(phone).toHaveValue('09171234567');
+    // The +63 country code is a fixed prefix, so the field shows the national number only.
+    expect(phone).toHaveValue('9171234567');
   });
 
   it('submits the form with a valid payload and moves to the verify-email step', async () => {
@@ -163,7 +164,7 @@ describe('RegisterPage', () => {
     expect(screen.getByText(/resend otp in \d+ seconds/i)).toBeInTheDocument();
   });
 
-  it('normalizes the Phone field to +63 format on blur', async () => {
+  it('keeps showing the national number beside the fixed +63 prefix after blur', async () => {
     useAuthMock.mockReturnValue({ register: vi.fn() });
     const user = userEvent.setup();
     renderRegisterPage();
@@ -172,7 +173,7 @@ describe('RegisterPage', () => {
     await user.type(phone, '09235753673');
     await user.tab();
 
-    await waitFor(() => expect(phone).toHaveValue('+639235753673'));
+    await waitFor(() => expect(phone).toHaveValue('9235753673'));
   });
 
   it('verifies the OTP and shows the success message with an explicit Go to Login action (no auto-redirect)', async () => {

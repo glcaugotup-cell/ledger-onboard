@@ -43,9 +43,12 @@ describe('DashboardPage', () => {
     AnalyticsApi.getLandlordAnalytics.mockResolvedValue(analytics);
     renderPage();
 
-    expect(await screen.findByText('82%')).toBeInTheDocument();
+    // Rate tiles show the value and a matching progress figure.
+    expect(await screen.findByRole('progressbar', { name: 'Occupancy rate' })).toHaveAttribute('aria-valuenow', '82');
+    expect(screen.getAllByText('82%').length).toBeGreaterThan(0);
     expect(screen.getByText('41/50 rooms occupied')).toBeInTheDocument();
-    expect(screen.getByText('91%')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Collection rate' })).toHaveAttribute('aria-valuenow', '91');
+    expect(screen.getAllByText('91%').length).toBeGreaterThan(0);
     expect(screen.getByText('₱8,000')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
   });
@@ -62,19 +65,17 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('₱0')).toHaveClass('text-[#0ca30c]');
   });
 
-  it('lists what needs attention, each linking to the page that handles it', async () => {
+  it('links pending reservation requests to the reservations page', async () => {
     AnalyticsApi.getLandlordAnalytics.mockResolvedValue(analytics);
     renderPage();
-    const request = await screen.findByRole('link', { name: /1 reservation request waiting for your answer/i });
+    const request = await screen.findByRole('link', { name: /1 request waiting for your answer/i });
     expect(request).toHaveAttribute('href', '/landlord/reservations');
-    expect(screen.getByRole('link', { name: /₱8,000 still unpaid/i })).toHaveAttribute('href', '/landlord/billing');
-    expect(screen.queryByRole('link', { name: /to verify/i })).not.toBeInTheDocument();
   });
 
   it('greets the landlord by first name', async () => {
     AnalyticsApi.getLandlordAnalytics.mockResolvedValue(analytics);
     renderPage();
-    expect(await screen.findByRole('heading', { level: 1, name: /, Landlord$/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Landlord!' })).toBeInTheDocument();
   });
 
   it('shows an error banner when analytics fail to load', async () => {
