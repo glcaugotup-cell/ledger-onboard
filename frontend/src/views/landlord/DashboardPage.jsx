@@ -4,6 +4,7 @@ import {
   BanknotesIcon,
   CalendarDaysIcon,
   CheckCircleIcon,
+  ClipboardDocumentListIcon,
   ChevronRightIcon,
   CreditCardIcon,
   DocumentTextIcon,
@@ -16,6 +17,7 @@ import AnalyticsApi from '../../services/AnalyticsApi.js';
 import LandlordVerificationApi from '../../services/LandlordVerificationApi.js';
 import ReservationApi from '../../services/ReservationApi.js';
 import PaymentApi from '../../services/PaymentApi.js';
+import MaintenanceIssueApi from '../../services/MaintenanceIssueApi.js';
 import PropertyApi from '../../services/PropertyApi.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import Card from '../../components/ui/Card.jsx';
@@ -87,12 +89,21 @@ export default function DashboardPage() {
   const [activity, setActivity] = useState([]);
   // Counts and recent rows for the dashboard activity areas.
   const [pending, setPending] = useState({ reservations: null, payments: null });
+  const [issueSummary, setIssueSummary] = useState(null);
 
   useEffect(() => {
     AnalyticsApi.getLandlordAnalytics()
       .then(setData)
       .catch(() => setError('Could not load analytics.'))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    MaintenanceIssueApi.list().then(({ issues }) => setIssueSummary({
+      open: issues.filter((issue) => issue.status !== 'resolved').length,
+      unassigned: issues.filter((issue) => issue.status === 'pending').length,
+      high: issues.filter((issue) => issue.urgency === 'high' && issue.status !== 'resolved').length,
+    })).catch(() => setIssueSummary(null));
   }, []);
 
   useEffect(() => {
@@ -141,6 +152,11 @@ export default function DashboardPage() {
           <Link to="/landlord/reservations" className="group flex min-h-16 items-center gap-3 rounded-xl px-1.5 py-2 transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#fff1d5] text-amber-700"><CalendarDaysIcon className="h-5 w-5" aria-hidden="true" /></span>
             <span className="min-w-0 flex-1"><span className="block text-xs font-medium text-gray-500">Upcoming</span><span className="mt-0.5 block text-sm font-semibold text-gray-900">{pending.reservations ?? '—'} request{pending.reservations === 1 ? '' : 's'} waiting for your answer</span></span>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#d7b66f] text-white transition group-hover:bg-[#c7a454]"><ChevronRightIcon className="h-4 w-4" aria-hidden="true" /></span>
+          </Link>
+          <Link to="/landlord/issues" className="group flex min-h-16 items-center gap-3 rounded-xl px-1.5 py-2 transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700"><ClipboardDocumentListIcon className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-xs font-medium text-gray-500">Maintenance issues</span><span className="mt-0.5 block text-sm font-semibold text-gray-900">{issueSummary ? `${issueSummary.open} open · ${issueSummary.unassigned} unassigned${issueSummary.high ? ` · ${issueSummary.high} high priority` : ''}` : 'View tenant repair reports'}</span></span>
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#d7b66f] text-white transition group-hover:bg-[#c7a454]"><ChevronRightIcon className="h-4 w-4" aria-hidden="true" /></span>
           </Link>
           {user?.businessVerificationStatus === 'VERIFIED' && <Link to="/landlord/properties/new" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#f5df8c] px-4 py-2.5 text-sm font-semibold text-[#26372d] transition hover:bg-[#f2d66d] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"><PlusIcon className="h-4 w-4" aria-hidden="true" />New property</Link>}

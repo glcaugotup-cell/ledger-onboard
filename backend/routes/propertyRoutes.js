@@ -10,6 +10,7 @@ const { createRoomValidators } = require('../validators/roomValidators');
 const { submitReviewValidators } = require('../validators/reviewValidators');
 const { propertyMediaUpload, assertMediaSizeLimits } = require('../middleware/upload');
 const { ROLES } = require('../utils/constants');
+const { uploadRateLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
 
@@ -31,17 +32,20 @@ router.post(
   '/',
   authenticate,
   requireRole(ROLES.LANDLORD),
+  uploadRateLimiter,
   propertyMediaFields,
   assertMediaSizeLimits,
   createPropertyValidators,
   validate,
   PropertyController.create
 );
+router.delete('/:id/caretakers/:caretakerId', authenticate, requireRole(ROLES.LANDLORD, ROLES.ADMIN), objectIdParam('id'), objectIdParam('caretakerId'), validate, PropertyController.unassignCaretaker);
 router.patch(
   '/:id',
   authenticate,
   requireRole(ROLES.LANDLORD, ROLES.ADMIN),
   objectIdParam('id'),
+  uploadRateLimiter,
   propertyMediaFields,
   assertMediaSizeLimits,
   updatePropertyValidators,

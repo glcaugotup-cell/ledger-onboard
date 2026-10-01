@@ -2,6 +2,8 @@ const AuthService = require('../../services/AuthService');
 const NotificationService = require('../../services/NotificationService');
 const asyncHandler = require('../../utils/asyncHandler');
 const { sendSuccess } = require('../../utils/ApiResponse');
+const PaymentQrService = require('../../services/PaymentQrService');
+const sendStoredFile = require('../../utils/sendStoredFile');
 
 class UserController {
   getMe = asyncHandler(async (req, res) => {
@@ -12,6 +14,16 @@ class UserController {
   updateMe = asyncHandler(async (req, res) => {
     const user = await AuthService.updateProfile(req.user.id, req.body);
     sendSuccess(res, { data: { user } });
+  });
+
+  uploadPaymentQr = asyncHandler(async (req, res) => {
+    const result = await PaymentQrService.uploadForLandlord(req.user.id, req.file);
+    sendSuccess(res, { data: result });
+  });
+
+  getPaymentQr = asyncHandler(async (req, res) => {
+    const file = await PaymentQrService.getForLandlord(req.user.id);
+    sendStoredFile(req, res, file);
   });
 
   listNotifications = asyncHandler(async (req, res) => {

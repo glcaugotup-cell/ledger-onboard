@@ -5,6 +5,10 @@ class PaymentApi extends BaseApiClient {
     return this.post('/payments', formData, UPLOAD_CONFIG);
   }
 
+  submitQr(payload) {
+    return this.post('/payments', payload);
+  }
+
   list() {
     return this.get('/payments');
   }

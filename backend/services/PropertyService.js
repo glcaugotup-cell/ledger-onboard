@@ -294,6 +294,14 @@ class PropertyService {
     return property;
   }
 
+  async unassignCaretaker(propertyId, requester, caretakerId) {
+    const property = await this._findManageable(propertyId);
+    this._assertLandlordOwnsOrAdmin(property, requester);
+    property.caretakerIds = property.caretakerIds.filter((id) => String(id) !== String(caretakerId));
+    await property.save();
+    return property;
+  }
+
   _assertLandlordOwnsOrAdmin(property, requester) {
     if (requester.role === ROLES.ADMIN) return;
     if (requester.role === ROLES.LANDLORD && String(property.landlordId) === String(requester.id)) return;

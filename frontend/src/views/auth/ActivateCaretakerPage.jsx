@@ -67,7 +67,7 @@ export default function ActivateCaretakerPage() {
   }
 
   return (
-    <AuthLayout title="Activate your caretaker account" subtitle="Set a password to finish activating your account.">
+    <AuthLayout title="Activate your caretaker account" subtitle="Your temporary password is caretaker1234. Choose a new strong password here to activate your account before you can access the dashboard.">
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <ErrorBanner message={error} />
         <SuccessBanner message={success} />

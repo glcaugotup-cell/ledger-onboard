@@ -120,6 +120,8 @@ const userSchema = new Schema(
     archivedAt: { type: Date, default: null },
     archiveReason: { type: String, default: null },
     profilePhotoUrl: { type: String, default: null },
+    // Landlord-only private GridFS URL; exposed to tenants only through an owned SOA route.
+    paymentQrUrl: { type: String, default: null },
     notificationPreferences: {
       email: { type: Boolean, default: true },
       inApp: { type: Boolean, default: true },

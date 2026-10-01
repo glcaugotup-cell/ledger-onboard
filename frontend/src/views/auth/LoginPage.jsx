@@ -143,7 +143,7 @@ export default function LoginPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900">Login</h1>
-      <p className="mt-1 text-sm text-gray-500">Welcome back! Please enter your details.</p>
+      <p className="mt-1 text-sm text-gray-500">Ledger Onboard</p>
 
       <form onSubmit={onSubmit} noValidate className="mt-6 space-y-4">
         <ErrorBanner message={error} />

@@ -136,6 +136,20 @@ class ReservationService {
 
     return updated;
   }
+
+  async reassignCaretaker(reservationId, requester, caretakerId) {
+    const reservation = await ReservationRepository.findById(reservationId);
+    if (!reservation || reservation.status !== RESERVATION_STATUS.APPROVED) throw ApiError.notFound('Current tenancy not found', 'TENANCY_NOT_FOUND');
+    const property = await PropertyRepository.findById(reservation.propertyId);
+    if (requester.role !== ROLES.ADMIN && (requester.role !== ROLES.LANDLORD || String(property?.landlordId) !== String(requester.id))) {
+      throw ApiError.forbidden('You do not manage this tenancy', 'FORBIDDEN_RESERVATION_UPDATE');
+    }
+    const caretaker = await UserRepository.findById(caretakerId);
+    if (!caretaker || caretaker.role !== ROLES.CARETAKER || caretaker.accountStatus !== ACCOUNT_STATUS.ACTIVE || String(caretaker.assignedLandlordId) !== String(property.landlordId)) {
+      throw ApiError.badRequest('Choose an active caretaker who works for you', 'INVALID_CARETAKER');
+    }
+    return ReservationRepository.updateById(reservationId, { caretakerAssignedId: caretakerId });
+  }
 }
 
 module.exports = new ReservationService();

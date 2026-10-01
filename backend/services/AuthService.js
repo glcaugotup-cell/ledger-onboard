@@ -378,7 +378,10 @@ class AuthService {
    * A landlord's listings stop appearing in search while the account is closed (see
    * PropertyService), and closure is refused while tenants still depend on the landlord.
    */
-  async deactivateOwnAccount(userId) {
+  async deactivateOwnAccount(userId, reason) {
+    if (typeof reason !== 'string' || reason.trim().length < 3 || reason.trim().length > 500) {
+      throw ApiError.badRequest('Please provide a reason (3 to 500 characters).', 'REASON_REQUIRED');
+    }
     const user = await UserRepository.findById(userId);
     if (!user) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
     if (user.role === ROLES.ADMIN) {
@@ -404,7 +407,7 @@ class AuthService {
 
     await UserRepository.updateById(userId, {
       accountStatus: ACCOUNT_STATUS.DEACTIVATED,
-      statusReason: 'Closed by the account owner',
+      statusReason: reason.trim(),
       statusChangedAt: new Date(),
       refreshTokenHash: null,
     });
@@ -426,7 +429,8 @@ class AuthService {
 
     const landlord = await UserRepository.findById(landlordId);
 
-    const placeholderHash = await hashPassword(crypto.randomBytes(24).toString('hex'));
+    const temporaryPassword = 'caretaker1234';
+    const placeholderHash = await hashPassword(temporaryPassword);
     const caretaker = await UserRepository.create({
       firstName,
       lastName,
@@ -449,7 +453,7 @@ class AuthService {
     try {
       // eslint-disable-next-line no-console
       console.log(`[EmailService] Sending caretaker activation email\nTo: ${caretaker.email}\nSubject: Ledger OnBoard Caretaker Invitation`);
-      await EmailService.sendCaretakerActivationEmail(caretaker.email, caretaker.fullName, activationUrl, landlord?.fullName);
+      await EmailService.sendCaretakerCreatedEmail(caretaker.email, caretaker.fullName, activationUrl, landlord?.fullName, temporaryPassword);
       // eslint-disable-next-line no-console
       console.log('[EmailService] Caretaker activation email sent successfully');
     } catch (err) {
@@ -469,7 +473,7 @@ class AuthService {
       metadata: { email: caretaker.email },
     });
 
-    return sanitizeUser(caretaker);
+    return { caretaker: sanitizeUser(caretaker), temporaryPassword };
   }
 
   async listCaretakersForLandlord(landlordId) {
@@ -490,6 +494,31 @@ class AuthService {
     }
     const updated = await UserRepository.updateById(caretakerId, safeUpdates);
     return sanitizeUser(updated);
+  }
+
+  async removeCaretaker(landlordId, caretakerId, reason) {
+    if (typeof reason !== 'string' || reason.trim().length < 3 || reason.trim().length > 500) {
+      throw ApiError.badRequest('Please provide a reason (3 to 500 characters).', 'REASON_REQUIRED');
+    }
+    const caretaker = await UserRepository.findById(caretakerId);
+    if (!caretaker || caretaker.role !== ROLES.CARETAKER || String(caretaker.assignedLandlordId) !== String(landlordId)) {
+      throw ApiError.notFound('Caretaker not found', 'CARETAKER_NOT_FOUND');
+    }
+    await UserRepository.updateById(caretakerId, {
+      accountStatus: ACCOUNT_STATUS.DEACTIVATED,
+      statusReason: reason.trim(),
+      statusChangedAt: new Date(),
+      refreshTokenHash: null,
+    });
+    await AuditLogRepository.record({
+      action: 'CARETAKER_REMOVED_BY_LANDLORD',
+      actorId: landlordId,
+      actorRole: ROLES.LANDLORD,
+      targetType: 'User',
+      targetId: caretakerId,
+      metadata: { reason: reason.trim() },
+    });
+    return { removed: true };
   }
 
   async activateCaretakerAccount({ token, password }) {

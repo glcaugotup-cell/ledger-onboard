@@ -1,4 +1,4 @@
-const app = require('./app');
+  const app = require('./app');
 const env = require('./config/env');
 const { connectDB } = require('./config/db');
 const { startAccountLifecycleJob } = require('./jobs/AccountLifecycleJob');

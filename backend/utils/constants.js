@@ -73,6 +73,7 @@ const PAYMENT_STATUS = Object.freeze({
 
 const PAYMENT_METHOD = Object.freeze({
   GCASH_SCREENSHOT: 'GCASH_SCREENSHOT',
+  GCASH_QR: 'GCASH_QR',
   CASH_ON_SITE: 'CASH_ON_SITE',
 });
 

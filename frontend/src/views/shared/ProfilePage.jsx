@@ -92,6 +92,57 @@ function ReviewForm({ reservation, onSubmitted }) {
   );
 }
 
+function PaymentQrSettings({ hasQr }) {
+  const [qrUrl, setQrUrl] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let objectUrl;
+    if (hasQr) AuthApi.fetchPaymentQrObjectUrl().then((url) => { objectUrl = url; setQrUrl(url); }).catch((err) => setError(describeApiError(err).message));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [hasQr]);
+
+  const upload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    setError('');
+    setMessage('');
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('Choose a JPEG, PNG or WEBP QR image.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const form = new FormData();
+      form.append('paymentQr', file);
+      await AuthApi.uploadPaymentQr(form);
+      const url = await AuthApi.fetchPaymentQrObjectUrl();
+      setQrUrl((old) => { if (old) URL.revokeObjectURL(old); return url; });
+      setMessage('GCash QR code saved. Tenants can now view it on their statements.');
+    } catch (err) {
+      setError(describeApiError(err).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card title="GCash payment QR code" className="mt-6">
+      <p className="mb-3 text-sm text-gray-500">Upload your GCash QR code. It will appear privately on your tenants’ billing statements.</p>
+      <ErrorBanner message={error} />
+      <SuccessBanner message={message} />
+      {qrUrl && <img src={qrUrl} alt="Your GCash payment QR code" className="mb-3 max-h-56 rounded-lg border border-gray-200 object-contain" />}
+      <label className="inline-flex cursor-pointer items-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800">
+        {loading ? 'Uploading…' : hasQr || qrUrl ? 'Replace QR code' : 'Upload QR code'}
+        <input type="file" accept="image/png,image/jpeg,image/webp" onChange={upload} disabled={loading} className="sr-only" />
+      </label>
+    </Card>
+  );
+}
+
 /**
  * Profile for every role (tenant, landlord, caretaker, admin): the registered
  * details (name and email are shown but can't be edited — the backend rejects
@@ -128,6 +179,7 @@ export default function ProfilePage() {
   const [eligibleReservations, setEligibleReservations] = useState([]);
   const [reviewedIds, setReviewedIds] = useState([]);
   const [closeError, setCloseError] = useState('');
+  const [closeReason, setCloseReason] = useState('');
   const [closeLoading, setCloseLoading] = useState(false);
 
   useEffect(() => {
@@ -249,7 +301,11 @@ export default function ProfilePage() {
     setCloseLoading(true);
     setCloseError('');
     try {
-      await AuthApi.deactivateAccount();
+      if (closeReason.trim().length < 3) {
+        setCloseError('Please enter a reason (at least 3 characters).');
+        return;
+      }
+      await AuthApi.deactivateAccount(closeReason.trim());
       await logout();
       navigate('/');
     } catch (err) {
@@ -270,7 +326,7 @@ export default function ProfilePage() {
   return (
     <DashboardLayout>
       <PageHeader title="Profile" description="Your account details, password and sign-in security." />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className={`grid grid-cols-1 gap-6 ${role === 'caretaker' ? 'lg:grid-cols-1' : 'lg:grid-cols-2'}`}>
         <Card title="Personal information">
           <dl className="mb-4">
             <InfoRow label="Full name" value={user?.fullName} hint="Your registered name can’t be changed here." />
@@ -376,6 +432,8 @@ export default function ProfilePage() {
         </Card>
       </div>
 
+      {role === 'landlord' && <PaymentQrSettings hasQr={Boolean(user?.hasPaymentQr)} />}
+
       {role !== 'admin' && (
         <Card title="Delete account" className="mt-6">
           <ErrorBanner message={closeStep !== 'confirm' ? closeError : ''} />
@@ -422,6 +480,7 @@ export default function ProfilePage() {
             tone="danger"
             title="Delete your account?"
             message={closeConsequence}
+            confirmDisabled={closeReason.trim().length < 3}
             confirmLabel="Yes, delete my account"
             loading={closeLoading}
             error={closeError}
@@ -430,7 +489,11 @@ export default function ProfilePage() {
               setCloseStep('idle');
               setCloseError('');
             }}
-          />
+          >
+            <Field label="Why are you leaving?">
+              <TextArea value={closeReason} onChange={(e) => setCloseReason(e.target.value)} maxLength={500} rows={3} placeholder="Please tell us why you are leaving" />
+            </Field>
+          </ConfirmDialog>
         </Card>
       )}
     </DashboardLayout>

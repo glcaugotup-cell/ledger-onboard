@@ -6,6 +6,7 @@ const mongoSanitize = require('express-mongo-sanitize');
 
 const env = require('./config/env');
 const apiRouter = require('./routes');
+const { apiRateLimiter } = require('./middleware/rateLimit');
 const MediaController = require('./controllers/shared/MediaController');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
@@ -24,8 +25,8 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '100kb', parameterLimit: 100 }));
 
 // Strip any keys starting with '$' or containing '.' from req.body/query/params
 // to block NoSQL operator injection.
@@ -52,7 +53,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is healthy' });
 });
 
-app.use('/api', apiRouter);
+app.use('/api', apiRateLimiter, apiRouter);
 
 app.use(notFound);
 app.use(errorHandler);

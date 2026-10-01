@@ -5,8 +5,16 @@ class UtilityApi extends BaseApiClient {
     return this.post('/utilities/readings', payload);
   }
 
+  logFixedRate(payload) {
+    return this.post('/utilities/fixed-rate', payload);
+  }
+
   listByRoom(roomId) {
     return this.get(`/utilities/readings/room/${roomId}`);
+  }
+
+  listMine() {
+    return this.get('/utilities/readings/mine');
   }
 }
 

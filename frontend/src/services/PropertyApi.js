@@ -53,6 +53,10 @@ class PropertyApi extends BaseApiClient {
   assignCaretaker(id, caretakerId) {
     return this.post(`/properties/${id}/caretakers`, { caretakerId });
   }
+
+  unassignCaretaker(id, caretakerId) {
+    return this.delete(`/properties/${id}/caretakers/${caretakerId}`);
+  }
 }
 
 export default new PropertyApi();

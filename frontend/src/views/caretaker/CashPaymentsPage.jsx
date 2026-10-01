@@ -12,6 +12,8 @@ import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { formatPeriod, formatPeso } from '../../utils/format.js';
 import { validatePaymentAmount } from '../../utils/validators.js';
+import { formatDateTime, formatStatus } from '../../utils/format.js';
+import { Badge } from '../../components/ui/Feedback.jsx';
 
 export default function CashPaymentsPage() {
   const { user } = useAuth();
@@ -24,6 +26,8 @@ export default function CashPaymentsPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadError, setLoadError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+  const [paymentLog, setPaymentLog] = useState([]);
+  const [paymentLogError, setPaymentLogError] = useState('');
 
   useEffect(() => {
     BillingApi.list()
@@ -32,6 +36,12 @@ export default function CashPaymentsPage() {
         setLoadError('');
       })
       .catch((err) => setLoadError(err.message || 'Could not load statements of account.'));
+  }, [refreshKey]);
+
+  useEffect(() => {
+    PaymentApi.list()
+      .then(({ payments }) => setPaymentLog(payments.filter((p) => p.paymentMethod === 'CASH_ON_SITE')))
+      .catch((err) => setPaymentLogError(err.message || 'Could not load your cash payment log.'));
   }, [refreshKey]);
 
   const onSubmit = async (e) => {
@@ -96,6 +106,10 @@ export default function CashPaymentsPage() {
         key={refreshKey}
         canVerify={(p) => p.paymentMethod === 'CASH_ON_SITE' && String(p.cashCollectedByCaretakerId) === String(user?._id || user?.id)}
       />
+      <Card title="Cash collection log" description="Cash payments you have recorded and their verification status." className="mt-6">
+        <ErrorBanner message={paymentLogError} />
+        {paymentLog.length === 0 ? <p className="py-4 text-sm text-gray-500">No cash payments recorded yet.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[40rem] text-left text-sm"><thead className="border-b text-xs uppercase tracking-wide text-gray-500"><tr><th className="py-2 pr-4">Date</th><th className="py-2 pr-4">Tenant</th><th className="py-2 pr-4">Property / room</th><th className="py-2 pr-4">Amount</th><th className="py-2">Status</th></tr></thead><tbody className="divide-y divide-gray-100">{paymentLog.map((payment) => <tr key={payment._id}><td className="py-3 pr-4">{formatDateTime(payment.timestamp || payment.createdAt)}</td><td className="py-3 pr-4">{payment.tenantName || 'Tenant'}</td><td className="py-3 pr-4">{[payment.propertyName, payment.roomNumber && `Room ${payment.roomNumber}`].filter(Boolean).join(' · ') || '—'}</td><td className="py-3 pr-4 font-semibold tabular-nums">{formatPeso(payment.amount)}</td><td className="py-3"><Badge tone={payment.verificationStatus === 'VERIFIED' ? 'green' : payment.verificationStatus === 'REJECTED' ? 'red' : 'yellow'}>{formatStatus(payment.verificationStatus)}</Badge></td></tr>)}</tbody></table></div>}
+      </Card>
     </DashboardLayout>
   );
 }

@@ -2,7 +2,7 @@ const express = require('express');
 const PaymentController = require('../controllers/shared/PaymentController');
 const { authenticate } = require('../middleware/auth');
 const { requireRole } = require('../middleware/rbac');
-const { paymentVerificationRateLimiter } = require('../middleware/rateLimit');
+const { paymentVerificationRateLimiter, paymentSubmissionRateLimiter } = require('../middleware/rateLimit');
 const validate = require('../middleware/validate');
 const { objectIdParam } = require('../validators/commonValidators');
 const { submitPaymentValidators, verifyPaymentValidators } = require('../validators/paymentValidators');
@@ -15,6 +15,7 @@ router.use(authenticate);
 router.post(
   '/',
   requireRole(ROLES.TENANT, ROLES.CARETAKER),
+  paymentSubmissionRateLimiter,
   paymentProofUpload.single('proofImage'),
   submitPaymentValidators,
   validate,

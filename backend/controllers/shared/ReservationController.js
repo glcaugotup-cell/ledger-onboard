@@ -17,6 +17,11 @@ class ReservationController {
     const reservation = await ReservationService.updateStatus(req.params.id, req.user, req.body);
     sendSuccess(res, { data: { reservation } });
   });
+
+  reassignCaretaker = asyncHandler(async (req, res) => {
+    const reservation = await ReservationService.reassignCaretaker(req.params.id, req.user, req.body.caretakerId);
+    sendSuccess(res, { data: { reservation } });
+  });
 }
 
 module.exports = new ReservationController();
