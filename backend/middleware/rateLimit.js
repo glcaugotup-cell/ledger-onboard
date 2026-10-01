@@ -46,10 +46,26 @@ const loginRateLimiter = buildLimiter({
 });
 
 // Additional throttling for OTP, password recovery and account activation endpoints.
-const sensitiveAuthRateLimiter = buildLimiter({
+// Each endpoint gets its own counter: a shared one let a few page reloads (each one a
+// /refresh) block email verification for everyone on the same network, and vice versa.
+// Where success needs a secret the caller already holds (session, code, activation link),
+// only failures count — that is what brute forcing looks like. Endpoints that send email
+// or need no secret count every request.
+const sensitiveAuthLimiter = ({ failuresOnly }) => buildLimiter({
   windowMinutes: env.sensitiveAuthRateLimitWindowMinutes,
   max: env.sensitiveAuthRateLimitMax,
+  skipSuccessfulRequests: failuresOnly,
 });
+
+const sensitiveAuthRateLimiters = {
+  refresh: sensitiveAuthLimiter({ failuresOnly: true }),
+  verifyOtp: sensitiveAuthLimiter({ failuresOnly: true }),
+  resetPassword: sensitiveAuthLimiter({ failuresOnly: true }),
+  activateCaretaker: sensitiveAuthLimiter({ failuresOnly: true }),
+  resendOtp: sensitiveAuthLimiter({ failuresOnly: false }),
+  forgotPassword: sensitiveAuthLimiter({ failuresOnly: false }),
+  accountRecovery: sensitiveAuthLimiter({ failuresOnly: false }),
+};
 
 const paymentVerificationRateLimiter = rateLimit({
   windowMs: env.paymentRateLimitWindowMinutes * 60 * 1000,
@@ -67,7 +83,7 @@ module.exports = {
   apiRateLimiter,
   authRateLimiter,
   loginRateLimiter,
-  sensitiveAuthRateLimiter,
+  sensitiveAuthRateLimiters,
   paymentVerificationRateLimiter,
   paymentSubmissionRateLimiter,
   uploadRateLimiter,

@@ -512,4 +512,43 @@ describe('Security — rate limiting', () => {
     }
     expect(failures.every((r) => r.status === 401)).toBe(true);
   }, 20000);
+
+  // Every page load of a signed-in user calls /refresh. The sensitive-auth limits must
+  // not turn ordinary reloads into a sign-out, or let them block other people's email
+  // verification on the same network (they once shared a single counter).
+  test('page reloads (successful refreshes) never use up a limit, and do not block email verification', async () => {
+    await registerAndVerify({
+      firstName: 'Reload', lastName: 'Tenant', email: 'reload.tenant@gmail.com', phone: '09171234520', password: 'Str0ng!Pass', role: 'tenant',
+      privacyConsent: true, emergencyContact: { name: 'Gigi Tenant', phone: '09171234580' },
+    });
+    const login = await request(app).post('/api/auth/login').send({ email: 'reload.tenant@gmail.com', password: 'Str0ng!Pass' });
+    let { refreshToken } = login.body.data;
+
+    // Well past the per-window ceiling of 8.
+    for (let i = 0; i < 12; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await request(app).post('/api/auth/refresh').send({ refreshToken });
+      expect(res.status).toBe(200);
+      ({ refreshToken } = res.body.data);
+    }
+
+    const other = await registerAndVerify({
+      firstName: 'Neighbor', lastName: 'Tenant', email: 'reload.neighbor@gmail.com', phone: '09171234521', password: 'Str0ng!Pass', role: 'tenant',
+      privacyConsent: true, emergencyContact: { name: 'Gigi Tenant', phone: '09171234581' },
+    });
+    expect(other.status).toBe(201);
+    const otherLogin = await request(app).post('/api/auth/login').send({ email: 'reload.neighbor@gmail.com', password: 'Str0ng!Pass' });
+    expect(otherLogin.status).toBe(200);
+  }, 20000);
+
+  // Runs last in this file: it deliberately uses up the shared app's refresh limit.
+  test('failed refreshes are still limited', async () => {
+    const statuses = [];
+    for (let i = 0; i < 10; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      statuses.push((await request(app).post('/api/auth/refresh').send({ refreshToken: 'not-a-real-token' })).status);
+    }
+    expect(statuses.slice(0, 8).every((s) => s === 401)).toBe(true);
+    expect(statuses.slice(8)).toEqual([429, 429]);
+  });
 });
