@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,8 +10,8 @@ import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.j
 const { useAuthMock, useNotificationsMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), useNotificationsMock: vi.fn() }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
-vi.mock('../../services/BillingApi.js', () => ({ default: { list: vi.fn() } }));
-vi.mock('../../services/PaymentApi.js', () => ({ default: { submit: vi.fn() } }));
+vi.mock('../../services/BillingApi.js', () => ({ default: { list: vi.fn(), fetchPaymentQrObjectUrl: vi.fn() } }));
+vi.mock('../../services/PaymentApi.js', () => ({ default: { submit: vi.fn(), submitQr: vi.fn() } }));
 
 const unpaidSoa = {
   _id: 's1',
@@ -40,6 +40,9 @@ describe('MyBillingPage', () => {
     vi.clearAllMocks();
     useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', fullName: 'Juan Dela Cruz', role: 'tenant' } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    // Tenants pay by scanning their landlord's GCash QR, fetched privately per statement.
+    BillingApi.fetchPaymentQrObjectUrl.mockResolvedValue('blob:landlord-qr');
+    URL.revokeObjectURL = vi.fn();
   });
 
   it('shows an empty state with no statements', async () => {
@@ -48,7 +51,7 @@ describe('MyBillingPage', () => {
     expect(await screen.findByText(/no statements yet/i)).toBeInTheDocument();
   });
 
-  it('renders the SOA breakdown and a Pay via GCash button when a balance is owed', async () => {
+  it('renders the SOA breakdown and a Pay now button when a balance is owed', async () => {
     BillingApi.list.mockResolvedValue({ soas: [unpaidSoa] });
     renderPage();
 
@@ -56,7 +59,7 @@ describe('MyBillingPage', () => {
     expect(within(card).getByText('Unpaid')).toBeInTheDocument();
     expect(within(card).getByText('₱2,900')).toBeInTheDocument();
     expect(within(card).getByText('₱2,400')).toBeInTheDocument();
-    expect(within(card).getByRole('button', { name: /pay via gcash/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pay now' })).toBeInTheDocument();
   });
 
   it('summarizes the total balance and the next due date', async () => {
@@ -72,7 +75,7 @@ describe('MyBillingPage', () => {
     BillingApi.list.mockResolvedValue({ soas: [{ ...unpaidSoa, paymentStatus: 'PAID', remainingBalance: 0, amountPaid: 2900 }] });
     renderPage();
     await screen.findByText('Paid');
-    expect(screen.queryByRole('button', { name: /pay via gcash/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /pay now/i })).not.toBeInTheDocument();
   });
 
   it('rejects an amount above the remaining balance before sending', async () => {
@@ -80,53 +83,59 @@ describe('MyBillingPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: /pay via gcash/i }));
+    await user.click(await screen.findByRole('button', { name: 'Pay now' }));
+    await screen.findByRole('img', { name: /landlord gcash payment qr code/i });
     const amount = screen.getByLabelText(/amount/i);
     await user.clear(amount);
     await user.type(amount, '5000');
-    await user.click(screen.getByRole('button', { name: /submit proof of payment/i }));
+    await user.type(screen.getByLabelText(/gcash transaction reference/i), 'ABC12345');
+    await user.click(screen.getByRole('button', { name: /submit payment for verification/i }));
 
     expect(screen.getByText(/cannot be more than the remaining balance of ₱2,400/)).toBeInTheDocument();
-    expect(PaymentApi.submit).not.toHaveBeenCalled();
+    expect(PaymentApi.submitQr).not.toHaveBeenCalled();
   });
 
-  it('never calls the API when no screenshot is attached', async () => {
-    // The file input carries `required` and this form has no `noValidate`,
-    // so — same as a real browser — a plain submit click is blocked by
-    // native constraint validation before onSubmit's own `if (!file)` guard
-    // ever runs. The outward guarantee (no API call) is what matters here.
+  it('requires the GCash transaction reference before sending', async () => {
     BillingApi.list.mockResolvedValue({ soas: [unpaidSoa] });
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: /pay via gcash/i }));
-    await user.click(screen.getByRole('button', { name: /submit proof of payment/i }));
+    await user.click(await screen.findByRole('button', { name: 'Pay now' }));
+    await screen.findByRole('img', { name: /landlord gcash payment qr code/i });
+    await user.click(screen.getByRole('button', { name: /submit payment for verification/i }));
 
-    expect(PaymentApi.submit).not.toHaveBeenCalled();
+    expect(screen.getByText('Enter the GCash transaction reference after paying.')).toBeInTheDocument();
+    expect(PaymentApi.submitQr).not.toHaveBeenCalled();
   });
 
-  it('submits payment proof as multipart form data with the fixed method', async () => {
+  it('submits a GCash QR payment with its transaction reference', async () => {
     BillingApi.list.mockResolvedValue({ soas: [unpaidSoa] });
-    PaymentApi.submit.mockResolvedValue({});
+    PaymentApi.submitQr.mockResolvedValue({});
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: /pay via gcash/i }));
-    const file = new File(['fake-image-bytes'], 'gcash.png', { type: 'image/png' });
-    const fileInput = screen.getByLabelText(/gcash screenshot/i);
-    await user.upload(fileInput, file);
-    // jsdom doesn't reliably clear a required file input's validity state
-    // after user-event sets its `files`, so dispatch the submit directly
-    // rather than clicking the button through native constraint validation.
-    fireEvent.submit(fileInput.closest('form'));
+    await user.click(await screen.findByRole('button', { name: 'Pay now' }));
+    expect(await screen.findByRole('img', { name: /landlord gcash payment qr code/i })).toHaveAttribute('src', 'blob:landlord-qr');
+    expect(BillingApi.fetchPaymentQrObjectUrl).toHaveBeenCalledWith('s1');
+    await user.type(screen.getByLabelText(/gcash transaction reference/i), 'ABC12345');
+    await user.click(screen.getByRole('button', { name: /submit payment for verification/i }));
 
     await waitFor(() => {
-      expect(PaymentApi.submit).toHaveBeenCalledTimes(1);
+      expect(PaymentApi.submitQr).toHaveBeenCalledWith({ soaId: 's1', amount: '2400', paymentMethod: 'GCASH_QR', referenceNumber: 'ABC12345' });
     });
-    const [formData] = PaymentApi.submit.mock.calls[0];
-    expect(formData.get('soaId')).toBe('s1');
-    expect(formData.get('paymentMethod')).toBe('GCASH_SCREENSHOT');
-    expect(formData.get('proofImage').name).toBe('gcash.png');
+    expect(PaymentApi.submit).not.toHaveBeenCalled();
     expect(await screen.findByText(/awaiting verification/i)).toBeInTheDocument();
+  });
+
+  it('tells the tenant when the landlord has no GCash QR yet and blocks submitting', async () => {
+    BillingApi.list.mockResolvedValue({ soas: [unpaidSoa] });
+    BillingApi.fetchPaymentQrObjectUrl.mockRejectedValue(new Error('PAYMENT_QR_NOT_FOUND'));
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Pay now' }));
+    expect(await screen.findByText(/has not uploaded a GCash QR code yet/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /submit payment for verification/i })).toBeDisabled();
+    expect(PaymentApi.submitQr).not.toHaveBeenCalled();
   });
 });

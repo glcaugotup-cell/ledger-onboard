@@ -394,10 +394,16 @@ describe('Objective 13 — closing your own account is a status change, never a 
       roomId: room._id, caretakerId: ct._id, readingMonth: new Date('2026-08-01'), prevElectricityKWh: 0, currElectricityKWh: 10, totalElectricBill: 100, totalWaterBill: 50,
     });
 
-    const res = await request(app).post('/api/auth/deactivate').set(auth(token));
+    // A reason is required, and it is what gets stored as the status reason.
+    const noReason = await request(app).post('/api/auth/deactivate').set(auth(token));
+    expect(noReason.status).toBe(400);
+    expect(noReason.body.error.code).toBe('REASON_REQUIRED');
+    expect((await UserRepository.findById(ct._id)).accountStatus).toBe('active');
+
+    const res = await request(app).post('/api/auth/deactivate').set(auth(token)).send({ reason: 'Moving to another city' });
     expect(res.status).toBe(200);
     const stored = await UserRepository.findById(ct._id);
-    expect(stored).toMatchObject({ accountStatus: 'deactivated', statusReason: 'Closed by the account owner' });
+    expect(stored).toMatchObject({ accountStatus: 'deactivated', statusReason: 'Moving to another city' });
     expect(String((await UtilityReadingRepository.findById(reading._id)).caretakerId)).toBe(String(ct._id));
     expect(await AuditLogRepository.count({ action: 'ACCOUNT_CLOSED_BY_OWNER', targetId: ct._id })).toBe(1);
     const login = await request(app).post('/api/auth/login').send({ email: 'close.caretaker@gmail.com', password: PASSWORD });
@@ -412,13 +418,13 @@ describe('Objective 13 — closing your own account is a status change, never a 
     const { user: tenant } = await makeUser('tenant', 'close.landlord.tenant@gmail.com');
     const pending = await ReservationRepository.create({ tenantId: tenant._id, roomId: room._id, propertyId: property._id, status: 'pending', moveInDate: new Date() });
 
-    const blocked = await request(app).post('/api/auth/deactivate').set(auth(token));
+    const blocked = await request(app).post('/api/auth/deactivate').set(auth(token)).send({ reason: 'Selling the property' });
     expect(blocked.status).toBe(409);
     expect(blocked.body.error.code).toBe('LANDLORD_HAS_OPEN_RESERVATIONS');
     expect((await UserRepository.findById(landlord._id)).accountStatus).toBe('active');
 
     await ReservationRepository.updateById(pending._id, { status: 'rejected' });
-    expect((await request(app).post('/api/auth/deactivate').set(auth(token))).status).toBe(200);
+    expect((await request(app).post('/api/auth/deactivate').set(auth(token)).send({ reason: 'Selling the property' })).status).toBe(200);
 
     // Hidden from tenants...
     expect((await request(app).get(`/api/properties/${property._id}`)).status).toBe(404);
@@ -442,7 +448,7 @@ describe('Objective 13 — closing your own account is a status change, never a 
 
   test('admins cannot close their own account from the profile', async () => {
     const { token } = await makeUser('admin', 'self.close.admin@gmail.com');
-    expect((await request(app).post('/api/auth/deactivate').set(auth(token))).status).toBe(403);
+    expect((await request(app).post('/api/auth/deactivate').set(auth(token)).send({ reason: 'Testing admin closure' })).status).toBe(403);
   });
 });
 

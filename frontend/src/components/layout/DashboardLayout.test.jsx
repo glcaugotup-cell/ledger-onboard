@@ -78,7 +78,8 @@ describe('DashboardLayout', () => {
     expect(document.getElementById('mobile-menu')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
     const menu = document.getElementById('mobile-menu');
-    expect(within(menu).getAllByRole('link')).toHaveLength(7);
+    expect(within(menu).getAllByRole('link')).toHaveLength(8);
+    expect(within(menu).getByRole('link', { name: 'Maintenance Issues' })).toHaveAttribute('href', '/landlord/issues');
 
     // Log out lives in the account menu at the bottom of the mobile menu.
     await user.click(within(menu).getByRole('button', { name: 'Open account menu' }));

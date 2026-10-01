@@ -146,8 +146,13 @@ describe('ProfilePage', () => {
     expect(AuthApi.deactivateAccount).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: /delete account/i }));
-    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /yes, delete my account/i }));
-    await waitFor(() => expect(AuthApi.deactivateAccount).toHaveBeenCalledTimes(1));
+    const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: /yes, delete my account/i });
+    // A reason (3+ characters) is required before the account can be closed.
+    expect(confirm).toBeDisabled();
+    await user.type(within(screen.getByRole('dialog')).getByLabelText(/why are you leaving/i), 'Moving away');
+    await user.click(confirm);
+    await waitFor(() => expect(AuthApi.deactivateAccount).toHaveBeenCalledWith('Moving away'));
+    expect(AuthApi.deactivateAccount).toHaveBeenCalledTimes(1);
     expect(logout).toHaveBeenCalled();
     expect(navigateMock).toHaveBeenCalledWith('/');
   });
@@ -157,6 +162,7 @@ describe('ProfilePage', () => {
     const user = userEvent.setup();
     const { logout } = renderPage(USERS.landlord);
     await user.click(screen.getByRole('button', { name: /delete account/i }));
+    await user.type(within(screen.getByRole('dialog')).getByLabelText(/why are you leaving/i), 'Selling the property');
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /yes, delete my account/i }));
     expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(/pending or current reservation/);
     expect(logout).not.toHaveBeenCalled();
@@ -179,8 +185,10 @@ describe('ProfilePage', () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(screen.getByRole('button', { name: /delete account/i }));
-    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /yes, delete my account/i }));
-    await waitFor(() => expect(AuthApi.deactivateAccount).toHaveBeenCalled());
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/why are you leaving/i), 'Graduated');
+    await user.click(within(dialog).getByRole('button', { name: /yes, delete my account/i }));
+    await waitFor(() => expect(AuthApi.deactivateAccount).toHaveBeenCalledWith('Graduated'));
   });
 
   it('toggles email-code sign-in', async () => {

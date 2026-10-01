@@ -65,7 +65,7 @@ describe('CaretakersPage', () => {
   });
 
   it('submits a valid invite and shows a confirmation message', async () => {
-    CaretakerApi.create.mockResolvedValue({});
+    CaretakerApi.create.mockResolvedValue({ caretaker: { _id: 'c9', email: 'pedro.reyes@gmail.com' }, temporaryPassword: 'caretaker1234' });
     const user = userEvent.setup();
     renderPage();
     await screen.findByText(/no caretakers yet/i);
@@ -82,7 +82,9 @@ describe('CaretakersPage', () => {
         serviceBarangay: 'Bonuan Gueset',
       });
     });
-    expect(await screen.findByText(/invitation sent to pedro.reyes@gmail.com/i)).toBeInTheDocument();
+    expect(await screen.findByText(/caretaker account created for pedro.reyes@gmail.com/i)).toBeInTheDocument();
+    // The landlord is shown the temporary password returned by the API.
+    expect(screen.getByText('caretaker1234')).toBeInTheDocument();
   });
 
   it('requires a service barangay and capitalizes names as they are typed (but not the email)', async () => {

@@ -107,7 +107,9 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
       .field('address[barangay]', 'Poblacion Oeste')
       .field('locationCoordinates[lat]', '16.0433')
       .field('locationCoordinates[lng]', '120.3333')
-      .field('propertyType', 'Bedspace')
+      // Meter readings (electricity + water) only apply to Apartment and Studio properties;
+      // Room Only and Bedspace are billed a fixed monthly rent instead.
+      .field('propertyType', 'Apartment')
       .field('tenantGenderPolicy', 'Co-Ed');
     expect(res.status).toBe(201);
     expect(res.body.data.property.listingStatus).toBe('approved');

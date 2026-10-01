@@ -11,14 +11,28 @@ const { useAuthMock, useNotificationsMock } = vi.hoisted(() => ({ useAuthMock: v
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
 vi.mock('../../services/ReservationApi.js', () => ({ default: { list: vi.fn() } }));
-vi.mock('../../services/UtilityApi.js', () => ({ default: { logReading: vi.fn() } }));
+vi.mock('../../services/UtilityApi.js', () => ({ default: { logReading: vi.fn(), logFixedRate: vi.fn(), listMine: vi.fn() } }));
 
 const reservations = {
   reservations: [
     {
       status: 'approved',
       roomId: { _id: 'r1', roomNumber: '101' },
+      // Meter readings apply to Apartment and Studio properties.
+      propertyId: { _id: 'p1', propertyType: 'Apartment' },
       tenantId: { _id: 't1', fullName: 'Juan Dela Cruz' },
+    },
+  ],
+};
+
+// Room Only and Bedspace rooms are billed a fixed monthly rent instead of meter readings.
+const bedspaceReservations = {
+  reservations: [
+    {
+      status: 'approved',
+      roomId: { _id: 'r2', roomNumber: '202', monthlyBaseRent: 2500 },
+      propertyId: { _id: 'p2', propertyType: 'Bedspace' },
+      tenantId: { _id: 't2', fullName: 'Maria Santos' },
     },
   ],
 };
@@ -37,6 +51,7 @@ describe('UtilityEntryPage', () => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 'c1', fullName: 'Caretaker Cruz', role: 'caretaker' } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());
     ReservationApi.list.mockResolvedValue(reservations);
+    UtilityApi.listMine.mockResolvedValue({ readings: [] });
   });
 
   it('reveals the reading form only after a room is selected', async () => {
@@ -104,5 +119,20 @@ describe('UtilityEntryPage', () => {
     await user.click(screen.getByRole('button', { name: /submit reading/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Reading already logged for this month');
+  });
+
+  it('bills a Bedspace room its fixed monthly rent without meter readings', async () => {
+    ReservationApi.list.mockResolvedValue(bedspaceReservations);
+    UtilityApi.logFixedRate.mockResolvedValue({ soas: [{ totalAmountDue: 2500 }] });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.selectOptions(await screen.findByLabelText(/room/i), 'r2');
+    expect(screen.getByText(/fixed-rate billing/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/total electric bill/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /generate fixed-rate statements/i }));
+
+    await waitFor(() => expect(UtilityApi.logFixedRate).toHaveBeenCalledWith(expect.objectContaining({ roomId: 'r2' })));
+    expect(UtilityApi.logReading).not.toHaveBeenCalled();
   });
 });
