@@ -56,6 +56,20 @@ class MaintenanceIssueService {
     } catch (err) { await FileStorageService.deleteByUrls(urls); throw err; }
   }
 
+  async completeByLandlord(issueId, landlordId) {
+    const issue = await IssueRepository.findOne({ _id: issueId, landlordId });
+    if (!issue) throw ApiError.notFound('Issue not found', 'ISSUE_NOT_FOUND');
+    if (issue.status === 'resolved') throw ApiError.badRequest('This issue is already marked resolved.', 'ISSUE_ALREADY_RESOLVED');
+    const updated = await IssueRepository.updateById(issueId, {
+      status: 'resolved',
+      resolutionNotes: issue.resolutionNotes || 'Marked complete by the landlord.',
+      resolvedAt: new Date(),
+    });
+    await NotificationService.notify({ userId: issue.tenantId, type: 'MAINTENANCE_ISSUE_RESOLVED', title: 'Issue resolved', message: 'Your landlord marked your maintenance issue as completed.', relatedType: 'MaintenanceIssue', relatedId: issue._id });
+    if (issue.caretakerId) await NotificationService.notify({ userId: issue.caretakerId, type: 'MAINTENANCE_ISSUE_RESOLVED', title: 'Maintenance task completed', message: `The landlord marked the ${issue.category} issue as completed.`, relatedType: 'MaintenanceIssue', relatedId: issue._id });
+    return updated;
+  }
+
   async getMedia(issueId, kind, index, requester) {
     const issue = await IssueRepository.findById(issueId);
     if (!issue) throw ApiError.notFound('Issue not found', 'ISSUE_NOT_FOUND');

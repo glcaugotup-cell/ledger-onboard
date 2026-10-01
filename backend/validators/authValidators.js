@@ -108,7 +108,14 @@ const buildServiceBarangayChain = () =>
       return true;
     });
 
-const createCaretakerValidators = [firstNameChain, lastNameChain, emailChain, phoneChain, buildServiceBarangayChain()];
+const caretakerNameChain = (field, maxLength) =>
+  body(field)
+    .trim()
+    .customSanitizer(toNameCase)
+    .matches(new RegExp(`^(?=.{2,${maxLength}}$)(?=.*[A-Za-z].*[A-Za-z])[A-Za-z][A-Za-z ]+$`))
+    .withMessage(`Name must contain 2-${maxLength} characters, including at least 2 letters, and use only letters and spaces`);
+
+const createCaretakerValidators = [caretakerNameChain('firstName', 15), caretakerNameChain('lastName', 20), emailChain, phoneChain, buildServiceBarangayChain()];
 
 // Landlords may update a caretaker's contact number and service area; the name and email are their identity and stay fixed.
 const updateCaretakerValidators = [

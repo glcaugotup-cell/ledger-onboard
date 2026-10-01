@@ -114,6 +114,17 @@ export default function MaintenanceIssuesPage() {
     finally { setBusy(false); }
   };
 
+  const completeIssue = async (issue) => {
+    setBusy(true); setError(''); setMessage('');
+    try {
+      await MaintenanceIssueApi.complete(issue._id);
+      if (selected?._id === issue._id) setSelected(null);
+      setMessage('Task marked done. The tenant has been notified.');
+      await load();
+    } catch (err) { setError(err.message || 'Could not mark this task done.'); }
+    finally { setBusy(false); }
+  };
+
   const title = role === 'tenant' ? 'Maintenance issues' : role === 'landlord' ? 'Issue management' : 'Assigned maintenance tasks';
   const openIssues = issues.filter((item) => item.status !== 'resolved');
 
@@ -139,6 +150,7 @@ export default function MaintenanceIssuesPage() {
         <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="mb-1 flex flex-wrap items-center gap-2"><h2 className="font-semibold text-gray-900">{issue.category} · Room {issue.roomId?.roomNumber}</h2><Pill className={statusStyles[issue.status]}>{statusNames[issue.status]}</Pill><Pill className={urgencyStyles[issue.urgency]}>{issue.urgency} priority</Pill></div><p className="line-clamp-2 text-sm text-gray-600">{issue.description}</p><p className="mt-1 text-xs text-gray-500">{issue.propertyId?.propertyName} · Reported {formatDate(issue.createdAt)}{role !== 'tenant' && issue.tenantId?.fullName ? ` · ${issue.tenantId.fullName}` : ''}</p></div><span className="text-xs text-brand-700">View details</span></div>
       </button>
       {role === 'landlord' && issue.status !== 'resolved' && <Button className="mt-3" variant="secondary" onClick={() => { setAssigning(issue); setAssignee(issue.caretakerId?._id || ''); setNotes(issue.internalNotes || ''); setLandlordUpdate(issue.landlordUpdate || ''); setTargetDate(issue.targetDate ? new Date(issue.targetDate).toISOString().slice(0, 10) : ''); }}>Assign / update</Button>}
+      {role === 'landlord' && issue.status !== 'resolved' && <Button className="ml-2 mt-3" loading={busy} disabled={busy} onClick={() => completeIssue(issue)}>Mark task done</Button>}
     </Card>)}</div>
     {role === 'caretaker' && <Card title="Maintenance work log" description="Completed jobs and the repair notes you submitted." className="mt-6">
       {caretakerHistory.length === 0 ? <p className="py-4 text-sm text-gray-500">Resolved maintenance tasks will appear here.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[42rem] text-left text-sm"><thead className="border-b text-xs uppercase tracking-wide text-gray-500"><tr><th className="py-2 pr-4">Resolved</th><th className="py-2 pr-4">Issue / room</th><th className="py-2 pr-4">Priority</th><th className="py-2 pr-4">Work summary</th><th className="py-2">Details</th></tr></thead><tbody className="divide-y divide-gray-100">{caretakerHistory.map((issue) => <tr key={issue._id}><td className="py-3 pr-4">{formatDate(issue.resolvedAt || issue.updatedAt)}</td><td className="py-3 pr-4 font-medium">{issue.category} · Room {issue.roomId?.roomNumber}</td><td className="py-3 pr-4"><Pill className={urgencyStyles[issue.urgency]}>{issue.urgency}</Pill></td><td className="max-w-xs truncate py-3 pr-4 text-gray-600">{issue.resolutionNotes || '—'}</td><td className="py-3"><Button variant="ghost" onClick={() => setSelected(issue)}>View</Button></td></tr>)}</tbody></table></div>}

@@ -12,11 +12,21 @@ import { EmptyState, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } fro
 import { DAGUPAN_BARANGAYS } from '../../data/dagupanBarangays.js';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
-import { validateGmail, validateName, validatePhone } from '../../utils/validators.js';
+import { validateGmail, validatePhone } from '../../utils/validators.js';
 import { initials } from '../../utils/format.js';
 
 const STATUS_TONE = { active: 'green', pending_activation: 'yellow', suspended: 'red', deactivated: 'gray', archived: 'gray' };
 const EMPTY_FORM = { firstName: '', lastName: '', email: '', phone: '', serviceBarangay: '' };
+const FIRST_NAME_MAX_LENGTH = 15;
+const LAST_NAME_MAX_LENGTH = 20;
+
+function validateCaretakerName(value, maxLength) {
+  if (!value) return 'This field is required';
+  if ((value.match(/[A-Za-z]/g) || []).length < 2) return 'Must contain at least 2 letters';
+  if (value.length > maxLength) return `Must be ${maxLength} characters or fewer`;
+  if (!/^[A-Za-z ]+$/.test(value)) return 'Use letters and spaces only';
+  return null;
+}
 
 function BarangayOptions() {
   return DAGUPAN_BARANGAYS.map((b) => (
@@ -126,12 +136,11 @@ export default function CaretakersPage() {
     setSuccessMsg('');
     setCreatedTemporaryPassword('');
 
-    const payload = { ...form, firstName: toNameCase(form.firstName.trim()), lastName: toNameCase(form.lastName.trim()), email: form.email.trim().toLowerCase() };
-    setForm(payload);
+    const payload = { ...form, firstName: toNameCase(form.firstName.trim()), lastName: toNameCase(form.lastName.trim()), email: `${form.email.trim().toLowerCase()}@gmail.com` };
     // Validate each field before the request goes out.
     const errors = {
-      firstName: validateName(payload.firstName),
-      lastName: validateName(payload.lastName),
+      firstName: validateCaretakerName(payload.firstName, FIRST_NAME_MAX_LENGTH),
+      lastName: validateCaretakerName(payload.lastName, LAST_NAME_MAX_LENGTH),
       email: validateGmail(payload.email),
       phone: validatePhone(payload.phone),
       serviceBarangay: payload.serviceBarangay ? null : 'Select the barangay this caretaker works in',
@@ -172,14 +181,17 @@ export default function CaretakersPage() {
             {createdTemporaryPassword && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-semibold">Temporary password</p><p className="mt-1 font-mono text-base">{createdTemporaryPassword}</p><p className="mt-1 text-xs">Share it with the caretaker. The activation page requires them to set a new password before they can use the account.</p></div>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="First name" error={formErrors.firstName}>
-                <TextInput maxLength={80} value={form.firstName} onChange={(e) => setField('firstName', capitalizeFirst(e.target.value))} error={formErrors.firstName} />
+                <TextInput maxLength={FIRST_NAME_MAX_LENGTH} value={form.firstName} onChange={(e) => setField('firstName', capitalizeFirst(e.target.value.replace(/[^A-Za-z ]/g, '')))} error={formErrors.firstName} />
               </Field>
               <Field label="Last name" error={formErrors.lastName}>
-                <TextInput maxLength={80} value={form.lastName} onChange={(e) => setField('lastName', capitalizeFirst(e.target.value))} error={formErrors.lastName} />
+                <TextInput maxLength={LAST_NAME_MAX_LENGTH} value={form.lastName} onChange={(e) => setField('lastName', capitalizeFirst(e.target.value.replace(/[^A-Za-z ]/g, '')))} error={formErrors.lastName} />
               </Field>
             </div>
             <Field label="Email (Gmail only)" error={formErrors.email}>
-              <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setField('email', e.target.value)} error={formErrors.email} />
+              <div className="flex">
+                <TextInput type="text" inputMode="email" maxLength={64} value={form.email} onChange={(e) => setField('email', e.target.value.replace(/@gmail\.com$/i, '').replace(/[^A-Za-z0-9._%+-]/g, ''))} error={formErrors.email} className="min-w-0 rounded-r-none" aria-label="Gmail username" />
+                <span className={`flex min-h-[2.5rem] items-center rounded-r-lg border border-l-0 px-3 text-sm ${formErrors.email ? 'border-red-400 text-gray-500' : 'border-gray-300 text-gray-600'}`}>@gmail.com</span>
+              </div>
             </Field>
             <Field label="Phone (+63)" error={formErrors.phone}>
               <PhoneInput value={form.phone} onChange={(value) => setField('phone', value)} error={formErrors.phone} placeholder="917 123 4567" />
