@@ -56,10 +56,10 @@ export default function ResetPasswordPage() {
       <form onSubmit={onSubmit} className="space-y-4">
         <ErrorBanner message={error} />
         <SuccessBanner message={success} />
-        <Field label="Email">
+        <Field required label="Email">
           <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         </Field>
-        <Field label="Verification code">
+        <Field required label="Verification code">
           <TextInput
             value={form.code}
             onChange={(e) => setForm({ ...form, code: e.target.value.replace(/\D/g, '').slice(0, 6) })}
@@ -69,13 +69,13 @@ export default function ResetPasswordPage() {
           />
         </Field>
         <div>
-          <Field label="New password">
+          <Field required label="New password">
             <PasswordInput value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} required />
           </Field>
           <PasswordStrengthIndicator password={form.newPassword} />
         </div>
         <div>
-          <Field label="Confirm password">
+          <Field required label="Confirm password">
             <PasswordInput
               value={confirmPassword}
               onChange={(e) => {

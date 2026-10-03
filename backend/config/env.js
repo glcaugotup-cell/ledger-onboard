@@ -10,11 +10,16 @@ function required(name, fallback) {
 }
 
 // CLIENT_ORIGIN may list several comma-separated origins (e.g. the Vercel URL
-// and http://localhost:5173). The first one is used to build links in emails.
+// and http://localhost:5173). Email links can use a separate public app URL.
 const clientOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);
+
+const emailAppUrl = new URL((process.env.EMAIL_APP_URL || clientOrigins[0]).trim());
+if (!['http:', 'https:'].includes(emailAppUrl.protocol) || emailAppUrl.username || emailAppUrl.password) {
+  throw new Error('EMAIL_APP_URL must be an http(s) frontend URL without credentials');
+}
 
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -23,6 +28,7 @@ const env = {
   port: Number(process.env.PORT) || 5000,
   clientOrigins,
   clientOrigin: clientOrigins[0],
+  emailAppUrl: emailAppUrl.origin,
   // Behind a hosting proxy (Render), trust one hop so req.ip is the real client IP for rate limiting.
   trustProxy: process.env.TRUST_PROXY !== undefined ? Number(process.env.TRUST_PROXY) : process.env.NODE_ENV === 'production' ? 1 : 0,
 

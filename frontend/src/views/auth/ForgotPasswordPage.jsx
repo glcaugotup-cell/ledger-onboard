@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
       <form onSubmit={onSubmit} className="space-y-4">
         <ErrorBanner message={error} />
         <SuccessBanner message={message} />
-        <Field label="Email">
+        <Field required label="Email">
           <TextInput type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} required />
         </Field>
         <Button type="submit" className="w-full" loading={loading}>

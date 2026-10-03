@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext.jsx';
 import { NotificationProvider } from './context/NotificationContext.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import ScrollToTop from './routes/ScrollToTop.jsx';
+import PageTransition from './routes/PageTransition.jsx';
 import ServerWakeNotice from './components/ServerWakeNotice.jsx';
 
 import LandingPage from './views/public/LandingPage.jsx';
@@ -52,69 +53,71 @@ export default function App() {
         <NotificationProvider>
           <ScrollToTop />
           <ServerWakeNotice />
-          <Routes>
-            {/* Public */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/properties/:id" element={<PropertyDetailPublicPage />} />
-            {/* Login/Register share a persistent split-screen shell so
-                switching between them slides instead of hard-swapping. */}
-            <Route element={<AuthSplitLayout />}>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-            </Route>
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/activate-caretaker" element={<ActivateCaretakerPage />} />
-            <Route path="/account-recovery" element={<AccountRecoveryPage />} />
-            <Route path="/unauthorized" element={<UnauthorizedPage />} />
+          <PageTransition>
+            <Routes>
+              {/* Public */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/properties/:id" element={<PropertyDetailPublicPage />} />
+              {/* Login/Register share a persistent split-screen shell so
+                  switching between them slides instead of hard-swapping. */}
+              <Route element={<AuthSplitLayout />}>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+              </Route>
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/activate-caretaker" element={<ActivateCaretakerPage />} />
+              <Route path="/account-recovery" element={<AccountRecoveryPage />} />
+              <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-            {/* Tenant */}
-            <Route element={<ProtectedRoute roles={['tenant']} />}>
-              <Route path="/tenant/discover" element={<DiscoverPage />} />
-              <Route path="/tenant/properties/:id" element={<TenantPropertyDetailPage />} />
-              <Route path="/tenant/reservations" element={<MyReservationsPage />} />
-              <Route path="/tenant/billing" element={<MyBillingPage />} />
-              <Route path="/tenant/issues" element={<MaintenanceIssuesPage />} />
-              <Route path="/tenant/profile" element={<ProfilePage />} />
-              {/* The page was called "Account" before every role got a Profile; keep old links working. */}
-              <Route path="/tenant/account" element={<Navigate to="/tenant/profile" replace />} />
-            </Route>
+              {/* Tenant */}
+              <Route element={<ProtectedRoute roles={['tenant']} />}>
+                <Route path="/tenant/discover" element={<DiscoverPage />} />
+                <Route path="/tenant/properties/:id" element={<TenantPropertyDetailPage />} />
+                <Route path="/tenant/reservations" element={<MyReservationsPage />} />
+                <Route path="/tenant/billing" element={<MyBillingPage />} />
+                <Route path="/tenant/issues" element={<MaintenanceIssuesPage />} />
+                <Route path="/tenant/profile" element={<ProfilePage />} />
+                {/* The page was called "Account" before every role got a Profile; keep old links working. */}
+                <Route path="/tenant/account" element={<Navigate to="/tenant/profile" replace />} />
+              </Route>
 
-            {/* Landlord */}
-            <Route element={<ProtectedRoute roles={['landlord']} />}>
-              <Route path="/landlord/dashboard" element={<LandlordDashboardPage />} />
-              <Route path="/landlord/properties" element={<PropertiesPage />} />
-              <Route path="/landlord/properties/new" element={<PropertyFormPage />} />
-              <Route path="/landlord/properties/:id" element={<PropertyManagePage />} />
-              <Route path="/landlord/caretakers" element={<CaretakersPage />} />
-              <Route path="/landlord/reservations" element={<LandlordReservationsPage />} />
-              <Route path="/landlord/billing" element={<LandlordBillingPage />} />
-              <Route path="/landlord/payments" element={<LandlordPaymentsPage />} />
-              <Route path="/landlord/issues" element={<MaintenanceIssuesPage />} />
-              <Route path="/landlord/verification" element={<BusinessVerificationPage />} />
-              <Route path="/landlord/profile" element={<ProfilePage />} />
-            </Route>
+              {/* Landlord */}
+              <Route element={<ProtectedRoute roles={['landlord']} />}>
+                <Route path="/landlord/dashboard" element={<LandlordDashboardPage />} />
+                <Route path="/landlord/properties" element={<PropertiesPage />} />
+                <Route path="/landlord/properties/new" element={<PropertyFormPage />} />
+                <Route path="/landlord/properties/:id" element={<PropertyManagePage />} />
+                <Route path="/landlord/caretakers" element={<CaretakersPage />} />
+                <Route path="/landlord/reservations" element={<LandlordReservationsPage />} />
+                <Route path="/landlord/billing" element={<LandlordBillingPage />} />
+                <Route path="/landlord/payments" element={<LandlordPaymentsPage />} />
+                <Route path="/landlord/issues" element={<MaintenanceIssuesPage />} />
+                <Route path="/landlord/verification" element={<BusinessVerificationPage />} />
+                <Route path="/landlord/profile" element={<ProfilePage />} />
+              </Route>
 
-            {/* Caretaker */}
-            <Route element={<ProtectedRoute roles={['caretaker']} />}>
-              <Route path="/caretaker/rooms" element={<AssignedRoomsPage />} />
-              <Route path="/caretaker/utilities" element={<UtilityEntryPage />} />
-              <Route path="/caretaker/payments" element={<CashPaymentsPage />} />
-              <Route path="/caretaker/issues" element={<MaintenanceIssuesPage />} />
-              <Route path="/caretaker/profile" element={<ProfilePage />} />
-            </Route>
+              {/* Caretaker */}
+              <Route element={<ProtectedRoute roles={['caretaker']} />}>
+                <Route path="/caretaker/rooms" element={<AssignedRoomsPage />} />
+                <Route path="/caretaker/utilities" element={<UtilityEntryPage />} />
+                <Route path="/caretaker/payments" element={<CashPaymentsPage />} />
+                <Route path="/caretaker/issues" element={<MaintenanceIssuesPage />} />
+                <Route path="/caretaker/profile" element={<ProfilePage />} />
+              </Route>
 
-            {/* Admin */}
-            <Route element={<ProtectedRoute roles={['admin']} />}>
-              <Route path="/admin/users" element={<UsersPage />} />
-              <Route path="/admin/reviews" element={<ReviewModerationPage />} />
-              <Route path="/admin/logs" element={<AuditLogsPage />} />
-              <Route path="/admin/landlord-verifications" element={<LandlordVerificationPage />} />
-              <Route path="/admin/profile" element={<ProfilePage />} />
-            </Route>
+              {/* Admin */}
+              <Route element={<ProtectedRoute roles={['admin']} />}>
+                <Route path="/admin/users" element={<UsersPage />} />
+                <Route path="/admin/reviews" element={<ReviewModerationPage />} />
+                <Route path="/admin/logs" element={<AuditLogsPage />} />
+                <Route path="/admin/landlord-verifications" element={<LandlordVerificationPage />} />
+                <Route path="/admin/profile" element={<ProfilePage />} />
+              </Route>
 
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </PageTransition>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>

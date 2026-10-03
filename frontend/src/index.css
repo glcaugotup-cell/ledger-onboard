@@ -17,6 +17,25 @@
 
 :root {
   color-scheme: light;
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-panel: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Reserve the scrollbar space so tall forms do not shift the whole layout. */
+html {
+  scrollbar-gutter: stable;
+}
+
+@layer base {
+  :where(a, button, input, select, textarea) {
+    transition-property: color, background-color, border-color, box-shadow;
+    transition-duration: 180ms;
+    transition-timing-function: var(--ease-smooth);
+  }
+}
+
+.ui-button:not(:disabled):active {
+  translate: 0 1px;
 }
 
 body {
@@ -59,7 +78,7 @@ body {
 @keyframes auth-slide-in-right {
   from {
     opacity: 0;
-    transform: translateX(28px);
+    transform: translateX(12px);
   }
   to {
     opacity: 1;
@@ -70,7 +89,7 @@ body {
 @keyframes auth-slide-in-left {
   from {
     opacity: 0;
-    transform: translateX(-28px);
+    transform: translateX(-12px);
   }
   to {
     opacity: 1;
@@ -79,9 +98,206 @@ body {
 }
 
 .animate-auth-slide-in-right {
-  animation: auth-slide-in-right 380ms ease-out;
+  animation: auth-slide-in-right 280ms var(--ease-smooth);
 }
 
 .animate-auth-slide-in-left {
-  animation: auth-slide-in-left 380ms ease-out;
+  animation: auth-slide-in-left 280ms var(--ease-smooth);
+}
+
+@keyframes panel-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-panel-enter {
+  animation: panel-enter 220ms var(--ease-smooth);
+}
+
+@keyframes drawer-enter {
+  from { opacity: 0.6; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-drawer-enter {
+  animation: drawer-enter 220ms var(--ease-smooth);
+}
+
+/* One continuous slide, with a fast exit and a gentle, delayed reveal.
+   Both brand copies share a grid cell, keeping their positions stable. */
+.auth-switcher {
+  --auth-slide-duration: 640ms;
+  --auth-slide-ease: cubic-bezier(0.65, 0, 0.25, 1);
+  --auth-panel-curve: 120px;
+}
+
+.auth-hero-grid {
+  min-height: 100svh;
+}
+
+@media (min-width: 1024px) {
+  .auth-hero-grid {
+    height: 100svh;
+  }
+
+  .auth-hero .auth-form-panel {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .auth-hero .auth-form-shell {
+    padding: 96px 40px 40px;
+  }
+
+  .auth-hero .auth-form-panel:first-child .auth-form-shell {
+    padding: 96px 32px 32px;
+  }
+
+  .auth-hero .auth-green-panel {
+    padding: 96px 40px 32px;
+  }
+
+  .auth-register-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 384px;
+  }
+
+  .auth-register-form > * {
+    margin-block: 0;
+  }
+
+  .auth-register-form label.block {
+    position: relative;
+  }
+
+  .auth-register-form label.block > span:first-child {
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    z-index: 10;
+    margin: 0;
+    padding-inline: 4px;
+    background: white;
+    font-size: 10px;
+    line-height: 12px;
+  }
+
+  .auth-register-form input:not([type="checkbox"]),
+  .auth-register-form select {
+    height: 42px;
+  }
+
+  .auth-register-form input[type="tel"] {
+    height: 40px;
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 740px) {
+  .auth-hero .auth-brand-copy img {
+    max-height: 25svh;
+    object-fit: contain;
+  }
+}
+
+.auth-green-panel {
+  border-radius: 0 var(--auth-panel-curve) var(--auth-panel-curve) 0;
+  transition: transform var(--auth-slide-duration) var(--auth-slide-ease),
+    border-radius var(--auth-slide-duration) var(--auth-slide-ease);
+}
+
+.auth-switcher[data-auth-mode="register"] .auth-green-panel {
+  border-radius: var(--auth-panel-curve) 0 0 var(--auth-panel-curve);
+}
+
+.auth-brand-copy {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+}
+
+.auth-brand-copy[data-active="true"] {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition: opacity 300ms var(--ease-smooth) 200ms,
+    transform 380ms var(--ease-smooth) 200ms;
+}
+
+@media (min-width: 1024px) {
+  .auth-form-panel {
+    animation: none;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease-out;
+  }
+
+  .auth-form-panel[data-active="true"] {
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity 320ms var(--ease-smooth) 240ms;
+  }
+}
+
+@media (min-width: 1280px) {
+  .auth-switcher { --auth-panel-curve: 140px; }
+}
+
+@media (min-width: 768px) {
+  /* Shared grid cell preserves the taller page's natural document height. */
+  .auth-route-brand,
+  .auth-route-form {
+    grid-area: 1 / 1;
+    position: relative;
+  }
+
+  .auth-route-brand {
+    z-index: 1;
+    width: 50%;
+    transform: translateX(0);
+    transition: transform var(--auth-slide-duration) var(--auth-slide-ease),
+      border-radius var(--auth-slide-duration) var(--auth-slide-ease);
+  }
+
+  .auth-route-switcher[data-auth-mode="register"] .auth-route-brand {
+    transform: translateX(100%);
+  }
+
+  .auth-route-form {
+    width: 50%;
+    left: 50%;
+    /* Keep fixed dialogs attached to the viewport: no form transform. */
+    transition: left var(--auth-slide-duration) var(--auth-slide-ease);
+  }
+
+  .auth-route-switcher[data-auth-mode="register"] .auth-route-form {
+    left: 0;
+  }
+}
+
+/* Keep controls immediate and content visible when motion is reduced. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .ui-button:not(:disabled):active {
+    translate: none;
+  }
+
+  .auth-green-panel,
+  .auth-brand-copy,
+  .auth-form-panel,
+  .auth-route-brand,
+  .auth-route-form {
+    animation: none !important;
+    transition: none !important;
+  }
 }

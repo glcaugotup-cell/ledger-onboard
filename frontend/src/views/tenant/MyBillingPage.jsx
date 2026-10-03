@@ -57,7 +57,7 @@ function PaySoaForm({ soa, onDone }) {
   return (
     <form onSubmit={onSubmit} noValidate className="mt-3 space-y-3 border-t border-gray-100 pt-3">
       <ErrorBanner message={error} />
-      <Field label="Amount (₱)" error={fieldErrors.amount}>
+      <Field required label="Amount (₱)" error={fieldErrors.amount}>
         <TextInput
           type="number"
           min="0.01"
@@ -79,7 +79,7 @@ function PaySoaForm({ soa, onDone }) {
         ) : <p className="text-sm text-gray-600">{qrError || 'Loading landlord QR code…'}</p>}
         <p className="mt-2 text-xs text-gray-500">Scan with GCash, complete the transfer, then enter the transaction reference shown in your receipt.</p>
       </div>
-      <Field label="GCash transaction reference" error={fieldErrors.referenceNumber}>
+      <Field required label="GCash transaction reference" error={fieldErrors.referenceNumber}>
         <TextInput value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} maxLength={100} placeholder="Enter the reference from your GCash receipt" error={fieldErrors.referenceNumber} />
       </Field>
       <Button type="submit" loading={loading} disabled={!qrUrl} className="w-full">

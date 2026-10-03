@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import ConfirmDialog from './ui/ConfirmDialog.jsx';
-import { TextArea } from './ui/Field.jsx';
+import { Field, FieldRequirement, TextArea } from './ui/Field.jsx';
 import { capitalizeFirst } from '../utils/textFormat.js';
 
 const OTHER_REASON = 'Other';
@@ -65,7 +65,7 @@ export default function ReasonDialog({ open, title, message, reasons = [], confi
       <fieldset>
         {!freeTextOnly && (
           <>
-            <legend className="mb-2 text-sm font-medium text-gray-700">Reason</legend>
+            <legend className="mb-2 text-sm font-medium text-gray-700">Reason<FieldRequirement required={required} /></legend>
             <div className="space-y-1.5">
               {[...reasons, OTHER_REASON].map((option) => (
                 <label key={option} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
@@ -82,8 +82,7 @@ export default function ReasonDialog({ open, title, message, reasons = [], confi
           </>
         )}
         {otherChosen && (
-          <label className="mt-2 block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">{freeTextOnly ? 'Reason' : 'Other reason'}</span>
+          <Field className="mt-2" required={required} label={freeTextOnly ? 'Reason' : 'Other reason'}>
             <TextArea
               rows={2}
               maxLength={MAX_REASON_LENGTH}
@@ -92,7 +91,7 @@ export default function ReasonDialog({ open, title, message, reasons = [], confi
               placeholder="Type the reason"
               error={touched && validation}
             />
-          </label>
+          </Field>
         )}
         {touched && validation && <p className="mt-2 text-xs text-red-600">{validation}</p>}
       </fieldset>

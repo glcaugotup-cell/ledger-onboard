@@ -27,6 +27,7 @@ Thumbs.db
 # Test coverage / temporary test uploads
 coverage/
 backend/tests/.tmp-uploads/
+backend/.email-previews/
 
 # Local AI-assistant tool state
 .claude/

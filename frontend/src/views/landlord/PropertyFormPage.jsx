@@ -351,7 +351,7 @@ export default function PropertyFormPage() {
               </div>
 
               <div className="space-y-4">
-                <Field label="Property name" error={errors.propertyName}>
+                <Field required label="Property name" error={errors.propertyName}>
                   <TextInput
                     value={form.propertyName}
                     onChange={update('propertyName')}
@@ -373,7 +373,7 @@ export default function PropertyFormPage() {
                 </Field>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Property type" error={errors.propertyType}>
+                  <Field required label="Property type" error={errors.propertyType}>
                     <Select value={form.propertyType} onChange={update('propertyType')} error={errors.propertyType}>
                       <option value="" disabled>
                         Choose property type
@@ -385,7 +385,7 @@ export default function PropertyFormPage() {
                       ))}
                     </Select>
                   </Field>
-                  <Field label="Gender policy" error={errors.tenantGenderPolicy}>
+                  <Field required label="Gender policy" error={errors.tenantGenderPolicy}>
                     <Select value={form.tenantGenderPolicy} onChange={update('tenantGenderPolicy')} error={errors.tenantGenderPolicy}>
                       <option value="" disabled>
                         Choose gender policy
@@ -436,7 +436,7 @@ export default function PropertyFormPage() {
               </div>
 
               <div className="space-y-4">
-                <Field label="Street" error={errors.street}>
+                <Field required label="Street" error={errors.street}>
                   <div className="relative">
                     <TextInput
                       value={form.street}
@@ -466,7 +466,7 @@ export default function PropertyFormPage() {
                     if (!e.currentTarget.contains(e.relatedTarget)) setBarangayOpen(false);
                   }}
                 >
-                  <Field label="Barangay" error={errors.barangay}>
+                  <Field required label="Barangay" error={errors.barangay}>
                     <div className="relative">
                       <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                       <TextInput
@@ -507,7 +507,7 @@ export default function PropertyFormPage() {
                 )}
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Latitude">
+                  <Field required label="Latitude">
                     <TextInput
                       value={selectedBarangay ? selectedBarangay.lat : ''}
                       readOnly
@@ -516,7 +516,7 @@ export default function PropertyFormPage() {
                       className="cursor-not-allowed bg-gray-50 text-gray-500"
                     />
                   </Field>
-                  <Field label="Longitude">
+                  <Field required label="Longitude">
                     <TextInput
                       value={selectedBarangay ? selectedBarangay.lng : ''}
                       readOnly
@@ -575,7 +575,7 @@ export default function PropertyFormPage() {
                   </p>
                 </Field>
 
-                <Field label="Property Video (Optional)" hint="Upload a short video tour of your property.">
+                <Field label="Property Video" hint="Upload a short video tour of your property.">
                   {!video ? (
                     <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/60 px-4 py-6 text-center hover:border-brand-300">
                       <VideoCameraIcon className="h-6 w-6 text-brand-500" />

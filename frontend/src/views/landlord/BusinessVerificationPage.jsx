@@ -17,6 +17,7 @@ import LandlordVerificationApi from '../../services/LandlordVerificationApi.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
+import { FieldRequirement } from '../../components/ui/Field.jsx';
 import { Badge, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
 
@@ -50,7 +51,7 @@ function DocumentUploadCard({ label, file, onFileChange, inputId }) {
           <DocumentTextIcon className="h-5 w-5" />
         </span>
         <div>
-          <p className="font-semibold text-gray-900">{label}</p>
+          <p className="font-semibold text-gray-900">{label}<FieldRequirement required /></p>
           <p className="text-xs font-medium text-amber-600">Current Year required</p>
         </div>
       </div>
@@ -80,7 +81,7 @@ function DocumentUploadCard({ label, file, onFileChange, inputId }) {
         <Button type="button" className="text-xs">
           Choose file
         </Button>
-        <input id={inputId} type="file" accept={ACCEPTED_TYPES} className="hidden" onChange={(e) => pick(e.target.files)} />
+        <input id={inputId} type="file" accept={ACCEPTED_TYPES} aria-label={label} aria-required="true" className="hidden" onChange={(e) => pick(e.target.files)} />
         <p className="text-xs text-gray-500">Accepted formats: PDF, JPG, PNG (Max 5MB)</p>
       </label>
       {fileError && (

@@ -50,7 +50,8 @@ npm install
 |---|---|
 | `MONGODB_URI` | MongoDB connection string |
 | `JWT_SECRET`, `JWT_REFRESH_SECRET` | Long random strings used to sign access and refresh tokens |
-| `CLIENT_ORIGIN` | Frontend URL(s) allowed by CORS, comma-separated; the first is used in email links (default `http://localhost:5173`) |
+| `CLIENT_ORIGIN` | Frontend URL(s) allowed by CORS, comma-separated (default `http://localhost:5173`) |
+| `EMAIL_APP_URL` | Public frontend URL for email links, e.g. `https://ledger-onboard.vercel.app`; defaults to the first `CLIENT_ORIGIN` when unset |
 | `EMAIL_TRANSPORT` | `console` prints emails (OTP codes, invitations) in the backend terminal; any other value sends real email using the `SMTP_*` settings |
 | `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing email settings (for Gmail, use an App Password) |
 | `ACCOUNT_ARCHIVE_WARNING_DAYS`, `ACCOUNT_ARCHIVE_DAYS`, `ACCOUNT_LIFECYCLE_CRON` | Inactivity warning/archive thresholds and the daily job schedule |
@@ -59,6 +60,23 @@ npm install
 | `SEED_DEMO_PASSWORD` | Password given to demo accounts created by `npm run seed` (strong password required; never commit it) |
 
 Never commit `backend/.env`; it is excluded by `.gitignore`.
+
+### Email links and styling
+
+Set `EMAIL_APP_URL=https://ledger-onboard.vercel.app` in the backend environment to point email buttons and caretaker invitations at the deployed app. Set it on your backend hosting service (Render) as well as in `backend/.env` when needed locally. In production, allow the frontend with `CLIENT_ORIGIN=https://ledger-onboard.vercel.app`. Restart the backend after changing environment variables and deploy backend code changes for the new email templates to take effect.
+
+The deployed frontend must call the backend that created the invitation: that backend must have the caretaker record and the JWT secret used to sign its activation token. A Vercel URL alone does not make an invitation from a separate local database work in production. Existing emails keep their original links; new invitations use the updated setting.
+
+Edit wording in `backend/services/EmailService.js` and the shared colors, spacing, and layout in `backend/utils/emailTemplate.js`. Emails include inline HTML styles and a plain-text alternative. Names, reasons, codes, and URLs are escaped before being inserted into HTML.
+
+To preview all templates locally with sample data (no email is sent):
+
+```bash
+cd backend
+npm run preview:emails
+```
+
+Open `backend/.email-previews/caretaker-invitation.html` or any of the other generated HTML files in a browser. Browser previews show the layout; Gmail may adjust colors in dark mode.
 
 The frontend needs no environment file for local development: the Vite dev server proxies `/api` and `/uploads` to `http://localhost:5000`. For a deployed build, set `VITE_API_URL` to the backend origin (see `frontend/.env.example`), e.g. `https://ledger-onboard-backend.onrender.com`.
 

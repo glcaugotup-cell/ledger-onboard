@@ -5,7 +5,7 @@ import ReservationApi from '../../services/ReservationApi.js';
 import CaretakerApi from '../../services/CaretakerApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
-import { Select } from '../../components/ui/Field.jsx';
+import { Field, Select } from '../../components/ui/Field.jsx';
 import { CalendarDaysIcon, CheckCircleIcon, ClockIcon, HomeModernIcon } from '@heroicons/react/24/outline';
 import { EmptyState, ErrorBanner, LoadingState, StatusBadge } from '../../components/ui/Feedback.jsx';
 import { formatDate } from '../../utils/format.js';
@@ -158,6 +158,7 @@ export default function ReservationsPage() {
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     {who(r)}
                     <div className="flex flex-col gap-2 border-t border-gray-100 pt-3 sm:flex-row sm:items-center xl:border-0 xl:pt-0">
+                      <Field label="Assign caretaker">
                       <Select
                         aria-label={`Assign a caretaker to ${r.tenantId?.fullName || 'this tenant'}`}
                         value={assignments[r._id] || ''}
@@ -165,10 +166,11 @@ export default function ReservationsPage() {
                         className="sm:w-60"
                       >
                         <option value="" disabled hidden>
-                          Assign caretaker (optional)
+                          Select caretaker
                         </option>
                         <CaretakerOptions caretakers={caretakers} barangay={r.propertyId?.address?.barangay} />
                       </Select>
+                      </Field>
                       <div className="grid grid-cols-2 gap-2 sm:flex">
                         <Button
                           loading={busyId === r._id}
@@ -199,10 +201,12 @@ export default function ReservationsPage() {
                     {who(r)}
                     <div className="flex items-center justify-between gap-2 sm:justify-end">
                       <StatusBadge status={r.status} tones={STATUS_TONE} />
+                      <Field required label="Reassign caretaker">
                       <Select aria-label={`Reassign caretaker for ${r.tenantId?.fullName || 'tenant'}`} value={assignments[r._id] || ''} onChange={(e) => setAssignments({ ...assignments, [r._id]: e.target.value })} className="sm:w-56">
                         <option value="">Select caretaker</option>
                         <CaretakerOptions caretakers={caretakers} barangay={r.propertyId?.address?.barangay} />
                       </Select>
+                      </Field>
                       <Button variant="secondary" loading={busyId === r._id} disabled={!assignments[r._id]} onClick={() => reassign(r._id)}>Reassign</Button>
                       <Button variant="secondary" loading={busyId === r._id} onClick={() => act(r._id, 'completed')}>
                         Mark completed

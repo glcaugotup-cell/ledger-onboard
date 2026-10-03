@@ -55,17 +55,17 @@ export default function AccountRecoveryPage() {
       <form onSubmit={onSubmit} className="space-y-4">
         <ErrorBanner message={error} />
         <SuccessBanner message={success} />
-        <Field label="Registered email">
+        <Field required label="Registered email">
           <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         </Field>
         <div>
-          <Field label="New password">
+          <Field required label="New password">
             <PasswordInput value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} required />
           </Field>
           <PasswordStrengthIndicator password={form.newPassword} />
         </div>
         <div>
-          <Field label="Confirm password">
+          <Field required label="Confirm password">
             <PasswordInput
               value={confirmPassword}
               onChange={(e) => {

@@ -13,7 +13,7 @@ export default function AuthSplitLayout() {
   const isRegister = location.pathname === '/register';
 
   const formPanel = (
-    <div className="flex w-full flex-col justify-center px-6 py-10 sm:px-10 md:w-1/2 md:px-14 lg:px-20">
+    <div className="auth-route-form order-1 flex w-full flex-col justify-center px-6 py-10 sm:px-10 md:px-14 lg:px-20">
       <Link to="/" className="mb-8 flex items-center gap-3">
         <img src={logo} alt="Ledger OnBoard" className="h-12 w-12 rounded-2xl object-cover shadow-md" />
         <span>
@@ -35,18 +35,13 @@ export default function AuthSplitLayout() {
 
   const brandPanel = (
     <div
-      className={`relative flex w-full flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-800 to-brand-900 px-8 py-10 text-white sm:px-12 md:w-1/2 md:py-14 ${
+      className={`auth-route-brand relative order-2 flex w-full flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-800 to-brand-900 px-8 py-10 text-white sm:px-12 md:py-14 ${
         isRegister ? 'md:rounded-l-[3rem]' : 'md:rounded-r-[3rem]'
       }`}
     >
       {/* Soft decorative blobs — static, no motion, just texture. */}
       <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/5 blur-2xl" />
       <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-amber-400/10 blur-3xl" />
-
-      <div className="relative z-10 mx-auto flex w-full max-w-xl items-center justify-start gap-2 text-xs font-medium tracking-wide text-brand-100">
-        <ShieldIcon className="h-4 w-4" />
-        <span>Safe · Trusted · For You</span>
-      </div>
 
       <div key={location.pathname} className={`relative z-10 mx-auto w-full max-w-xl ${isRegister ? 'animate-auth-slide-in-right' : 'animate-auth-slide-in-left'}`}>
         <span className="mb-3 block h-1 w-10 rounded-full bg-amber-400" />
@@ -106,7 +101,7 @@ export default function AuthSplitLayout() {
 
   // On md+ screens, register mode puts the form on the left and the brand panel on the right.
   return (
-    <div className={`flex min-h-screen flex-col bg-white ${isRegister ? 'md:flex-row-reverse' : 'md:flex-row'}`}>
+    <div className="auth-switcher auth-route-switcher flex min-h-screen flex-col bg-white md:grid md:grid-cols-1" data-auth-mode={isRegister ? 'register' : 'login'}>
       {brandPanel}
       {formPanel}
     </div>

@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import AuthApi from '../../services/AuthApi.js';
 import { Field, TextInput } from '../../components/ui/Field.jsx';
 import Button from '../../components/ui/Button.jsx';
+import PasswordInput from '../../components/ui/PasswordInput.jsx';
+import AuthIntro from './AuthIntro.jsx';
 import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { useAuthedRedirect } from '../../routes/useAuthedRedirect.js';
@@ -122,7 +124,7 @@ export default function LoginPage() {
 
         <form onSubmit={onVerifyOtp} className="mt-6 space-y-4">
           <ErrorBanner message={error} />
-          <Field label="Verification code">
+          <Field required label="Verification code">
             <TextInput
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -142,8 +144,7 @@ export default function LoginPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900">Login</h1>
-      <p className="mt-1 text-sm text-gray-500">Ledger Onboard</p>
+      <AuthIntro />
 
       <form onSubmit={onSubmit} noValidate className="mt-6 space-y-4">
         <ErrorBanner message={error} />
@@ -156,9 +157,10 @@ export default function LoginPage() {
           </p>
         )}
         {verified && <SuccessBanner message="Email verified! You can now log in." />}
-        <Field label="Email" error={touched.email ? errors.email : undefined}>
+        <Field required label="Email" error={touched.email ? errors.email : undefined}>
           <TextInput
             type="email"
+            autoComplete="username"
             maxLength={254}
             value={form.email}
             onChange={(e) => updateField('email', e.target.value)}
@@ -167,9 +169,9 @@ export default function LoginPage() {
             error={touched.email ? errors.email : undefined}
           />
         </Field>
-        <Field label="Password" error={touched.password ? errors.password : undefined}>
-          <TextInput
-            type="password"
+        <Field required label="Password" error={touched.password ? errors.password : undefined}>
+          <PasswordInput
+            autoComplete="current-password"
             maxLength={256}
             value={form.password}
             onChange={(e) => updateField('password', e.target.value)}
@@ -191,15 +193,16 @@ export default function LoginPage() {
             <p className="text-xs text-amber-700">Your email address hasn&apos;t been verified yet.</p>
             {resendMessage && <p className="text-xs text-green-700">{resendMessage}</p>}
             {verifyError && <p className="text-xs text-red-600">{verifyError}</p>}
-            <div className="flex gap-2">
-              <TextInput
-                value={verifyCode}
-                onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="123456"
-                inputMode="numeric"
-                maxLength={6}
-                className="flex-1"
-              />
+            <div className="flex items-end gap-2">
+              <Field required label="Verification code" className="min-w-0 flex-1">
+                <TextInput
+                  value={verifyCode}
+                  onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="123456"
+                  inputMode="numeric"
+                  maxLength={6}
+                />
+              </Field>
               <Button type="button" variant="secondary" loading={verifying} onClick={onVerifyEmail}>
                 Verify
               </Button>

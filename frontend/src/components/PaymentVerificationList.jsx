@@ -200,7 +200,7 @@ export default function PaymentVerificationList({ canVerify, landlordMode = fals
           }}
           onCancel={() => { setAdjusting(null); setBalanceError(''); }}
         >
-          <Field label="New remaining balance (₱)">
+          <Field required label="New remaining balance (₱)">
             <TextInput type="number" min="0" max={adjusting.remainingBalance} step="0.01" value={balanceValue} onChange={(e) => { setBalanceValue(e.target.value); setBalanceError(''); }} />
           </Field>
         </ConfirmDialog>

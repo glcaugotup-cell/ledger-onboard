@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import PropertyMap from './map/PropertyMap.jsx';
 import Button from './ui/Button.jsx';
 import Card from './ui/Card.jsx';
+import { Field } from './ui/Field.jsx';
 import { Badge, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from './ui/Feedback.jsx';
 import { formatDate, formatPeso } from '../utils/format.js';
 import { describeApiError } from '../utils/errors.js';
@@ -318,8 +319,7 @@ export default function PropertyDetailContent() {
             <Card title={`Reserve Room ${selectedRoom.roomNumber}`} className="mt-4">
               <form onSubmit={onReserve} className="space-y-3" noValidate>
                 <ErrorBanner message={reserveError} />
-                <label className="block text-sm">
-                  <span className="mb-1 block font-medium text-gray-700">Preferred move-in date</span>
+                <Field required label="Preferred move-in date">
                   <input
                     type="date"
                     required
@@ -333,7 +333,7 @@ export default function PropertyDetailContent() {
                     className={`min-h-[2.5rem] w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 ${moveInError ? 'border-red-400' : 'border-gray-300'}`}
                   />
                   {moveInError && <span className="mt-1 block text-xs text-red-600">{moveInError}</span>}
-                </label>
+                </Field>
                 <div className="flex gap-2">
                   <Button type="submit" loading={reserving} className="flex-1">
                     Submit request

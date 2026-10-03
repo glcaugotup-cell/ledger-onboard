@@ -1,3 +1,6 @@
+// Keep CORS local while requiring invitations to use the public deployment.
+const previousEmailAppUrl = process.env.EMAIL_APP_URL;
+process.env.EMAIL_APP_URL = 'https://ledger-onboard.vercel.app/';
 const request = require('supertest');
 const { startTestDb, stopTestDb } = require('../helpers/testDb');
 const EmailService = require('../../services/EmailService');
@@ -30,6 +33,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await stopTestDb();
+  if (previousEmailAppUrl === undefined) delete process.env.EMAIL_APP_URL;
+  else process.env.EMAIL_APP_URL = previousEmailAppUrl;
 });
 
 describe('Caretaker invitation email', () => {
@@ -51,6 +56,9 @@ describe('Caretaker invitation email', () => {
     expect(call[0].subject).toBe('Ledger OnBoard Caretaker Invitation');
     expect(call[0].text).toMatch(/activate-caretaker\?token=/);
     expect(call[0].text).toMatch(/Owner Landlord/); // "invited by <landlord name>"
+    const invitationUrl = call[0].text.match(/https:\/\/ledger-onboard\.vercel\.app\/activate-caretaker\?token=\S+/)[0];
+    expect(call[0].html).toContain(`href="${invitationUrl}"`);
+    expect(call[0].html).not.toContain('localhost');
     sendSpy.mockRestore();
   });
 

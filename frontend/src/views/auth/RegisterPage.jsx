@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import AuthApi from '../../services/AuthApi.js';
-import { Field, Select, TextInput } from '../../components/ui/Field.jsx';
+import { Field, FieldRequirement, Select, TextInput } from '../../components/ui/Field.jsx';
 import Button from '../../components/ui/Button.jsx';
+import AuthIntro from './AuthIntro.jsx';
 import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
@@ -266,7 +267,7 @@ export default function RegisterPage() {
 
         <form onSubmit={onVerifyOtp} className="mt-6 space-y-4" noValidate>
           <ErrorBanner message={otpError} />
-          <Field label="Verification code">
+          <Field required label="Verification code">
             <TextInput
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -311,15 +312,14 @@ export default function RegisterPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900">Create Account</h1>
-      <p className="mt-1 text-sm text-gray-500">Join Ledger OnBoard to start your journey.</p>
+      <AuthIntro mode="register" />
       <SuccessBanner message={cancelMessage} />
 
       <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
         <ErrorBanner message={submitError} />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="First name" error={touched.firstName ? errors.firstName : undefined} hint="Starts with an uppercase letter — letters, spaces, hyphens, and periods only">
+          <Field required label="First name" error={touched.firstName ? errors.firstName : undefined} hint="Starts with an uppercase letter — letters, spaces, hyphens, and periods only">
             <TextInput
               maxLength={80}
               value={form.firstName}
@@ -330,7 +330,7 @@ export default function RegisterPage() {
             />
           </Field>
 
-          <Field label="Last name" error={touched.lastName ? errors.lastName : undefined} hint="Starts with an uppercase letter — letters, spaces, hyphens, and periods only">
+          <Field required label="Last name" error={touched.lastName ? errors.lastName : undefined} hint="Starts with an uppercase letter — letters, spaces, hyphens, and periods only">
             <TextInput
               maxLength={80}
               value={form.lastName}
@@ -342,7 +342,7 @@ export default function RegisterPage() {
           </Field>
         </div>
 
-        <Field label="Email (Gmail only)" error={touched.email ? errors.email : undefined}>
+        <Field required label="Email (Gmail only)" error={touched.email ? errors.email : undefined}>
           <TextInput
             type="email"
             maxLength={254}
@@ -354,7 +354,7 @@ export default function RegisterPage() {
           />
         </Field>
 
-        <Field
+        <Field required
           label="Phone number"
           error={touched.phone ? errors.phone : undefined}
           hint="Enter as 09171234567 or +639171234567 — we'll store it as +639171234567"
@@ -370,7 +370,7 @@ export default function RegisterPage() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <Field label="Password">
+            <Field required label="Password">
               <PasswordInput
                 value={form.password}
                 onChange={(e) => updateField('password', e.target.value)}
@@ -384,7 +384,7 @@ export default function RegisterPage() {
 
           <div>
             {/* A mismatch is shown live by PasswordMatchHint; the field error only covers an empty confirm. */}
-            <Field label="Confirm password" error={touched.confirmPassword && !form.confirmPassword ? errors.confirmPassword : undefined}>
+            <Field required label="Confirm password" error={touched.confirmPassword && !form.confirmPassword ? errors.confirmPassword : undefined}>
               <PasswordInput
                 value={form.confirmPassword}
                 onChange={(e) => updateConfirmPassword(e.target.value)}
@@ -396,7 +396,7 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <Field label="I am a...">
+        <Field required label="I am a...">
           <Select value={form.role} onChange={(e) => updateField('role', e.target.value)}>
             <option value="tenant">Tenant</option>
             <option value="landlord">Landlord</option>
@@ -405,7 +405,7 @@ export default function RegisterPage() {
 
         {form.role === 'tenant' && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field
+            <Field required
               label="Emergency contact person"
               error={touched.emergencyContactName ? errors.emergencyContactName : undefined}
               hint="Someone your landlord can reach if something happens to you"
@@ -419,7 +419,7 @@ export default function RegisterPage() {
               />
             </Field>
 
-            <Field label="Emergency contact CP number" error={touched.emergencyContactPhone ? errors.emergencyContactPhone : undefined}>
+            <Field required label="Emergency contact CP number" error={touched.emergencyContactPhone ? errors.emergencyContactPhone : undefined}>
               <PhoneInput
                 value={form.emergencyContactPhone}
                 onChange={(value) => updateField('emergencyContactPhone', value)}
@@ -435,6 +435,7 @@ export default function RegisterPage() {
           <label className="flex items-start gap-2 text-sm text-gray-600">
             <input
               type="checkbox"
+              aria-required="true"
               checked={form.privacyConsent}
               onChange={(e) => toggleConsent(e.target.checked)}
               className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-400"
@@ -450,7 +451,7 @@ export default function RegisterPage() {
                 }}
                 className="cursor-pointer font-medium text-gray-800 underline decoration-dotted underline-offset-2 hover:text-brand-700"
               >
-                Privacy Policy
+                Privacy Policy<FieldRequirement required />
               </button>{' '}
               — my information, including property and service-area location (GPS) data, is collected only to run this platform (registration,
               reservations, billing, and safety) and won&apos;t be used beyond that.

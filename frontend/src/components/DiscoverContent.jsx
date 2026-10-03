@@ -6,6 +6,7 @@ import PropertyMap from './map/PropertyMap.jsx';
 import { Field, Select, TextInput } from './ui/Field.jsx';
 import { EmptyState, ErrorBanner, LoadingState } from './ui/Feedback.jsx';
 import { DAGUPAN_BARANGAYS } from '../data/dagupanBarangays.js';
+import { scrollBehavior } from '../utils/motion.js';
 
 /**
  * Shared search/filter + results. `mapSection` (tenant Discover) swaps the
@@ -53,7 +54,7 @@ export default function DiscoverContent({ linkPrefix = '/tenant/properties', map
   const activeFilters = Object.values(filters).filter((v) => v !== '').length;
   const rentRangeInvalid = filters.minRent !== '' && filters.maxRent !== '' && Number(filters.minRent) > Number(filters.maxRent);
 
-  const scrollToMap = () => mapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const scrollToMap = () => mapRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   const showOnMap = (property) => {
     setMapFocus((prev) => ({ id: property._id, nonce: (prev?.nonce || 0) + 1 }));
     scrollToMap();

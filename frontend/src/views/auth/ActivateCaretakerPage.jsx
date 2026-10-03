@@ -73,14 +73,14 @@ export default function ActivateCaretakerPage() {
         <SuccessBanner message={success} />
 
         <div>
-          <Field label="New password">
+          <Field required label="New password">
             <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required />
           </Field>
           <PasswordStrengthIndicator password={password} />
         </div>
 
         <div>
-          <Field label="Confirm password">
+          <Field required label="Confirm password">
             <PasswordInput
               value={confirmPassword}
               onChange={(e) => {

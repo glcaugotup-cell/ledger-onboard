@@ -70,13 +70,13 @@ function AddRoomForm({ propertyId, onAdded }) {
       <div className="sm:col-span-2 xl:col-span-4">
         <ErrorBanner message={error} />
       </div>
-      <Field label="Room number" hint="Use a unique room label" error={fieldErrors.roomNumber}>
+      <Field required label="Room number" hint="Use a unique room label" error={fieldErrors.roomNumber}>
         <TextInput value={form.roomNumber} maxLength={20} onChange={(e) => setField('roomNumber', capitalizeFirst(e.target.value))} error={fieldErrors.roomNumber} />
       </Field>
-      <Field label="Capacity" hint="1–50 occupants" error={fieldErrors.capacity}>
+      <Field required label="Capacity" hint="1–50 occupants" error={fieldErrors.capacity}>
         <TextInput type="number" min="1" max="50" step="1" inputMode="numeric" value={form.capacity} onChange={(e) => setField('capacity', e.target.value)} error={fieldErrors.capacity} />
       </Field>
-      <Field label="Rent per slot" hint="Monthly · up to ₱1,000,000 · 2 decimal places" error={fieldErrors.monthlyBaseRent}>
+      <Field required label="Rent per slot" hint="Monthly · up to ₱1,000,000 · 2 decimal places" error={fieldErrors.monthlyBaseRent}>
         <div className="relative">
           <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center rounded-l-lg border-r border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-600">₱</span>
           <TextInput

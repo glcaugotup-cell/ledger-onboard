@@ -17,11 +17,13 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import AuthApi from '../../services/AuthApi.js';
 import { ROLE_HOME } from '../../routes/roleHome.js';
 import Button from '../../components/ui/Button.jsx';
+import { Field, FieldRequirement } from '../../components/ui/Field.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
 import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import PrivacyPolicyModal from '../../components/PrivacyPolicyModal.jsx';
 import { describeApiError } from '../../utils/errors.js';
+import { scrollBehavior } from '../../utils/motion.js';
 import {
   normalizePhToE164,
   validateGmail,
@@ -44,7 +46,7 @@ import houseExplore from '../../assets/housedesign2.webp';
  */
 
 const inputClass =
-  'w-full rounded-xl border border-gray-200 bg-gray-50/60 py-3 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 transition-all focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500';
+  'w-full rounded-xl border border-gray-200 bg-gray-50/60 py-3 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 transition-[border-color,background-color,box-shadow] duration-200 ease-[var(--ease-smooth)] focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500';
 const errorInputClass = '!border-red-400 focus:!ring-red-400';
 
 function BrandLockup({ size = 44 }) {
@@ -166,12 +168,13 @@ function HeroLoginForm({ onSwitch }) {
 
   if (mfaChallenge) {
     return (
-      <div className="flex min-h-full flex-col justify-between p-6 pt-20 lg:p-10 lg:pt-24">
+      <div className="auth-form-shell flex min-h-full flex-col justify-between p-6 pt-20 lg:p-8 lg:pb-4 lg:pt-18">
         <div className="flex justify-end">
           <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold tracking-widest text-emerald-800">
             <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600" /> SAFE &middot; TRUSTED
           </span>
         </div>
+
         <div className="mx-auto my-auto w-full max-w-sm">
           <div className="mb-3 flex justify-center">
             <BrandLockup size={48} />
@@ -179,7 +182,7 @@ function HeroLoginForm({ onSwitch }) {
           <h2 className="mb-0.5 text-center text-2xl font-extrabold text-gray-900">Enter verification code</h2>
           <p className="mb-6 text-center text-xs text-gray-500">We sent a 6-digit code to {mfaChallenge.email}</p>
           <form onSubmit={onVerifyOtp} className="space-y-3.5">
-            <input
+            <Field required label="Verification code" labelClassName="mb-1 block text-xs font-medium text-gray-700"><input
               type="text"
               inputMode="numeric"
               maxLength={6}
@@ -187,7 +190,7 @@ function HeroLoginForm({ onSwitch }) {
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="123456"
               className="w-full rounded-xl border border-gray-200 bg-gray-50/60 px-4 py-2.5 text-center font-mono text-lg tracking-[0.5em] text-gray-900 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
+            /></Field>
             {error && <p className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs font-medium text-red-600">{error}</p>}
             <Button type="submit" variant="accent" className="w-full justify-center rounded-xl py-2.5 text-xs" disabled={loading}>
               {loading ? 'Verifying…' : 'Verify & sign in'}
@@ -200,12 +203,12 @@ function HeroLoginForm({ onSwitch }) {
   }
 
   return (
-    <div className="flex min-h-full flex-col justify-between p-6 pt-20 lg:p-10 lg:pt-24">
-      <div className="flex justify-end">
-        <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold tracking-widest text-emerald-800">
-          <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600" /> SAFE &middot; TRUSTED
-        </span>
-      </div>
+    <div className="auth-form-shell flex min-h-full flex-col justify-between p-6 pt-20 lg:p-8 lg:pb-4 lg:pt-18">
+        <div className="flex justify-end">
+          <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold tracking-widest text-emerald-800">
+            <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600" /> SAFE &middot; TRUSTED
+          </span>
+        </div>
 
       <div className="mx-auto my-auto w-full max-w-sm">
         <div className="mb-3 flex justify-center">
@@ -215,11 +218,12 @@ function HeroLoginForm({ onSwitch }) {
         <p className="mb-6 text-center text-xs text-gray-500">Welcome back! Please enter your details.</p>
 
         <form onSubmit={onSubmit} noValidate className="space-y-3.5">
-          <div>
+          <Field required label="Email" labelClassName="mb-1 block text-xs font-medium text-gray-700">
             <div className="relative">
               <EnvelopeIcon className="absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="email"
+                autoComplete="username"
                 maxLength={254}
                 placeholder="Email address"
                 value={form.email}
@@ -229,13 +233,14 @@ function HeroLoginForm({ onSwitch }) {
               />
             </div>
             <FieldError message={touched.email ? errors.email : ''} />
-          </div>
+          </Field>
 
-          <div>
+          <Field required label="Password" labelClassName="mb-1 block text-xs font-medium text-gray-700">
             <div className="relative">
               <LockClosedIcon className="absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
                 placeholder="Password"
                 value={form.password}
                 onChange={(e) => updateField('password', e.target.value)}
@@ -252,7 +257,7 @@ function HeroLoginForm({ onSwitch }) {
               </button>
             </div>
             <FieldError message={touched.password ? errors.password : ''} />
-          </div>
+          </Field>
 
           <div className="-mt-1 text-right">
             <Link to="/forgot-password" className="text-[11px] font-semibold text-brand-700 hover:text-brand-800 hover:underline">
@@ -285,7 +290,7 @@ function HeroLoginForm({ onSwitch }) {
               {resendMessage && <p className="text-xs text-emerald-700">{resendMessage}</p>}
               {verifyError && <p className="text-xs text-red-600">{verifyError}</p>}
               <div className="flex gap-2">
-                <input
+                <Field required label="Verification code" labelClassName="mb-1 block text-xs font-medium text-gray-700" className="min-w-0 flex-1"><input
                   type="text"
                   inputMode="numeric"
                   maxLength={6}
@@ -293,7 +298,7 @@ function HeroLoginForm({ onSwitch }) {
                   onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="123456"
                   className={`${inputClass} flex-1 !pl-4 text-center font-mono tracking-[0.3em]`}
-                />
+                /></Field>
                 <Button type="button" variant="secondary" className="rounded-xl text-xs" disabled={verifying} onClick={onVerifyEmail}>
                   {verifying ? 'Verifying…' : 'Verify'}
                 </Button>
@@ -552,19 +557,20 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
     }
   }
 
-  const smallInput = 'w-full rounded-xl border border-gray-200 bg-gray-50/60 py-2.5 pl-9 pr-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-all focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500';
+  const smallInput = 'w-full rounded-xl border border-gray-200 bg-gray-50/60 py-2.5 pl-9 pr-2.5 text-sm text-gray-900 placeholder:text-gray-400 transition-[border-color,background-color,box-shadow] duration-200 ease-[var(--ease-smooth)] focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500';
 
   if (step === 'verify') {
     return (
-      <div className="flex min-h-full flex-col justify-between p-6 pt-20 lg:p-8 lg:pt-24">
-        <div className="mb-1 flex items-center justify-end">
+      <div className="auth-form-shell flex min-h-full flex-col justify-between p-6 pt-20 lg:p-8 lg:pb-4 lg:pt-18">
+        <div className="mb-1 flex items-center justify-start">
           <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold tracking-widest text-emerald-800">
             <CheckCircleIcon className="h-3 w-3 text-emerald-600" /> SAFE &middot; TRUSTED
           </span>
         </div>
+
         <div className="mx-auto my-auto w-full max-w-sm">
           <div className="mb-3 flex justify-center">
-            <BrandLockup size={48} />
+            <BrandLockup size={40} />
           </div>
           <h2 className="mb-0.5 text-center text-2xl font-extrabold text-gray-900">Verify Your Email</h2>
           <p className="mb-3 text-center text-xs text-gray-500">
@@ -573,8 +579,8 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
           {verifyInfo && (
             <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-center text-xs font-medium text-emerald-700">{verifyInfo}</p>
           )}
-          <form onSubmit={onVerifyOtp} noValidate className="space-y-3.5">
-            <input
+          <form onSubmit={onVerifyOtp} noValidate className="space-y-3">
+            <Field required label="Verification code" labelClassName="mb-1 block text-xs font-medium text-gray-700"><input
               type="text"
               inputMode="numeric"
               maxLength={6}
@@ -582,7 +588,7 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="123456"
               className="w-full rounded-xl border border-gray-200 bg-gray-50/60 px-4 py-2.5 text-center font-mono text-lg tracking-[0.5em] text-gray-900 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
+            /></Field>
             {otpError && <p className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs font-medium text-red-600">{otpError}</p>}
             <Button type="submit" variant="accent" className="w-full justify-center rounded-xl py-2.5 text-xs" disabled={verifying}>
               {verifying ? 'Verifying…' : 'Verify Email'}
@@ -614,15 +620,16 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
 
   if (step === 'done') {
     return (
-      <div className="flex min-h-full flex-col justify-between p-6 pt-20 lg:p-8 lg:pt-24">
-        <div className="mb-1 flex items-center justify-end">
+      <div className="auth-form-shell flex min-h-full flex-col justify-between p-6 pt-20 lg:p-8 lg:pb-4 lg:pt-18">
+        <div className="mb-1 flex items-center justify-start">
           <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold tracking-widest text-emerald-800">
             <CheckCircleIcon className="h-3 w-3 text-emerald-600" /> SAFE &middot; TRUSTED
           </span>
         </div>
+
         <div className="mx-auto my-auto w-full max-w-sm text-center">
           <div className="mb-3 flex justify-center">
-            <BrandLockup size={48} />
+            <BrandLockup size={40} />
           </div>
           <h2 className="mb-2 text-2xl font-extrabold text-gray-900">Registration successful!</h2>
           <p className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-700">
@@ -638,12 +645,12 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
   }
 
   return (
-    <div className="flex min-h-full flex-col justify-between p-6 pt-20 lg:p-8 lg:pt-24">
-      <div className="mb-1 flex items-center justify-end">
-        <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold tracking-widest text-emerald-800">
-          <CheckCircleIcon className="h-3 w-3 text-emerald-600" /> SAFE &middot; TRUSTED
-        </span>
-      </div>
+    <div className="auth-form-shell flex min-h-full flex-col justify-between p-6 pt-20 lg:p-8 lg:pb-4 lg:pt-18">
+        <div className="mb-1 flex items-center justify-start">
+          <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-extrabold tracking-widest text-emerald-800">
+            <CheckCircleIcon className="h-3 w-3 text-emerald-600" /> SAFE &middot; TRUSTED
+          </span>
+        </div>
 
       <div className="mx-auto w-full max-w-sm py-1">
         <h2 className="mb-0.5 text-xl font-extrabold text-gray-900">Create Account</h2>
@@ -652,9 +659,9 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
           <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-xs font-medium text-emerald-700">{cancelMessage}</p>
         )}
 
-        <form onSubmit={onSubmit} noValidate className="space-y-2.5">
+        <form onSubmit={onSubmit} noValidate className="auth-register-form space-y-2.5">
           <div className="grid grid-cols-2 gap-2.5">
-            <div>
+            <Field required label="First name" labelClassName="mb-1 block text-xs font-medium text-gray-700">
               <div className="relative">
                 <UserIcon className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
                 <input
@@ -668,8 +675,8 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
                 />
               </div>
               <FieldError message={touched.firstName ? errors.firstName : ''} />
-            </div>
-            <div>
+            </Field>
+            <Field required label="Last name" labelClassName="mb-1 block text-xs font-medium text-gray-700">
               <div className="relative">
                 <UserIcon className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
                 <input
@@ -683,38 +690,39 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
                 />
               </div>
               <FieldError message={touched.lastName ? errors.lastName : ''} />
-            </div>
+            </Field>
           </div>
 
-          <div>
-            <div className="relative">
-              <EnvelopeIcon className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-              <input
-                type="email"
-                maxLength={254}
-                placeholder="yourname@gmail.com"
-                value={form.email}
-                onChange={(e) => updateField('email', e.target.value)}
-                onBlur={() => onBlur('email')}
-                className={`${smallInput} ${touched.email && errors.email ? errorInputClass : ''}`}
-              />
-            </div>
-            <FieldError message={touched.email ? errors.email : ''} />
-          </div>
+          <Field required label="Email" labelClassName="mb-1 block text-xs font-medium text-gray-700">
+              <div className="relative">
+                <EnvelopeIcon className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  maxLength={254}
+                  placeholder="yourname@gmail.com"
+                  value={form.email}
+                  onChange={(e) => updateField('email', e.target.value)}
+                  onBlur={() => onBlur('email')}
+                  className={`${smallInput} ${touched.email && errors.email ? errorInputClass : ''}`}
+                />
+              </div>
+              <FieldError message={touched.email ? errors.email : ''} />
+            </Field>
 
-          <div>
+          <Field required label="Phone number" labelClassName="mb-1 block text-xs font-medium text-gray-700">
             <PhoneInput
               placeholder="917 123 4567"
               value={form.phone}
               onChange={(value) => updateField('phone', value)}
               onBlur={() => onBlur('phone')}
               className={`rounded-xl border-gray-200 bg-gray-50/60 ${touched.phone && errors.phone ? 'border-red-500' : ''}`}
+              inputClassName="py-2.5"
             />
             <FieldError message={touched.phone ? errors.phone : ''} />
-          </div>
+          </Field>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <Field required label="Password" labelClassName="mb-1 block text-xs font-medium text-gray-700">
               <div className="relative">
                 <LockClosedIcon className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
                 <input
@@ -731,8 +739,8 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
               </div>
               <PasswordStrengthIndicator password={form.password} />
               <FieldError message={touched.password ? errors.password : ''} />
-            </div>
-            <div>
+            </Field>
+            <Field required label="Confirm password" labelClassName="mb-1 block text-xs font-medium text-gray-700">
               <div className="relative">
                 <LockClosedIcon className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
                 <input
@@ -750,25 +758,27 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
               {/* A mismatch is shown live by PasswordMatchHint; FieldError only covers an empty confirm. */}
               <PasswordMatchHint password={form.password} confirmPassword={form.confirmPassword} />
               <FieldError message={touched.confirmPassword && !form.confirmPassword ? errors.confirmPassword : ''} />
-            </div>
+            </Field>
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
-            <select
-              value={form.role}
-              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-              className="w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50/60 px-2.5 py-2.5 text-sm text-gray-900 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              <option value="tenant">Renter / Tenant</option>
-              <option value="landlord">Landlord</option>
-            </select>
+            <Field required label="I am a..." labelClassName="mb-1 block text-xs font-medium text-gray-700">
+              <select
+                value={form.role}
+                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+                className="w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50/60 px-2.5 py-2.5 text-sm text-gray-900 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="tenant">Renter / Tenant</option>
+                <option value="landlord">Landlord</option>
+              </select>
+            </Field>
             <div className="flex items-center px-1 text-[10px] text-gray-400">Choose your role</div>
           </div>
 
           {form.role === 'tenant' && (
             <div className="grid grid-cols-1 gap-2.5 rounded-xl border border-amber-100 bg-amber-50/40 p-2.5 sm:grid-cols-2">
               <div className="sm:col-span-2 -mb-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">Emergency contact</div>
-              <div>
+              <Field required label="Emergency contact person" labelClassName="mb-1 block text-xs font-medium text-gray-700">
                 <input
                   type="text"
                   placeholder="Contact person"
@@ -778,17 +788,18 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
                   className={`w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 ${touched.emergencyContactName && errors.emergencyContactName ? errorInputClass : ''}`}
                 />
                 <FieldError message={touched.emergencyContactName ? errors.emergencyContactName : ''} />
-              </div>
-              <div>
+              </Field>
+              <Field required label="Emergency contact CP number" labelClassName="mb-1 block text-xs font-medium text-gray-700">
                 <PhoneInput
                   placeholder="917 123 4567"
                   value={form.emergencyContactPhone}
                   onChange={(value) => updateField('emergencyContactPhone', value)}
                   onBlur={() => onBlur('emergencyContactPhone')}
                   className={`rounded-xl border-gray-200 ${touched.emergencyContactPhone && errors.emergencyContactPhone ? 'border-red-500' : ''}`}
+                  inputClassName="py-2.5"
                 />
                 <FieldError message={touched.emergencyContactPhone ? errors.emergencyContactPhone : ''} />
-              </div>
+              </Field>
             </div>
           )}
 
@@ -796,6 +807,7 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
             <label className="flex items-start gap-2 text-[11px] text-gray-600">
               <input
                 type="checkbox"
+                aria-required="true"
                 checked={form.privacyConsent}
                 onChange={(e) => toggleConsent(e.target.checked)}
                 className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-400"
@@ -811,7 +823,7 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
                   }}
                   className="cursor-pointer font-semibold text-gray-800 underline decoration-dotted underline-offset-2 hover:text-brand-700"
                 >
-                  Privacy Policy
+                Privacy Policy<FieldRequirement required />
                 </button>{' '}
                 — my information, including property and service-area location (GPS) data, is used only to run this platform and won&apos;t be
                 shared beyond that.
@@ -843,7 +855,7 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
       </div>
 
       <div className="flex items-center justify-center gap-1 text-center text-[10px] text-gray-500">
-        <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600" /> Your information is safe with us.
+        <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-500" /> Your information is safe with us.
       </div>
     </div>
   );
@@ -852,56 +864,50 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
 export default function HeroAuthCard({ mode, onModeChange }) {
   const isLogin = mode !== 'register';
   const switchTo = (nextMode) => onModeChange?.(nextMode);
-  const scrollToAbout = () => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const scrollToAbout = () => document.getElementById('about')?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
 
   const houseSize = 'max-w-[380px] lg:max-w-[460px]';
-  // Shared by the form panels, overlay and overlay text so they move in sync.
-  const transitionSpec = 'duration-[450ms] ease-in-out';
-
   return (
-    // Both form panels are normal grid items so the section grows with the
-    // taller form (min-h-screen, not h-screen); only the sliding overlay is absolute.
-    <div className="relative min-h-screen w-full">
-      <div className="relative min-h-screen w-full overflow-visible bg-white lg:grid lg:grid-cols-2">
+    // The desktop hero fills the screen; each form can scroll independently.
+    // On smaller screens, the section grows naturally with the active form.
+    <div className="auth-switcher auth-hero relative w-full" data-auth-mode={isLogin ? 'login' : 'register'}>
+      <div className="auth-hero-grid relative w-full overflow-visible bg-white lg:grid lg:grid-cols-2">
         {/* REGISTER FORM PANEL */}
         <div
-          className={`${!isLogin ? 'block' : 'hidden'} w-full lg:block lg:transition-all lg:duration-[450ms] lg:ease-in-out ${
-            !isLogin ? 'lg:translate-x-0 lg:opacity-100' : 'lg:pointer-events-none lg:-translate-x-4 lg:opacity-0'
-          }`}
+          data-active={!isLogin}
+          inert={isLogin}
+          className={`auth-form-panel ${!isLogin ? 'block animate-panel-enter lg:animate-none' : 'hidden'} w-full lg:block`}
         >
           <HeroRegisterForm onSwitch={() => switchTo('login')} onRegistered={() => switchTo('login')} />
         </div>
 
         {/* LOGIN FORM PANEL */}
         <div
-          className={`${isLogin ? 'block' : 'hidden'} w-full lg:block lg:transition-all lg:duration-[450ms] lg:ease-in-out ${
-            isLogin ? 'lg:translate-x-0 lg:opacity-100' : 'lg:pointer-events-none lg:translate-x-4 lg:opacity-0'
-          }`}
+          data-active={isLogin}
+          inert={!isLogin}
+          className={`auth-form-panel ${isLogin ? 'block animate-panel-enter lg:animate-none' : 'hidden'} w-full lg:block`}
         >
           <HeroLoginForm onSwitch={() => switchTo('register')} />
         </div>
 
         {/* GREEN OVERLAY PANEL — slides across on top, desktop only; its curved edge faces the form side. */}
         <div
-          className={`absolute inset-y-0 left-0 z-20 hidden w-1/2 flex-col justify-between bg-gradient-to-br from-brand-800 via-brand-800 to-brand-900 p-8 pt-24 text-white transition-transform ${transitionSpec} lg:flex lg:p-10 lg:pt-24 ${
-            // Fixed px radius: a % radius would clip the badge and footer near the edges.
-            isLogin ? 'lg:rounded-r-[120px] xl:rounded-r-[140px]' : 'lg:rounded-l-[120px] xl:rounded-l-[140px]'
-          }`}
+          className="auth-green-panel absolute inset-y-0 left-0 z-20 hidden w-1/2 flex-col justify-between bg-gradient-to-br from-brand-800 via-brand-800 to-brand-900 p-8 pt-20 text-white lg:flex"
           style={{ transform: isLogin ? 'translateX(0%)' : 'translateX(100%)' }}
         >
-          {/* Anchored to the side away from the curve so the badge never sits under it. */}
           <div className={`flex shrink-0 items-center ${isLogin ? 'justify-start' : 'justify-end'}`}>
             <span className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-extrabold tracking-widest text-emerald-200 backdrop-blur-sm">
               <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-300" /> SAFE &middot; TRUSTED
             </span>
           </div>
 
-          <div className="relative flex min-h-0 flex-1 flex-col justify-center py-4">
+          <div className="relative grid min-h-0 flex-1 items-center py-4">
             {/* LOGIN OVERLAY CONTENT */}
             <div
-              className={`flex flex-col transition-all duration-[450ms] ease-in-out ${
-                isLogin ? 'pointer-events-auto translate-x-0 opacity-100' : 'pointer-events-none absolute inset-0 -translate-x-8 opacity-0'
-              }`}
+              data-active={isLogin}
+              inert={!isLogin}
+              aria-hidden={!isLogin}
+              className="auth-brand-copy flex w-full flex-col [grid-area:1/1]"
             >
               <h2 className="mb-3 text-3xl font-extrabold leading-tight text-white lg:text-4xl">
                 Find your next apartment or move into your <span className="text-amber-400">dream boarding house</span>
@@ -938,16 +944,17 @@ export default function HeroAuthCard({ mode, onModeChange }) {
 
             {/* REGISTER OVERLAY CONTENT */}
             <div
-              className={`flex flex-col transition-all duration-[450ms] ease-in-out ${
-                !isLogin ? 'pointer-events-auto translate-x-0 opacity-100' : 'pointer-events-none absolute inset-0 translate-x-8 opacity-0'
-              }`}
+              data-active={!isLogin}
+              inert={isLogin}
+              aria-hidden={isLogin}
+              className="auth-brand-copy flex w-full flex-col [grid-area:1/1]"
             >
               <span className="mb-3 block h-1 w-10 rounded-full bg-amber-400" />
               <h2 className="mb-3 text-3xl font-extrabold leading-tight text-white lg:text-4xl">
-                Welcome <span className="text-amber-400">Back!</span>
+                Your next chapter <span className="text-amber-400">starts here.</span>
               </h2>
               <p className="mb-5 max-w-sm text-xs leading-relaxed text-brand-100/90 lg:text-sm">
-                Already have an account? Log in to continue browsing and finding your perfect rental home.
+                Find your next home or bring your rental property online. Already a member? Log in to pick up where you left off.
               </p>
               <button
                 type="button"
@@ -962,15 +969,9 @@ export default function HeroAuthCard({ mode, onModeChange }) {
 
           {/* Centered so neither end item sits under the curve. */}
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-6 gap-y-1 border-t border-white/10 pt-3 text-[10px] font-medium text-brand-100/70">
-            <span className="flex items-center gap-1">
-              <BuildingOffice2Icon className="h-3 w-3 text-amber-400" /> Verified Listings
-            </span>
-            <span className="flex items-center gap-1">
-              <ShieldCheckIcon className="h-3 w-3 text-amber-400" /> Secure Platform
-            </span>
-            <span className="flex items-center gap-1">
-              <MapPinIcon className="h-3 w-3 text-amber-400" /> Find Your Home
-            </span>
+            <span className="flex items-center gap-1"><BuildingOffice2Icon className="h-3 w-3 text-amber-400" /> Verified Listings</span>
+            <span className="flex items-center gap-1"><ShieldCheckIcon className="h-3 w-3 text-amber-400" /> Secure Platform</span>
+            <span className="flex items-center gap-1"><MapPinIcon className="h-3 w-3 text-amber-400" /> Find Your Home</span>
           </div>
         </div>
       </div>

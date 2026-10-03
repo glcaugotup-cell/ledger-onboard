@@ -83,7 +83,7 @@ export default function CashPaymentsPage() {
           <ErrorBanner message={loadError} />
           <ErrorBanner message={error} />
           <SuccessBanner message={success} />
-          <Field label="Statement of account" error={fieldErrors.soaId}>
+          <Field required label="Statement of account" error={fieldErrors.soaId}>
             <Select value={soaId} onChange={(e) => setSoaId(e.target.value)} error={fieldErrors.soaId}>
               <option value="">Select a statement…</option>
               {soas.map((s) => (
@@ -93,7 +93,7 @@ export default function CashPaymentsPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Amount collected (₱)" error={fieldErrors.amount}>
+          <Field required label="Amount collected (₱)" error={fieldErrors.amount}>
             <TextInput type="number" min="0.01" max={Math.min(100000000, soas.find((s) => s._id === soaId)?.remainingBalance || 100000000)} step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} error={fieldErrors.amount} />
           </Field>
           <Button type="submit" loading={loading}>

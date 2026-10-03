@@ -8,7 +8,7 @@ import ReviewApi from '../../services/ReviewApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
-import { Field, TextArea, TextInput } from '../../components/ui/Field.jsx';
+import { Field, FieldRequirement, TextArea, TextInput } from '../../components/ui/Field.jsx';
 import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
@@ -62,7 +62,8 @@ function ReviewForm({ reservation, onSubmitted }) {
     <div className="rounded-lg border border-gray-200 p-3">
       <p className="mb-2 text-sm font-medium text-gray-800">{reservation.propertyId?.propertyName || 'Your stay'}</p>
       <ErrorBanner message={error} />
-      <div className="mb-2 flex gap-1" role="radiogroup" aria-label="Rating">
+      <p className="mb-1.5 text-sm font-medium text-gray-700">Rating<FieldRequirement required /></p>
+      <div className="mb-2 flex gap-1" role="radiogroup" aria-label="Rating" aria-required="true">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
@@ -77,6 +78,7 @@ function ReviewForm({ reservation, onSubmitted }) {
           </button>
         ))}
       </div>
+      <Field label="Review comment">
       <TextArea
         value={comment}
         onChange={(e) => setComment(capitalizeFirst(e.target.value))}
@@ -85,6 +87,7 @@ function ReviewForm({ reservation, onSubmitted }) {
         className="mb-2"
         rows={2}
       />
+      </Field>
       <Button onClick={submit} loading={loading} className="w-full">
         Submit review
       </Button>
@@ -135,6 +138,7 @@ function PaymentQrSettings({ hasQr }) {
       <ErrorBanner message={error} />
       <SuccessBanner message={message} />
       {qrUrl && <img src={qrUrl} alt="Your GCash payment QR code" className="mb-3 max-h-56 rounded-lg border border-gray-200 object-contain" />}
+      <p className="mb-1.5 text-sm font-medium text-gray-700">GCash QR code<FieldRequirement /></p>
       <label className="inline-flex cursor-pointer items-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800">
         {loading ? 'Uploading…' : hasQr || qrUrl ? 'Replace QR code' : 'Upload QR code'}
         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={upload} disabled={loading} className="sr-only" />
@@ -350,7 +354,7 @@ export default function ProfilePage() {
           <form onSubmit={savePhone} className="space-y-3" noValidate>
             <ErrorBanner message={profileError} />
             <SuccessBanner message={profileMsg} />
-            <Field label="Phone" error={phoneError}>
+            <Field required label="Phone" error={phoneError}>
               <PhoneInput
                 value={phone}
                 onChange={(value) => {
@@ -383,7 +387,7 @@ export default function ProfilePage() {
           )}
           {pwStep === 'code' && (
             <form onSubmit={submitPasswordChange} className="mt-3 space-y-3" noValidate>
-              <Field label="Code from the email" error={pwErrors.code}>
+              <Field required label="Code from the email" error={pwErrors.code}>
                 <TextInput
                   inputMode="numeric"
                   maxLength={6}
@@ -394,13 +398,13 @@ export default function ProfilePage() {
                 />
               </Field>
               <div>
-                <Field label="New password" error={pwErrors.newPassword}>
+                <Field required label="New password" error={pwErrors.newPassword}>
                   <PasswordInput value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" />
                 </Field>
                 <PasswordStrengthIndicator password={pwNew} />
               </div>
               <div>
-                <Field label="Confirm password" error={pwErrors.confirm}>
+                <Field required label="Confirm password" error={pwErrors.confirm}>
                   <PasswordInput value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} autoComplete="new-password" />
                 </Field>
                 <PasswordMatchHint password={pwNew} confirmPassword={pwConfirm} />
@@ -490,7 +494,7 @@ export default function ProfilePage() {
               setCloseError('');
             }}
           >
-            <Field label="Why are you leaving?">
+            <Field required label="Why are you leaving?">
               <TextArea value={closeReason} onChange={(e) => setCloseReason(e.target.value)} maxLength={500} rows={3} placeholder="Please tell us why you are leaving" />
             </Field>
           </ConfirmDialog>

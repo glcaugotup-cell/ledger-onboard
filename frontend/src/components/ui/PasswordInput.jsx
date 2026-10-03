@@ -9,7 +9,7 @@ export default function PasswordInput({ className = '', ...rest }) {
 
   return (
     <div className="relative">
-      <TextInput {...rest} type={show ? 'text' : 'password'} maxLength={128} autoComplete={rest.autoComplete} className={`pr-10 ${className}`} />
+      <TextInput {...rest} type={show ? 'text' : 'password'} maxLength={rest.maxLength ?? 128} autoComplete={rest.autoComplete} className={`pr-10 ${className}`} />
       <button
         type="button"
         onClick={() => setShow((s) => !s)}

@@ -141,7 +141,7 @@ export default function UtilityEntryPage() {
               message={`Reading logged. Generated ${success.soas.length} statement(s) totaling ₱${success.soas.reduce((s, x) => s + x.totalAmountDue, 0).toLocaleString()}.`}
             />
           )}
-          <Field label="Room" error={fieldErrors.roomId}>
+          <Field required label="Room" error={fieldErrors.roomId}>
             <Select value={roomId} onChange={(e) => setRoomId(e.target.value)} error={fieldErrors.roomId}>
               <option value="">Select a room…</option>
               {rooms.map(({ room, property }) => (
@@ -154,7 +154,7 @@ export default function UtilityEntryPage() {
 
           {selected && (
             <>
-              <Field label="Billing month" error={fieldErrors.readingMonth}>
+              <Field required label="Billing month" error={fieldErrors.readingMonth}>
                 <TextInput type="date" max={defaultMonth} value={readingMonth} onChange={(e) => setReadingMonth(e.target.value)} error={fieldErrors.readingMonth} />
               </Field>
               {fixedRate ? (
@@ -164,7 +164,7 @@ export default function UtilityEntryPage() {
               ) : (
               <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Total electric bill (₱)" error={fieldErrors.totalElectricBill}>
+                <Field required label="Total electric bill (₱)" error={fieldErrors.totalElectricBill}>
                   <TextInput
                     type="number"
                     min="0"
@@ -176,7 +176,7 @@ export default function UtilityEntryPage() {
                     error={fieldErrors.totalElectricBill}
                   />
                 </Field>
-                <Field label="Total water bill (₱)" error={fieldErrors.totalWaterBill}>
+                <Field required label="Total water bill (₱)" error={fieldErrors.totalWaterBill}>
                   <TextInput type="number" min="0" max={MAX_BILL_AMOUNT} step="0.01" inputMode="decimal" value={totalWaterBill} onChange={(e) => setTotalWaterBill(e.target.value)} error={fieldErrors.totalWaterBill} />
                 </Field>
               </div>
@@ -187,6 +187,7 @@ export default function UtilityEntryPage() {
                   {selected.tenants.map((t) => (
                     <div key={t._id} className={`grid grid-cols-3 items-center gap-2 rounded-lg border p-2 ${fieldErrors[t._id] ? 'border-red-300' : 'border-gray-200'}`}>
                       <p className="text-sm text-gray-700">{t.fullName}</p>
+                      <Field required label="Previous reading">
                       <TextInput
                         type="number"
                         min="0"
@@ -194,9 +195,12 @@ export default function UtilityEntryPage() {
                         step="0.01"
                         inputMode="decimal"
                         placeholder="Previous reading"
+                        aria-label={`Previous reading for ${t.fullName}`}
                         value={readings[t._id]?.previousReading || ''}
                         onChange={(e) => updateReading(t._id, 'previousReading', e.target.value)}
                       />
+                      </Field>
+                      <Field required label="Current reading">
                       <TextInput
                         type="number"
                         min="0"
@@ -204,9 +208,11 @@ export default function UtilityEntryPage() {
                         step="0.01"
                         inputMode="decimal"
                         placeholder="Current reading"
+                        aria-label={`Current reading for ${t.fullName}`}
                         value={readings[t._id]?.currentReading || ''}
                         onChange={(e) => updateReading(t._id, 'currentReading', e.target.value)}
                       />
+                      </Field>
                       {fieldErrors[t._id] && <p className="col-span-3 text-xs text-red-600">{fieldErrors[t._id]}</p>}
                     </div>
                   ))}

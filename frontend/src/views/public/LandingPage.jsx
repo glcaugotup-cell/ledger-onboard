@@ -5,6 +5,8 @@ import HeroAuthCard from './HeroAuthCard.jsx';
 import logo from '../../assets/Logo.png';
 import { capitalizeFirst } from '../../utils/textFormat.js';
 import { validateName } from '../../utils/validators.js';
+import { Field } from '../../components/ui/Field.jsx';
+import { scrollBehavior } from '../../utils/motion.js';
 
 const FEATURES = [
   { icon: '🏠', num: '01', title: 'Discover', desc: 'Browse verified boarding houses across Dagupan City barangays — filtered by university, price, and availability. No more door-to-door hunting.' },
@@ -82,8 +84,8 @@ function Section({ id, className = '', children }) {
     <section
       id={id}
       ref={ref}
-      className={`scroll-mt-20 px-6 py-20 transition-all duration-1000 ease-out md:px-16 ${
-        visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
+      className={`scroll-mt-20 px-6 py-20 transition-[opacity,transform,translate] duration-500 ease-[var(--ease-smooth)] motion-reduce:transform-none motion-reduce:translate-y-0 motion-reduce:opacity-100 md:px-16 ${
+        visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
       } ${className}`}
     >
       <div className="mx-auto max-w-6xl">{children}</div>
@@ -102,12 +104,7 @@ function SectionLabel({ children }) {
   );
 }
 
-/**
- * Sticky nav bar — transparent over the Hero, solid once the Hero scrolls out of view.
- * Over the Hero, text color follows the sliding panel beneath it (desktop): in login
- * mode the green panel is on the left and the white form on the right, and the
- * other way round in register mode. On smaller screens the Hero is white.
- */
+/** Over the hero, navigation colors follow the side covered by the green panel. */
 function NavBar({ heroRef, authMode }) {
   const [solid, setSolid] = useState(false);
 
@@ -124,18 +121,17 @@ function NavBar({ heroRef, authMode }) {
     return () => window.removeEventListener('scroll', onScroll);
   }, [heroRef]);
 
-  // Which half of the desktop Hero is green depends on the auth panel's mode.
   const brandOnGreen = !solid && authMode !== 'register';
   const linksOnGreen = !solid && authMode === 'register';
 
   const scrollToId = (id) => (e) => {
     e.preventDefault();
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById(id)?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   };
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-40 transition-all duration-300 ${
+      className={`fixed inset-x-0 top-0 z-40 transition-[background-color,box-shadow] duration-300 ${
         solid ? 'border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur' : 'bg-white/85 backdrop-blur lg:bg-transparent lg:backdrop-blur-none'
       }`}
     >
@@ -191,7 +187,7 @@ function BackToTopButton() {
   return (
     <button
       type="button"
-      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      onClick={() => window.scrollTo({ top: 0, behavior: scrollBehavior() })}
       aria-label="Back to top"
       className={`fixed bottom-6 right-6 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-brand-800 text-amber-400 shadow-xl transition-all duration-300 hover:bg-brand-900 hover:shadow-2xl focus:outline-none ${
         visible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
@@ -209,7 +205,7 @@ export default function LandingPage() {
   const [contactStatus, setContactStatus] = useState('');
   const [contactErrors, setContactErrors] = useState({});
 
-  const scrollToAbout = () => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const scrollToAbout = () => document.getElementById('about')?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
 
   const handleContactSubmit = async (e) => {
     e.preventDefault();
@@ -244,7 +240,7 @@ export default function LandingPage() {
     <div id="top" className="bg-slate-50 font-sans text-slate-800 selection:bg-amber-200 selection:text-brand-900">
       <NavBar heroRef={heroRef} authMode={authMode} />
 
-      {/* HERO — fullscreen sliding Login/Register widget */}
+      {/* HERO — fullscreen sliding Login/Register panel */}
       <div ref={heroRef} className="relative w-full overflow-hidden">
         <HeroAuthCard mode={authMode} onModeChange={setAuthMode} />
         <button
@@ -434,8 +430,7 @@ export default function LandingPage() {
 
           <form onSubmit={handleContactSubmit} noValidate className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">Full Name</label>
+              <Field required label="Full Name" labelClassName="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">
                 <input
                   type="text"
                   maxLength={80}
@@ -446,9 +441,8 @@ export default function LandingPage() {
                   className={`${inputClass} ${contactErrors.fullName ? '!border-red-400' : ''}`}
                 />
                 {contactErrors.fullName && <p className="mt-1 text-xs text-red-600">{contactErrors.fullName}</p>}
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">Email Address</label>
+              </Field>
+              <Field required label="Email Address" labelClassName="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">
                 <input
                   type="email"
                   maxLength={254}
@@ -459,21 +453,19 @@ export default function LandingPage() {
                   className={`${inputClass} ${contactErrors.email ? '!border-red-400' : ''}`}
                 />
                 {contactErrors.email && <p className="mt-1 text-xs text-red-600">{contactErrors.email}</p>}
-              </div>
+              </Field>
             </div>
 
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">Inquiry Type</label>
+            <Field required label="Inquiry Type" labelClassName="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">
               <select value={contactForm.inquiryType} onChange={(e) => setContactForm({ ...contactForm, inquiryType: e.target.value })} className={inputClass}>
                 <option>General Inquiry</option>
                 <option>Landlord Listing Registration</option>
                 <option>Technical Support</option>
                 <option>Feedback & Suggestions</option>
               </select>
-            </div>
+            </Field>
 
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">Message</label>
+            <Field required label="Message" labelClassName="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-700">
               <textarea
                 rows={4}
                 maxLength={2000}
@@ -484,7 +476,7 @@ export default function LandingPage() {
                 className={`${inputClass} ${contactErrors.message ? '!border-red-400' : ''}`}
               />
               {contactErrors.message && <p className="mt-1 text-xs text-red-600">{contactErrors.message}</p>}
-            </div>
+            </Field>
 
             {contactStatus && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">{contactStatus}</p>}
 

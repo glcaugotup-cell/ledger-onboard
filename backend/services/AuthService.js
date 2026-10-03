@@ -448,7 +448,7 @@ class AuthService {
     const activationToken = jwt.sign({ sub: String(caretaker._id), purpose: 'caretaker_activation' }, env.jwtSecret, {
       expiresIn: '3d',
     });
-    const activationUrl = `${env.clientOrigin}/activate-caretaker?token=${activationToken}`;
+    const activationUrl = `${env.emailAppUrl}/activate-caretaker?token=${encodeURIComponent(activationToken)}`;
 
     try {
       // eslint-disable-next-line no-console

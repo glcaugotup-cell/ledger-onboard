@@ -319,7 +319,7 @@ export default function DashboardLayout({ children }) {
       </a>
       <div className="flex min-h-screen w-full">
         {links.length > 0 && (
-          <aside className={`sticky top-0 z-50 hidden h-screen shrink-0 self-start flex-col border-r border-[#21453c] bg-[#0c3028] transition-[width] duration-200 xl:flex ${sidebarCollapsed ? 'w-20' : 'w-64'}`}>
+          <aside className={`sticky top-0 z-50 hidden h-screen shrink-0 self-start flex-col border-r border-[#21453c] bg-[#0c3028] transition-[width] duration-250 ease-[var(--ease-panel)] xl:flex ${sidebarCollapsed ? 'w-20' : 'w-64'}`}>
             <div className={`flex border-b border-white/10 px-3 ${sidebarCollapsed ? 'flex-col items-center gap-2 py-3' : 'h-16 items-center justify-between gap-2'}`}>
               <div className={`flex min-w-0 items-center gap-2 ${sidebarCollapsed ? 'justify-center' : ''}`}>
                 {!sidebarCollapsed && <img src={logo} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />}
@@ -349,7 +349,7 @@ export default function DashboardLayout({ children }) {
         {menuOpen && links.length > 0 && (
           <div className="fixed inset-0 z-40 xl:hidden">
             <button type="button" className="absolute inset-0 h-full w-full bg-gray-900/30" onClick={() => setMenuOpen(false)} aria-label="Close menu" />
-            <nav id="mobile-menu" ref={mobileMenuRef} aria-label="Main" className="relative flex h-full w-[min(20rem,85vw)] flex-col border-r border-[#21453c] bg-[#0c3028] p-3 shadow-xl">
+            <nav id="mobile-menu" ref={mobileMenuRef} aria-label="Main" className="animate-drawer-enter relative flex h-full w-[min(20rem,85vw)] flex-col border-r border-[#21453c] bg-[#0c3028] p-3 shadow-xl">
               <div className="mb-3 flex min-h-16 items-center justify-between gap-2 border-b border-white/10 px-2 pb-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <img src={logo} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />

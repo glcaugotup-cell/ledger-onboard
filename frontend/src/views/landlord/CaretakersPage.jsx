@@ -62,6 +62,7 @@ function ServiceAreaEditor({ caretaker, onSaved }) {
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
+      <Field required label="Service barangay">
       <Select
         value={value}
         onChange={(e) => {
@@ -74,6 +75,7 @@ function ServiceAreaEditor({ caretaker, onSaved }) {
         <option value="">Service barangay…</option>
         <BarangayOptions />
       </Select>
+      </Field>
       {changed && (
         <Button variant="secondary" loading={saving} onClick={save}>
           Save
@@ -180,23 +182,23 @@ export default function CaretakersPage() {
             <SuccessBanner message={successMsg} />
             {createdTemporaryPassword && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-semibold">Temporary password</p><p className="mt-1 font-mono text-base">{createdTemporaryPassword}</p><p className="mt-1 text-xs">Share it with the caretaker. The activation page requires them to set a new password before they can use the account.</p></div>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="First name" error={formErrors.firstName}>
+              <Field required label="First name" error={formErrors.firstName}>
                 <TextInput maxLength={FIRST_NAME_MAX_LENGTH} value={form.firstName} onChange={(e) => setField('firstName', capitalizeFirst(e.target.value.replace(/[^A-Za-z ]/g, '')))} error={formErrors.firstName} />
               </Field>
-              <Field label="Last name" error={formErrors.lastName}>
+              <Field required label="Last name" error={formErrors.lastName}>
                 <TextInput maxLength={LAST_NAME_MAX_LENGTH} value={form.lastName} onChange={(e) => setField('lastName', capitalizeFirst(e.target.value.replace(/[^A-Za-z ]/g, '')))} error={formErrors.lastName} />
               </Field>
             </div>
-            <Field label="Email (Gmail only)" error={formErrors.email}>
+            <Field required label="Email (Gmail only)" error={formErrors.email}>
               <div className="flex">
                 <TextInput type="text" inputMode="email" maxLength={64} value={form.email} onChange={(e) => setField('email', e.target.value.replace(/@gmail\.com$/i, '').replace(/[^A-Za-z0-9._%+-]/g, ''))} error={formErrors.email} className="min-w-0 rounded-r-none" aria-label="Gmail username" />
                 <span className={`flex min-h-[2.5rem] items-center rounded-r-lg border border-l-0 px-3 text-sm ${formErrors.email ? 'border-red-400 text-gray-500' : 'border-gray-300 text-gray-600'}`}>@gmail.com</span>
               </div>
             </Field>
-            <Field label="Phone (+63)" error={formErrors.phone}>
+            <Field required label="Phone (+63)" error={formErrors.phone}>
               <PhoneInput value={form.phone} onChange={(value) => setField('phone', value)} error={formErrors.phone} placeholder="917 123 4567" />
             </Field>
-            <Field label="Service barangay" error={formErrors.serviceBarangay}>
+            <Field required label="Service barangay" error={formErrors.serviceBarangay}>
               <Select value={form.serviceBarangay} onChange={(e) => setField('serviceBarangay', e.target.value)} error={formErrors.serviceBarangay}>
                 <option value="">Select a barangay…</option>
                 <BarangayOptions />
@@ -255,7 +257,7 @@ export default function CaretakersPage() {
         </section>
       </div>
       <ConfirmDialog open={Boolean(removing)} tone="danger" title={removing ? `Remove ${removing.fullName}?` : ''} message="Their sign-in access will end. Existing readings, payments, and audit records will remain on file." confirmLabel="Remove caretaker" loading={removeLoading} confirmDisabled={removeReason.trim().length < 3} error={removeError} onConfirm={removeCaretaker} onCancel={() => setRemoving(null)}>
-        <Field label="Reason for removal">
+        <Field required label="Reason for removal">
           <TextArea rows={3} maxLength={500} value={removeReason} onChange={(e) => setRemoveReason(e.target.value)} placeholder="Explain why this caretaker is being removed" />
         </Field>
       </ConfirmDialog>
