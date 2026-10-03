@@ -476,6 +476,45 @@ class AuthService {
     return { caretaker: sanitizeUser(caretaker), temporaryPassword };
   }
 
+  /** Emails a fresh 3-day activation link to a caretaker who has not activated yet. */
+  async resendCaretakerInvitation(landlordId, caretakerId) {
+    const caretaker = await UserRepository.findById(caretakerId);
+    if (!caretaker || caretaker.role !== ROLES.CARETAKER || String(caretaker.assignedLandlordId) !== String(landlordId)) {
+      throw ApiError.notFound('Caretaker not found', 'CARETAKER_NOT_FOUND');
+    }
+    if (caretaker.accountStatus !== ACCOUNT_STATUS.PENDING_ACTIVATION) {
+      throw ApiError.conflict('This caretaker has already activated their account', 'ALREADY_ACTIVATED');
+    }
+
+    const landlord = await UserRepository.findById(landlordId);
+    const temporaryPassword = 'caretaker1234';
+    const activationToken = jwt.sign({ sub: String(caretaker._id), purpose: 'caretaker_activation' }, env.jwtSecret, {
+      expiresIn: '3d',
+    });
+    const activationUrl = `${env.emailAppUrl}/activate-caretaker?token=${encodeURIComponent(activationToken)}`;
+
+    try {
+      await EmailService.sendCaretakerCreatedEmail(caretaker.email, caretaker.fullName, activationUrl, landlord?.fullName, temporaryPassword);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[EmailService] Caretaker invitation resend failed:', err.message);
+      // Unlike createCaretaker, the account already existed, so it is kept as is.
+      throw ApiError.badRequest('Could not send the caretaker activation email. Please try again.', 'CARETAKER_EMAIL_DELIVERY_FAILED');
+    }
+
+    const updated = await UserRepository.updateById(caretaker._id, { invitationResentAt: new Date() });
+    await AuditLogRepository.record({
+      action: 'CARETAKER_INVITATION_RESENT',
+      actorId: landlordId,
+      actorRole: ROLES.LANDLORD,
+      targetType: 'User',
+      targetId: caretaker._id,
+      metadata: { email: caretaker.email },
+    });
+
+    return { resent: true, email: caretaker.email, caretaker: sanitizeUser(updated) };
+  }
+
   async listCaretakersForLandlord(landlordId) {
     const caretakers = await UserRepository.findCaretakersByLandlord(landlordId);
     return caretakers.map(sanitizeUser);
@@ -544,6 +583,7 @@ class AuthService {
     await UserRepository.updateById(user._id, {
       passwordHash,
       accountStatus: ACCOUNT_STATUS.ACTIVE,
+      activatedAt: new Date(),
       lastActivityAt: new Date(),
     });
 

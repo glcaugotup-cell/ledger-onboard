@@ -10,7 +10,7 @@ const { objectIdParam } = require('../validators/commonValidators');
 const { documentParamValidators } = require('../validators/landlordVerificationValidators');
 const { landlordVerificationUpload } = require('../middleware/upload');
 const { ROLES } = require('../utils/constants');
-const { uploadRateLimiter } = require('../middleware/rateLimit');
+const { uploadRateLimiter, sensitiveAuthRateLimiters } = require('../middleware/rateLimit');
 
 const caretakersRouter = express.Router();
 caretakersRouter.use(authenticate);
@@ -18,6 +18,7 @@ caretakersRouter.use(authenticate);
 caretakersRouter.post('/caretakers', requireRole(ROLES.LANDLORD), createCaretakerValidators, validate, CaretakerController.create);
 caretakersRouter.get('/caretakers', requireRole(ROLES.LANDLORD), CaretakerController.list);
 caretakersRouter.patch('/caretakers/:id', requireRole(ROLES.LANDLORD), objectIdParam('id'), updateCaretakerValidators, validate, CaretakerController.update);
+caretakersRouter.post('/caretakers/:id/resend-invitation', requireRole(ROLES.LANDLORD), sensitiveAuthRateLimiters.resendCaretakerInvitation, objectIdParam('id'), validate, CaretakerController.resendInvitation);
 caretakersRouter.delete('/caretakers/:id', requireRole(ROLES.LANDLORD), objectIdParam('id'), validate, CaretakerController.remove);
 
 // Analytics is mounted at /api/analytics/landlord.

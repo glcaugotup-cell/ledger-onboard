@@ -19,6 +19,11 @@ class CaretakerController {
     sendSuccess(res, { data: { caretaker } });
   });
 
+  resendInvitation = asyncHandler(async (req, res) => {
+    const result = await AuthService.resendCaretakerInvitation(req.user.id, req.params.id);
+    sendSuccess(res, { data: result });
+  });
+
   remove = asyncHandler(async (req, res) => {
     const result = await AuthService.removeCaretaker(req.user.id, req.params.id, req.body.reason);
     sendSuccess(res, { data: result });

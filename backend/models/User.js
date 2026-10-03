@@ -77,6 +77,9 @@ const userSchema = new Schema(
     // Why the account was last suspended/deactivated/closed (admin-selected reasons or self-closure).
     statusReason: { type: String, default: null },
     statusChangedAt: { type: Date, default: null },
+    // Caretakers only: when they accepted the invitation, and when the landlord last resent it.
+    activatedAt: { type: Date, default: null },
+    invitationResentAt: { type: Date, default: null },
     // Caretakers only: the Dagupan City barangay they work in, used to suggest them for properties there.
     serviceBarangay: {
       type: String,

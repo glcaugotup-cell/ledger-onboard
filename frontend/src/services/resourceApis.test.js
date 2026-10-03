@@ -103,6 +103,9 @@ describe('resource API clients', () => {
 
       await CaretakerApi.update('ct1', { active: false });
       expect(instance.patch).toHaveBeenCalledWith('/landlord/caretakers/ct1', { active: false }, undefined);
+
+      await CaretakerApi.resendInvitation('ct1');
+      expect(instance.post).toHaveBeenCalledWith('/landlord/caretakers/ct1/resend-invitation', undefined, undefined);
     });
   });
 

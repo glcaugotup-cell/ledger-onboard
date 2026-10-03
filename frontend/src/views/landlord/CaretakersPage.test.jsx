@@ -10,7 +10,7 @@ import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.j
 const { useAuthMock, useNotificationsMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), useNotificationsMock: vi.fn() }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
-vi.mock('../../services/CaretakerApi.js', () => ({ default: { list: vi.fn(), create: vi.fn(), update: vi.fn() } }));
+vi.mock('../../services/CaretakerApi.js', () => ({ default: { list: vi.fn(), create: vi.fn(), update: vi.fn(), resendInvitation: vi.fn() } }));
 
 function renderPage() {
   return render(
@@ -136,5 +136,66 @@ describe('CaretakersPage', () => {
 
     expect(await screen.findByText('Validation failed')).toBeInTheDocument();
     expect(await screen.findByText('Email already in use')).toBeInTheDocument();
+  });
+
+  it('resends the invitation only for caretakers who have not activated yet', async () => {
+    CaretakerApi.list.mockResolvedValue({
+      caretakers: [
+        { _id: 'c1', fullName: 'Maria Santos', email: 'maria@gmail.com', accountStatus: 'active' },
+        { _id: 'c2', fullName: 'Pedro Reyes', email: 'pedro@gmail.com', accountStatus: 'pending_activation' },
+      ],
+    });
+    CaretakerApi.resendInvitation.mockResolvedValue({
+      resent: true,
+      email: 'pedro@gmail.com',
+      caretaker: { _id: 'c2', fullName: 'Pedro Reyes', email: 'pedro@gmail.com', accountStatus: 'pending_activation', createdAt: '2026-10-01T02:00:00Z', invitationResentAt: '2026-10-03T12:41:00Z' },
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText('Pedro Reyes');
+    const buttons = screen.getAllByRole('button', { name: /resend invite/i });
+    expect(buttons).toHaveLength(1);
+    await user.click(buttons[0]);
+
+    expect(CaretakerApi.resendInvitation).toHaveBeenCalledWith('c2');
+    // The button turns into a "sent" status on the card (no page-level banner), with the resend date.
+    expect(await screen.findByText('Invite sent')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /resend invite/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/Invited Oct 1, 2026 · Resent Oct 3, 2026/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /send again/i }));
+    expect(CaretakerApi.resendInvitation).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows when each caretaker joined, pending invitations first, then newest caretaker on top', async () => {
+    CaretakerApi.list.mockResolvedValue({
+      caretakers: [
+        { _id: 'c1', fullName: 'Older Caretaker', email: 'older@gmail.com', accountStatus: 'active', createdAt: '2026-08-01T02:00:00Z', activatedAt: '2026-08-02T02:00:00Z' },
+        { _id: 'c2', fullName: 'Newer Caretaker', email: 'newer@gmail.com', accountStatus: 'active', createdAt: '2026-09-01T02:00:00Z', activatedAt: '2026-09-05T02:00:00Z' },
+        { _id: 'c3', fullName: 'Pending Caretaker', email: 'pending@gmail.com', accountStatus: 'pending_activation', createdAt: '2026-07-01T02:00:00Z' },
+      ],
+    });
+    renderPage();
+
+    await screen.findByText('Older Caretaker');
+    const names = screen.getAllByText(/Caretaker$/, { selector: 'p' }).map((el) => el.textContent);
+    expect(names).toEqual(['Pending Caretaker', 'Newer Caretaker', 'Older Caretaker']);
+    expect(screen.getByText('Caretaker since Sep 5, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Caretaker since Aug 2, 2026')).toBeInTheDocument();
+  });
+
+  it('shows the error when resending the invitation fails', async () => {
+    CaretakerApi.list.mockResolvedValue({
+      caretakers: [{ _id: 'c2', fullName: 'Pedro Reyes', email: 'pedro@gmail.com', accountStatus: 'pending_activation' }],
+    });
+    CaretakerApi.resendInvitation.mockRejectedValue(
+      new ApiClientError('Could not send the caretaker activation email. Please try again.', 'CARETAKER_EMAIL_DELIVERY_FAILED', 400)
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /resend invite/i }));
+    expect(await screen.findByText(/could not send the caretaker activation email/i)).toBeInTheDocument();
   });
 });

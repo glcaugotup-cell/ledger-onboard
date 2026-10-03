@@ -65,6 +65,7 @@ const sensitiveAuthRateLimiters = {
   resendOtp: sensitiveAuthLimiter({ failuresOnly: false }),
   forgotPassword: sensitiveAuthLimiter({ failuresOnly: false }),
   accountRecovery: sensitiveAuthLimiter({ failuresOnly: false }),
+  resendCaretakerInvitation: sensitiveAuthLimiter({ failuresOnly: false }),
 };
 
 const paymentVerificationRateLimiter = rateLimit({

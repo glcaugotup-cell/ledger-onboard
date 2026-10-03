@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { UserPlusIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, UserPlusIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import PageHeader from '../../components/layout/PageHeader.jsx';
 import CaretakerApi from '../../services/CaretakerApi.js';
@@ -13,10 +13,13 @@ import { DAGUPAN_BARANGAYS } from '../../data/dagupanBarangays.js';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
 import { validateGmail, validatePhone } from '../../utils/validators.js';
-import { initials } from '../../utils/format.js';
+import { formatDate, formatDateTime, initials } from '../../utils/format.js';
 
 const STATUS_TONE = { active: 'green', pending_activation: 'yellow', suspended: 'red', deactivated: 'gray', archived: 'gray' };
 const EMPTY_FORM = { firstName: '', lastName: '', email: '', phone: '', serviceBarangay: '' };
+const STATUS_ORDER = { pending_activation: 0, active: 1 };
+// Caretakers activated before the date was recorded fall back to when they were invited.
+const caretakerSince = (c) => new Date(c.activatedAt || c.createdAt || 0).getTime();
 const FIRST_NAME_MAX_LENGTH = 15;
 const LAST_NAME_MAX_LENGTH = 20;
 
@@ -100,6 +103,26 @@ export default function CaretakersPage() {
   const [removeReason, setRemoveReason] = useState('');
   const [removeError, setRemoveError] = useState('');
   const [removeLoading, setRemoveLoading] = useState(false);
+  const [resendingId, setResendingId] = useState(null);
+  const [resendError, setResendError] = useState(null);
+
+  const resendInvitation = async (caretaker) => {
+    setResendingId(caretaker._id);
+    setResendError(null);
+    try {
+      const { caretaker: updated } = await CaretakerApi.resendInvitation(caretaker._id);
+      setCaretakers((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
+    } catch (err) {
+      setResendError({ id: caretaker._id, message: describeApiError(err).message });
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  // Pending invitations first, then caretakers by when they accepted (newest on top), then removed ones.
+  const sortedCaretakers = [...caretakers].sort(
+    (a, b) => (STATUS_ORDER[a.accountStatus] ?? 2) - (STATUS_ORDER[b.accountStatus] ?? 2) || caretakerSince(b) - caretakerSince(a)
+  );
 
   const removeCaretaker = async () => {
     setRemoveLoading(true);
@@ -223,7 +246,7 @@ export default function CaretakersPage() {
           {loading && <LoadingState />}
           {!loading && caretakers.length === 0 && <EmptyState title="No caretakers yet" description="Your invited team members will appear here." />}
           <div className="space-y-3">
-            {caretakers.map((c) => (
+            {sortedCaretakers.map((c) => (
               <Card key={c._id} className="overflow-hidden rounded-2xl border-gray-200/80 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -231,12 +254,26 @@ export default function CaretakersPage() {
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-gray-900">{c.fullName}</p>
                       <p className="truncate text-sm text-gray-500">{c.email}</p>
+                      {c.accountStatus === 'pending_activation' ? (
+                        <p className="mt-0.5 text-xs text-gray-500">Invited {formatDate(c.createdAt)}{c.invitationResentAt && ` · Resent ${formatDateTime(c.invitationResentAt)}`}</p>
+                      ) : (
+                        <p className="mt-0.5 text-xs text-gray-500">{c.activatedAt ? `Caretaker since ${formatDate(c.activatedAt)}` : `Added ${formatDate(c.createdAt)}`}</p>
+                      )}
                     </div>
                   </div>
                   <StatusBadge status={c.accountStatus} tones={STATUS_TONE} />
                   {c.accountStatus === 'pending_activation' && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Must set password</span>}
+                  {c.accountStatus === 'pending_activation' && (c.invitationResentAt ? (
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-800"><CheckCircleIcon className="h-4 w-4" aria-hidden="true" />Invite sent</span>
+                      <button type="button" className="text-xs font-medium text-brand-700 hover:underline disabled:text-gray-400 disabled:no-underline" disabled={Boolean(resendingId)} onClick={() => resendInvitation(c)}>{resendingId === c._id ? 'Sending…' : 'Send again'}</button>
+                    </div>
+                  ) : (
+                    <Button variant="secondary" loading={resendingId === c._id} disabled={Boolean(resendingId)} onClick={() => resendInvitation(c)}>Resend invite</Button>
+                  ))}
                   {c.accountStatus === 'active' && <Button variant="danger" onClick={() => { setRemoving(c); setRemoveReason(''); setRemoveError(''); }}>Remove</Button>}
                 </div>
+                {resendError?.id === c._id && <p className="mt-2 text-right text-xs text-red-600" role="alert">{resendError.message}</p>}
                 <div className="mt-4 grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 xl:grid-cols-[minmax(8rem,0.8fr)_minmax(10rem,1fr)_minmax(14rem,1.4fr)]">
                   <div className="min-w-0">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">Phone</p>

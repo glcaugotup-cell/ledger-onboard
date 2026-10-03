@@ -13,6 +13,10 @@ class CaretakerApi extends BaseApiClient {
     return this.patch(`/landlord/caretakers/${id}`, payload);
   }
 
+  resendInvitation(id) {
+    return this.post(`/landlord/caretakers/${id}/resend-invitation`);
+  }
+
   remove(id, reason) {
     return this.delete(`/landlord/caretakers/${id}`, { data: { reason } });
   }
