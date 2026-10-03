@@ -52,8 +52,10 @@ npm install
 | `JWT_SECRET`, `JWT_REFRESH_SECRET` | Long random strings used to sign access and refresh tokens |
 | `CLIENT_ORIGIN` | Frontend URL(s) allowed by CORS, comma-separated (default `http://localhost:5173`) |
 | `EMAIL_APP_URL` | Public frontend URL for email links, e.g. `https://ledger-onboard.vercel.app`; defaults to the first `CLIENT_ORIGIN` when unset |
-| `EMAIL_TRANSPORT` | `console` prints emails (OTP codes, invitations) in the backend terminal; any other value sends real email using the `SMTP_*` settings |
-| `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing email settings (for Gmail, use an App Password) |
+| `EMAIL_TRANSPORT` | `console` prints emails (OTP codes, invitations) in the backend terminal; `brevo` sends through Brevo's HTTPS API (needed on Render's free plan, which blocks outgoing SMTP); any other value (e.g. `smtp`) sends real email using the `SMTP_*` settings |
+| `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing email settings (for Gmail, use an App Password). With Brevo, the `EMAIL_FROM` address must be a verified sender in Brevo |
+| `BREVO_API_KEY` | Brevo API key, used only when `EMAIL_TRANSPORT=brevo` |
+| `EMAIL_TIMEOUT_MS` | How long a single email send may take before it fails with an error (default 10000), so a blocked mail server can't hang registration |
 | `ACCOUNT_ARCHIVE_WARNING_DAYS`, `ACCOUNT_ARCHIVE_DAYS`, `ACCOUNT_LIFECYCLE_CRON` | Inactivity warning/archive thresholds and the daily job schedule |
 | `MAX_UPLOAD_MB`, `MAX_VIDEO_UPLOAD_MB` | Upload size limits (photos/documents, video) |
 | `UPLOAD_DIR` | Source folder for `npm run migrate:uploads` (old on-disk uploads); uploads themselves are stored in MongoDB |

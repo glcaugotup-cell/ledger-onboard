@@ -2,10 +2,25 @@ const nodemailer = require('nodemailer');
 const env = require('../config/env');
 const { buildEmail } = require('../utils/emailTemplate');
 
+const BREVO_SEND_URL = 'https://api.brevo.com/v3/smtp/email';
+
+/** 'Ledger OnBoard <team@gmail.com>' (quotes optional) -> { name, email }; a bare address -> { email }. */
+function parseSender(from) {
+  const value = String(from || '').trim().replace(/^["']|["']$/g, '');
+  const match = /^(.*)<([^>]+)>$/.exec(value);
+  if (!match) return { email: value };
+  const name = match[1].trim().replace(/^["']|["']$/g, '');
+  return name ? { name, email: match[2].trim() } : { email: match[2].trim() };
+}
+
 /**
  * Sends transactional email (OTP, caretaker activation, archive warnings,
- * verification notices). In development (EMAIL_TRANSPORT=console) it just
- * logs the message instead of requiring real SMTP credentials.
+ * verification notices) through one of three transports (EMAIL_TRANSPORT):
+ *  - console: logs the message instead of sending (development and tests);
+ *  - brevo:   Brevo's HTTPS API, for hosts that block outgoing SMTP ports (Render's free plan);
+ *  - smtp (or any other value): an SMTP server such as Gmail with an App Password.
+ * Every real send gives up after EMAIL_TIMEOUT_MS (10 s by default), so an unreachable
+ * mail server makes the request fail with a clear error instead of hanging it.
  */
 class EmailService {
   constructor() {
@@ -23,6 +38,10 @@ class EmailService {
       port: env.smtp.port,
       secure: env.smtp.secure,
       auth: env.smtp.user ? { user: env.smtp.user, pass: env.smtp.pass } : undefined,
+      // Without these, a blocked SMTP port leaves the connection hanging for minutes.
+      connectionTimeout: env.emailTimeoutMs,
+      greetingTimeout: env.emailTimeoutMs,
+      socketTimeout: env.emailTimeoutMs,
     });
     return this._transporter;
   }
@@ -38,8 +57,38 @@ class EmailService {
       return { accepted: [to], messageId: 'console-transport' };
     }
 
+    if (env.emailTransport === 'brevo') return this._sendViaBrevo({ to, subject, text, html });
+
     const transporter = this._getTransporter();
     return transporter.sendMail({ from: env.emailFrom, to, subject, text, html });
+  }
+
+  /** Brevo transactional email over HTTPS (port 443), which hosting providers don't block. */
+  async _sendViaBrevo({ to, subject, text, html }) {
+    if (!env.brevoApiKey) throw new Error('EMAIL_TRANSPORT is "brevo" but BREVO_API_KEY is not set');
+    const body = { sender: parseSender(env.emailFrom), to: [{ email: to }], subject };
+    if (html) body.htmlContent = html;
+    if (text) body.textContent = text;
+
+    let res;
+    try {
+      res = await fetch(BREVO_SEND_URL, {
+        method: 'POST',
+        headers: { 'api-key': env.brevoApiKey, 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(env.emailTimeoutMs),
+      });
+    } catch (err) {
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') throw new Error(`Brevo did not respond within ${env.emailTimeoutMs} ms`);
+      throw err;
+    }
+    if (!res.ok) {
+      // Brevo explains the problem (e.g. unverified sender) in the body; it never echoes the API key.
+      const detail = (await res.text().catch(() => '')).slice(0, 300);
+      throw new Error(`Brevo rejected the email (HTTP ${res.status}): ${detail}`);
+    }
+    const data = await res.json().catch(() => ({}));
+    return { accepted: [to], messageId: data.messageId || 'brevo' };
   }
 
   _sendMessage(to, subject, content) {

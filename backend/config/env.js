@@ -45,9 +45,14 @@ const env = {
   archiveDays: Number(process.env.ACCOUNT_ARCHIVE_DAYS) || 30,
   lifecycleCron: process.env.ACCOUNT_LIFECYCLE_CRON || '0 2 * * *',
 
+  // 'console' prints emails to the log, 'smtp' sends through the SMTP_* server, and 'brevo'
+  // sends through Brevo's HTTPS API (for hosts that block outgoing SMTP, like Render's free plan).
   // Tests always use the console transport so they never send real email.
-  emailTransport: process.env.NODE_ENV === 'test' ? 'console' : process.env.EMAIL_TRANSPORT || 'console',
+  emailTransport: process.env.NODE_ENV === 'test' ? 'console' : (process.env.EMAIL_TRANSPORT || 'console').trim().toLowerCase(),
   emailFrom: process.env.EMAIL_FROM || 'Ledger OnBoard <no-reply@ledgeronboard.local>',
+  brevoApiKey: (process.env.BREVO_API_KEY || '').trim(),
+  // Longest any single email send may take, so a blocked mail server can't hang a request (e.g. registration).
+  emailTimeoutMs: Number(process.env.EMAIL_TIMEOUT_MS) || 10000,
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: Number(process.env.SMTP_PORT) || 587,
