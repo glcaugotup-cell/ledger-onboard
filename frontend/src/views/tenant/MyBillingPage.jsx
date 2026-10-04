@@ -6,7 +6,7 @@ import PaymentApi from '../../services/PaymentApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Field, TextInput } from '../../components/ui/Field.jsx';
-import { BanknotesIcon, CalendarDaysIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { BanknotesIcon, CalendarDaysIcon, DocumentTextIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import StatTile from '../../components/charts/StatTile.jsx';
 import { EmptyState, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { formatDate, formatPeriod, formatPeso } from '../../utils/format.js';
@@ -15,11 +15,16 @@ import { validatePaymentAmount } from '../../utils/validators.js';
 
 const STATUS_TONE = { UNPAID: 'yellow', PARTIAL: 'blue', PAID: 'green', OVERDUE: 'red' };
 
+/** Same rule as the server: digits only (spaces, dashes and letters are stripped), 10 to 13 of them. */
+function validateReferenceNumber(value) {
+  return /^\d{10,13}$/.test(value) ? '' : 'Reference number must be 10 to 13 digits.';
+}
+
 function PaySoaForm({ soa, onDone }) {
   const [amount, setAmount] = useState(String(soa.remainingBalance));
   const [referenceNumber, setReferenceNumber] = useState('');
   const [qrUrl, setQrUrl] = useState('');
-  const [qrError, setQrError] = useState('');
+  const [qrMissing, setQrMissing] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -28,7 +33,7 @@ function PaySoaForm({ soa, onDone }) {
     let currentUrl;
     BillingApi.fetchPaymentQrObjectUrl(soa._id)
       .then((url) => { currentUrl = url; setQrUrl(url); })
-      .catch(() => setQrError('Your landlord has not uploaded a GCash QR code yet. Please contact them to arrange payment.'));
+      .catch(() => setQrMissing(true));
     return () => { if (currentUrl) URL.revokeObjectURL(currentUrl); };
   }, [soa._id]);
 
@@ -37,13 +42,13 @@ function PaySoaForm({ soa, onDone }) {
     setError('');
     const errors = {
       amount: validatePaymentAmount(amount, soa.remainingBalance),
-      referenceNumber: referenceNumber.trim().length < 5 ? 'Enter the GCash transaction reference after paying.' : '',
+      referenceNumber: validateReferenceNumber(referenceNumber),
     };
     setFieldErrors(errors);
     if (errors.amount || errors.referenceNumber || !qrUrl) return;
     setLoading(true);
     try {
-      await PaymentApi.submitQr({ soaId: soa._id, amount, paymentMethod: 'GCASH_QR', referenceNumber: referenceNumber.trim() });
+      await PaymentApi.submitQr({ soaId: soa._id, amount, paymentMethod: 'GCASH_QR', referenceNumber });
       onDone();
     } catch (err) {
       const { message, fieldErrors: serverErrors } = describeApiError(err);
@@ -53,6 +58,16 @@ function PaySoaForm({ soa, onDone }) {
       setLoading(false);
     }
   };
+
+  // P1: without the landlord's QR there is nothing to pay to, so the form is replaced by a clear message.
+  if (qrMissing) {
+    return (
+      <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+        <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <p>Your landlord has not set up GCash yet, so you can’t pay this bill by GCash for now. Please contact your landlord to arrange payment.</p>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={onSubmit} noValidate className="mt-3 space-y-3 border-t border-gray-100 pt-3">
@@ -76,11 +91,18 @@ function PaySoaForm({ soa, onDone }) {
             <img src={qrUrl} alt="Landlord GCash payment QR code" className="mx-auto max-h-64 max-w-full rounded-lg bg-white object-contain" />
             <a href={qrUrl} download="landlord-gcash-qr.png" className="mt-2 inline-block text-sm font-medium text-brand-700 underline">Save QR code to scan in GCash</a>
           </>
-        ) : <p className="text-sm text-gray-600">{qrError || 'Loading landlord QR code…'}</p>}
-        <p className="mt-2 text-xs text-gray-500">Scan with GCash, complete the transfer, then enter the transaction reference shown in your receipt.</p>
+        ) : <p className="text-sm text-gray-600">Loading landlord QR code…</p>}
+        <p className="mt-2 text-xs text-gray-500">Scan with GCash, complete the transfer, then enter the reference number shown in your receipt.</p>
       </div>
-      <Field required label="GCash transaction reference" error={fieldErrors.referenceNumber}>
-        <TextInput value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} maxLength={100} placeholder="Enter the reference from your GCash receipt" error={fieldErrors.referenceNumber} />
+      <Field required label="GCash transaction reference" error={fieldErrors.referenceNumber} hint="10 to 13 digits, as shown on your GCash receipt.">
+        <TextInput
+          inputMode="numeric"
+          value={referenceNumber}
+          onChange={(e) => setReferenceNumber(e.target.value.replace(/\D/g, '').slice(0, 13))}
+          maxLength={13}
+          placeholder="e.g. 1234567890123"
+          error={fieldErrors.referenceNumber}
+        />
       </Field>
       <Button type="submit" loading={loading} disabled={!qrUrl} className="w-full">
         Submit payment for verification
@@ -89,7 +111,12 @@ function PaySoaForm({ soa, onDone }) {
   );
 }
 
-export default function MyBillingPage() {
+/**
+ * The tenant's statements, balances and GCash payment. Used inside My Apartment; existing
+ * bills stay visible and payable even after a stay ends. `highlightBillId` (from a
+ * notification link) scrolls to and marks that bill.
+ */
+export function BillingSection({ highlightBillId = null }) {
   const [soas, setSoas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -97,9 +124,8 @@ export default function MyBillingPage() {
   const [successMsg, setSuccessMsg] = useState('');
 
   const load = () => {
-    setLoading(true);
     BillingApi.list()
-      .then(({ soas: list }) => setSoas(list))
+      .then(({ soas: list }) => { setSoas(list); setError(''); })
       .catch(() => setError('Could not load your billing statements.'))
       .finally(() => setLoading(false));
   };
@@ -111,27 +137,32 @@ export default function MyBillingPage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!highlightBillId || loading) return;
+    document.getElementById(`bill-${highlightBillId}`)?.scrollIntoView?.({ block: 'center' });
+  }, [highlightBillId, loading]);
+
   const open = soas.filter((s) => s.remainingBalance > 0 && s.paymentStatus !== 'PAID');
   const outstanding = open.reduce((sum, s) => sum + s.remainingBalance, 0);
   const nextDue = [...open].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
+  const highlight = (soa) => (highlightBillId === soa._id ? 'ring-2 ring-amber-300' : '');
 
   return (
-    <DashboardLayout>
-      <PageHeader title="Billing & statements" description="Monthly rent, utility charges, statements, and payment receipts. Updates sync automatically." />
+    <>
       <div className="space-y-4">
         <ErrorBanner message={error} />
         <SuccessBanner message={successMsg} />
       </div>
       {loading && <LoadingState label="Loading your statements…" />}
       {!loading && soas.length === 0 && (
-        <EmptyState icon={DocumentTextIcon} title="No statements yet" description="Your monthly statement of account appears here once a caretaker logs a utility reading." />
+        <EmptyState icon={DocumentTextIcon} title="No statements yet" description="Your monthly statement of account appears here once you have moved in and a caretaker logs your bill." />
       )}
       {!loading && open.length > 0 && (
         <section className="mb-6" aria-labelledby="balances-to-pay-heading">
           <h2 id="balances-to-pay-heading" className="mb-3 text-lg font-semibold text-gray-900">Balances to pay</h2>
           <div className="space-y-3">
             {open.map((soa) => (
-              <Card key={`balance-${soa._id}`} className={soa.paymentStatus === 'OVERDUE' ? 'border-red-200' : ''}>
+              <Card key={`balance-${soa._id}`} className={`${soa.paymentStatus === 'OVERDUE' ? 'border-red-200' : ''} ${highlight(soa)}`}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="font-semibold text-gray-900">Balance to pay — {formatPeriod(soa.billingPeriod)}</p>
@@ -181,7 +212,7 @@ export default function MyBillingPage() {
         {soas.map((soa) => {
           const owed = soa.remainingBalance > 0 && soa.paymentStatus !== 'PAID';
           return (
-            <Card key={soa._id} className={soa.paymentStatus === 'OVERDUE' ? 'border-red-200' : ''}>
+            <Card key={soa._id} id={`bill-${soa._id}`} className={`${soa.paymentStatus === 'OVERDUE' ? 'border-red-200' : ''} ${highlight(soa)}`}>
               <article aria-label={`${formatPeriod(soa.billingPeriod)} statement`}>
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
@@ -219,6 +250,16 @@ export default function MyBillingPage() {
           );
         })}
       </div>
+    </>
+  );
+}
+
+/** Stand-alone billing page (the /tenant/billing route now redirects to My Apartment). */
+export default function MyBillingPage() {
+  return (
+    <DashboardLayout>
+      <PageHeader title="Billing & statements" description="Monthly rent, utility charges, statements, and payment receipts. Updates sync automatically." />
+      <BillingSection />
     </DashboardLayout>
   );
 }

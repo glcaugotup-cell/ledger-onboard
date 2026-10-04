@@ -6,7 +6,7 @@ import PageHeader from '../../components/layout/PageHeader.jsx';
 import ReservationApi from '../../services/ReservationApi.js';
 import Card from '../../components/ui/Card.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState } from '../../components/ui/Feedback.jsx';
-import { initials } from '../../utils/format.js';
+import { formatDate, initials } from '../../utils/format.js';
 
 const actionLink =
   'inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500';
@@ -18,7 +18,8 @@ export default function AssignedRoomsPage() {
 
   useEffect(() => {
     ReservationApi.list()
-      .then(({ reservations: list }) => setReservations(list.filter((r) => r.status === 'approved')))
+      // Moved-in tenants, plus reserved tenants who are about to arrive.
+      .then(({ reservations: list }) => setReservations(list.filter((r) => ['approved', 'active'].includes(r.status))))
       .catch(() => setError('Could not load your assigned rooms.'))
       .finally(() => setLoading(false));
   }, []);
@@ -29,7 +30,7 @@ export default function AssignedRoomsPage() {
       const key = r.roomId?._id;
       if (!key) continue;
       if (!byRoom.has(key)) byRoom.set(key, { room: r.roomId, property: r.propertyId, tenants: [] });
-      byRoom.get(key).tenants.push(r.tenantId);
+      byRoom.get(key).tenants.push({ ...r.tenantId, arriving: r.status === 'approved' ? r.moveInDate : null });
     }
     return [...byRoom.values()];
   }, [reservations]);
@@ -83,6 +84,7 @@ export default function AssignedRoomsPage() {
                       {initials(t.fullName)}
                     </span>
                     {t.fullName}
+                    {t.arriving && <span className="text-xs text-gray-500">· arriving {formatDate(t.arriving)}</span>}
                   </li>
                 ))}
               </ul>

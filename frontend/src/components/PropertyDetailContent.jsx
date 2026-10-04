@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import PropertyMap from './map/PropertyMap.jsx';
 import Button from './ui/Button.jsx';
 import Card from './ui/Card.jsx';
+import ConfirmDialog from './ui/ConfirmDialog.jsx';
 import { Field } from './ui/Field.jsx';
 import { Badge, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from './ui/Feedback.jsx';
 import { formatDate, formatPeso } from '../utils/format.js';
@@ -98,6 +99,19 @@ export default function PropertyDetailContent() {
   const [reserveMessage, setReserveMessage] = useState('');
   const [reserveError, setReserveError] = useState('');
   const [moveInError, setMoveInError] = useState('');
+  // R6: the signed-in tenant's open request per room, so "Reserve" becomes "Reservation sent" + Cancel.
+  const [myRequests, setMyRequests] = useState([]);
+  const [cancelling, setCancelling] = useState(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const isTenant = user?.role === 'tenant';
+
+  const loadMyRequests = () => {
+    if (!isTenant) return Promise.resolve();
+    return ReservationApi.list()
+      .then(({ reservations }) => setMyRequests((reservations || []).filter((r) => ['pending', 'approved', 'active'].includes(r.status))))
+      .catch(() => {});
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -106,6 +120,29 @@ export default function PropertyDetailContent() {
       .catch(() => setError('This property could not be found.'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    loadMyRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isTenant]);
+
+  const requestFor = (roomId) => myRequests.find((r) => String(r.roomId?._id || r.roomId) === String(roomId));
+
+  const confirmCancel = async () => {
+    setCancelLoading(true);
+    setCancelError('');
+    try {
+      await ReservationApi.cancel(cancelling._id);
+      setCancelling(null);
+      setReserveMessage('Your reservation was cancelled.');
+      await loadMyRequests();
+      PropertyApi.getPublicDetail(id).then(setData).catch(() => {});
+    } catch (err) {
+      setCancelError(describeApiError(err).message);
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   /** Signed-out visitors are sent to the landing page; signed-in users get the reservation form. */
   function onReserveClick(room) {
@@ -130,10 +167,15 @@ export default function PropertyDetailContent() {
       await ReservationApi.create({ roomId: selectedRoom._id, moveInDate });
       setReserveMessage('Reservation request submitted! The landlord will review it shortly.');
       setSelectedRoom(null);
+      await loadMyRequests();
     } catch (err) {
-      const { message, fieldErrors } = describeApiError(err);
+      const { message, fieldErrors, code } = describeApiError(err);
       if (fieldErrors.moveInDate) setMoveInError(fieldErrors.moveInDate);
-      else setReserveError(message || 'Could not submit reservation.');
+      else if (code === 'DUPLICATE_RESERVATION') {
+        // Already requested (e.g. in another tab): show the "Reservation sent" state instead of an error.
+        setSelectedRoom(null);
+        await loadMyRequests();
+      } else setReserveError(message || 'Could not submit reservation.');
     } finally {
       setReserving(false);
     }
@@ -295,7 +337,18 @@ export default function PropertyDetailContent() {
                     <p className="text-xs text-gray-500">
                       {room.currentOccupancy}/{room.capacity} occupied
                     </p>
-                    {isAvailable &&
+                    {isTenant && requestFor(room._id) ? (
+                      <div className="mt-3 flex gap-2">
+                        <Button variant="secondary" className="flex-1" disabled>
+                          {requestFor(room._id).status === 'active' ? 'Your current stay' : 'Reservation sent'}
+                        </Button>
+                        {['pending', 'approved'].includes(requestFor(room._id).status) && (
+                          <Button variant="ghost" onClick={() => { setCancelError(''); setCancelling(requestFor(room._id)); }}>
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    ) : isAvailable &&
                       (user ? (
                         <Button variant="secondary" className="mt-3 w-full" onClick={() => onReserveClick(room)}>
                           Reserve this room
@@ -314,6 +367,19 @@ export default function PropertyDetailContent() {
               {rooms.length === 0 && <p className="text-sm text-gray-500">No rooms listed yet.</p>}
             </div>
           </Card>
+
+          <ConfirmDialog
+            open={Boolean(cancelling)}
+            tone="danger"
+            title="Cancel this reservation?"
+            message={cancelling?.status === 'approved' ? 'Your reserved room will be released and the landlord will be notified.' : 'Your request will be withdrawn and the landlord will be notified.'}
+            confirmLabel="Cancel reservation"
+            cancelLabel="Keep it"
+            loading={cancelLoading}
+            error={cancelError}
+            onConfirm={confirmCancel}
+            onCancel={() => setCancelling(null)}
+          />
 
           {selectedRoom && (
             <Card title={`Reserve Room ${selectedRoom.roomNumber}`} className="mt-4">

@@ -45,6 +45,64 @@ describe('DashboardLayout', () => {
     expect(screen.getAllByText('Landlord Cruz').length).toBeGreaterThan(0);
   });
 
+  it('R11: tenants get My Apartment below My Reservations; Billing and Maintenance moved inside it', () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Tenant Cruz', role: 'tenant' } }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    renderLayout();
+    const sidebar = screen.getAllByRole('navigation', { name: 'Main' })[0];
+    const labels = within(sidebar).getAllByRole('link').map((link) => link.textContent);
+    expect(labels).toEqual(['Discover', 'My Reservations', 'My Apartment']);
+  });
+
+  it.each(['tenant', 'landlord', 'caretaker'])('M9: the %s account menu has Account, Archive and Log out (no Billing)', async (role) => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Someone', role, hasPaymentQr: true } }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    const user = userEvent.setup();
+    renderLayout();
+    await user.click(screen.getAllByRole('button', { name: 'Open account menu' })[0]);
+    const menuLinks = screen.getByRole('link', { name: 'Account' }).parentElement;
+    expect(within(menuLinks).getAllByRole('link').map((link) => link.textContent)).toEqual(['Account', 'Archive']);
+    expect(within(menuLinks).getByRole('link', { name: 'Archive' })).toHaveAttribute('href', `/${role}/archive`);
+  });
+
+  it('X1: clicking a notification marks it read and opens its deep link', async () => {
+    const markRead = vi.fn().mockResolvedValue({});
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Tenant Cruz', role: 'tenant' } }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue({
+      unreadCount: 1,
+      markRead,
+      notifications: [{ _id: 'n1', title: 'New bill', message: 'Your bill is ready.', read: false, link: '/tenant/apartment?tab=billing&bill=b1' }],
+    }));
+    const user = userEvent.setup();
+    renderLayout();
+    await user.click(screen.getByRole('button', { name: /notifications, 1 unread/i }));
+    await user.click(screen.getByRole('button', { name: /new bill/i }));
+    expect(markRead).toHaveBeenCalledWith('n1');
+    expect(navigateMock).toHaveBeenCalledWith('/tenant/apartment?tab=billing&bill=b1');
+  });
+
+  it('X1: older notifications without a link still open the matching item', async () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Landlord Cruz', role: 'landlord', hasPaymentQr: true } }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue({
+      unreadCount: 1,
+      markRead: vi.fn().mockResolvedValue({}),
+      notifications: [{ _id: 'n2', title: 'New maintenance issue', message: 'Plumbing.', read: false, type: 'MAINTENANCE_ISSUE_CREATED', relatedType: 'MaintenanceIssue', relatedId: 'i7' }],
+    }));
+    const user = userEvent.setup();
+    renderLayout();
+    await user.click(screen.getByRole('button', { name: /notifications, 1 unread/i }));
+    await user.click(screen.getByRole('button', { name: /new maintenance issue/i }));
+    expect(navigateMock).toHaveBeenCalledWith('/landlord/issues?issue=i7');
+  });
+
+  it('P1: a landlord without a GCash QR sees a banner pointing to Account', () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Landlord Cruz', role: 'landlord', hasPaymentQr: false } }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    renderLayout();
+    expect(screen.getByText(/Upload your GCash QR code so tenants can pay their bills/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Upload it in Account' })).toHaveAttribute('href', '/landlord/profile');
+  });
+
   it('renders no nav links for an unknown role', () => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Nobody', role: 'ghost' } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());

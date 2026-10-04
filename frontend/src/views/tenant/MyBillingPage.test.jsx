@@ -104,7 +104,22 @@ describe('MyBillingPage', () => {
     await screen.findByRole('img', { name: /landlord gcash payment qr code/i });
     await user.click(screen.getByRole('button', { name: /submit payment for verification/i }));
 
-    expect(screen.getByText('Enter the GCash transaction reference after paying.')).toBeInTheDocument();
+    expect(screen.getByText('Reference number must be 10 to 13 digits.')).toBeInTheDocument();
+    expect(PaymentApi.submitQr).not.toHaveBeenCalled();
+  });
+
+  it('P2: keeps only digits (spaces, dashes and letters are stripped) and needs 10 to 13 of them', async () => {
+    BillingApi.list.mockResolvedValue({ soas: [unpaidSoa] });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Pay now' }));
+    await screen.findByRole('img', { name: /landlord gcash payment qr code/i });
+    const field = screen.getByLabelText(/gcash transaction reference/i);
+    await user.type(field, '1234-56 78AB');
+    expect(field).toHaveValue('12345678');
+    await user.click(screen.getByRole('button', { name: /submit payment for verification/i }));
+    expect(screen.getByText('Reference number must be 10 to 13 digits.')).toBeInTheDocument();
     expect(PaymentApi.submitQr).not.toHaveBeenCalled();
   });
 
@@ -117,11 +132,12 @@ describe('MyBillingPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Pay now' }));
     expect(await screen.findByRole('img', { name: /landlord gcash payment qr code/i })).toHaveAttribute('src', 'blob:landlord-qr');
     expect(BillingApi.fetchPaymentQrObjectUrl).toHaveBeenCalledWith('s1');
-    await user.type(screen.getByLabelText(/gcash transaction reference/i), 'ABC12345');
+    await user.type(screen.getByLabelText(/gcash transaction reference/i), '0012345678901');
     await user.click(screen.getByRole('button', { name: /submit payment for verification/i }));
 
     await waitFor(() => {
-      expect(PaymentApi.submitQr).toHaveBeenCalledWith({ soaId: 's1', amount: '2400', paymentMethod: 'GCASH_QR', referenceNumber: 'ABC12345' });
+      // Kept as a string, so leading zeros survive.
+      expect(PaymentApi.submitQr).toHaveBeenCalledWith({ soaId: 's1', amount: '2400', paymentMethod: 'GCASH_QR', referenceNumber: '0012345678901' });
     });
     expect(PaymentApi.submit).not.toHaveBeenCalled();
     expect(await screen.findByText(/awaiting verification/i)).toBeInTheDocument();
@@ -134,8 +150,10 @@ describe('MyBillingPage', () => {
     renderPage();
 
     await user.click(await screen.findByRole('button', { name: 'Pay now' }));
-    expect(await screen.findByText(/has not uploaded a GCash QR code yet/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /submit payment for verification/i })).toBeDisabled();
+    // P1: a clear message replaces the payment form.
+    expect(await screen.findByText(/has not set up GCash yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /submit payment for verification/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/gcash transaction reference/i)).not.toBeInTheDocument();
     expect(PaymentApi.submitQr).not.toHaveBeenCalled();
   });
 });

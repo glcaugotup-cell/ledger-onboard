@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { NotificationProvider } from './context/NotificationContext.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
@@ -22,7 +22,7 @@ import AccountRecoveryPage from './views/auth/AccountRecoveryPage.jsx';
 import DiscoverPage from './views/tenant/DiscoverPage.jsx';
 import TenantPropertyDetailPage from './views/tenant/PropertyDetailPage.jsx';
 import MyReservationsPage from './views/tenant/MyReservationsPage.jsx';
-import MyBillingPage from './views/tenant/MyBillingPage.jsx';
+import MyApartmentPage from './views/tenant/MyApartmentPage.jsx';
 
 import LandlordDashboardPage from './views/landlord/DashboardPage.jsx';
 import PropertiesPage from './views/landlord/PropertiesPage.jsx';
@@ -40,11 +40,20 @@ import CashPaymentsPage from './views/caretaker/CashPaymentsPage.jsx';
 
 import ProfilePage from './views/shared/ProfilePage.jsx';
 import MaintenanceIssuesPage from './views/shared/MaintenanceIssuesPage.jsx';
+import ArchivePage from './views/shared/ArchivePage.jsx';
 
 import UsersPage from './views/admin/UsersPage.jsx';
 import ReviewModerationPage from './views/admin/ReviewModerationPage.jsx';
 import AuditLogsPage from './views/admin/AuditLogsPage.jsx';
 import LandlordVerificationPage from './views/admin/LandlordVerificationPage.jsx';
+
+/** Old tenant routes now live inside My Apartment; keeps any ?bill= / ?issue= so old links still land on the item. */
+function ApartmentRedirect({ tab }) {
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set('tab', tab);
+  return <Navigate to={`/tenant/apartment?${params.toString()}`} replace />;
+}
 
 export default function App() {
   return (
@@ -75,8 +84,10 @@ export default function App() {
                 <Route path="/tenant/discover" element={<DiscoverPage />} />
                 <Route path="/tenant/properties/:id" element={<TenantPropertyDetailPage />} />
                 <Route path="/tenant/reservations" element={<MyReservationsPage />} />
-                <Route path="/tenant/billing" element={<MyBillingPage />} />
-                <Route path="/tenant/issues" element={<MaintenanceIssuesPage />} />
+                <Route path="/tenant/apartment" element={<MyApartmentPage />} />
+                <Route path="/tenant/billing" element={<ApartmentRedirect tab="billing" />} />
+                <Route path="/tenant/issues" element={<ApartmentRedirect tab="issues" />} />
+                <Route path="/tenant/archive" element={<ArchivePage />} />
                 <Route path="/tenant/profile" element={<ProfilePage />} />
                 {/* The page was called "Account" before every role got a Profile; keep old links working. */}
                 <Route path="/tenant/account" element={<Navigate to="/tenant/profile" replace />} />
@@ -95,6 +106,7 @@ export default function App() {
                 <Route path="/landlord/issues" element={<MaintenanceIssuesPage />} />
                 <Route path="/landlord/verification" element={<BusinessVerificationPage />} />
                 <Route path="/landlord/profile" element={<ProfilePage />} />
+                <Route path="/landlord/archive" element={<ArchivePage />} />
               </Route>
 
               {/* Caretaker */}
@@ -104,6 +116,7 @@ export default function App() {
                 <Route path="/caretaker/payments" element={<CashPaymentsPage />} />
                 <Route path="/caretaker/issues" element={<MaintenanceIssuesPage />} />
                 <Route path="/caretaker/profile" element={<ProfilePage />} />
+                <Route path="/caretaker/archive" element={<ArchivePage />} />
               </Route>
 
               {/* Admin */}

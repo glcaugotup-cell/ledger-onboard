@@ -189,6 +189,27 @@ describe('resource API clients', () => {
       await ReservationApi.updateStatus('res1', { status: 'approved' });
       expect(instance.patch).toHaveBeenCalledWith('/reservations/res1/status', { status: 'approved' }, undefined);
     });
+
+    it('cancels, requests to leave, and decides on a leave request', async () => {
+      await ReservationApi.cancel('res1');
+      expect(instance.patch).toHaveBeenCalledWith('/reservations/res1/status', { status: 'cancelled' }, undefined);
+
+      await ReservationApi.requestLeave('res1', 'Graduating');
+      expect(instance.post).toHaveBeenCalledWith('/reservations/res1/leave-request', { note: 'Graduating' }, undefined);
+
+      await ReservationApi.decideLeave('res1', { decision: 'approve', acknowledgeBalance: true });
+      expect(instance.patch).toHaveBeenCalledWith('/reservations/res1/leave-request', { decision: 'approve', acknowledgeBalance: true }, undefined);
+    });
+  });
+
+  describe('PropertyApi archive', () => {
+    it('lists hidden properties and restores one', async () => {
+      await PropertyApi.listArchived();
+      expect(instance.get).toHaveBeenCalledWith('/properties/mine/archived', undefined);
+
+      await PropertyApi.restore('p1');
+      expect(instance.patch).toHaveBeenCalledWith('/properties/p1/restore', undefined, undefined);
+    });
   });
 
   describe('ReviewApi', () => {

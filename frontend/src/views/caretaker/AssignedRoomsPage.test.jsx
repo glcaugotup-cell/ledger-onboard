@@ -58,6 +58,21 @@ describe('AssignedRoomsPage', () => {
     expect(screen.getByText('2/4 occupied')).toBeInTheDocument();
   });
 
+  it('lists moved-in tenants and marks reserved tenants as arriving', async () => {
+    ReservationApi.list.mockResolvedValue({
+      reservations: [
+        { status: 'active', roomId: { _id: 'r1', roomNumber: '101', capacity: 2, currentOccupancy: 2 }, propertyId: { _id: 'p1', propertyName: 'Sunshine' }, tenantId: { _id: 't1', fullName: 'Moved In' } },
+        { status: 'approved', moveInDate: '2026-10-20T00:00:00Z', roomId: { _id: 'r1', roomNumber: '101', capacity: 2, currentOccupancy: 2 }, propertyId: { _id: 'p1', propertyName: 'Sunshine' }, tenantId: { _id: 't2', fullName: 'Arriving Soon' } },
+        { status: 'completed', roomId: { _id: 'r2', roomNumber: '102', capacity: 1, currentOccupancy: 0 }, propertyId: { _id: 'p1', propertyName: 'Sunshine' }, tenantId: { _id: 't3', fullName: 'Moved Out' } },
+      ],
+    });
+    renderPage();
+    expect(await screen.findByText('Moved In')).toBeInTheDocument();
+    expect(screen.getByText('Arriving Soon')).toBeInTheDocument();
+    expect(screen.getByText(/arriving Oct 20, 2026/)).toBeInTheDocument();
+    expect(screen.queryByText('Moved Out')).not.toBeInTheDocument();
+  });
+
   it('shows an error banner when the reservation list fails to load', async () => {
     ReservationApi.list.mockRejectedValue(new Error('network down'));
     renderPage();

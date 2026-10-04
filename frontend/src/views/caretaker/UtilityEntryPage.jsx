@@ -61,7 +61,8 @@ export default function UtilityEntryPage() {
   useEffect(() => {
     Promise.all([ReservationApi.list(), UtilityApi.listMine()])
       .then(([{ reservations: list }, { readings: logs }]) => {
-        setReservations(list.filter((r) => r.status === 'approved'));
+        // Bills are only for tenants who have moved in (the landlord confirmed the move-in).
+        setReservations(list.filter((r) => r.status === 'active'));
         setReadingLog(logs);
       })
       .catch(() => setError('Could not load your assigned rooms or utility log.'))

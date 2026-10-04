@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import PageHeader from '../../components/layout/PageHeader.jsx';
 import PropertyApi from '../../services/PropertyApi.js';
+import ReservationApi from '../../services/ReservationApi.js';
+import CaretakerApi from '../../services/CaretakerApi.js';
+import TenancyManager from '../../components/TenancyManager.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
@@ -234,6 +238,50 @@ function CaretakerAssignment({ propertyId }) {
   );
 }
 
+/** R10: this property's requests, tenants awaiting move-in and current tenants, below the Caretakers card. */
+function PropertyTenancies({ propertyId, onChanged }) {
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const [reservations, setReservations] = useState([]);
+  const [caretakers, setCaretakers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = () =>
+    Promise.all([ReservationApi.list(), CaretakerApi.list()])
+      .then(([r, c]) => {
+        setReservations(r.reservations.filter((item) => String(item.propertyId?._id || item.propertyId) === String(propertyId)));
+        setCaretakers(c.caretakers.filter((ct) => ct.accountStatus === 'active'));
+        setError('');
+      })
+      .catch(() => setError('Could not load this property’s reservations.'))
+      .finally(() => setLoading(false));
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [propertyId]);
+
+  useEffect(() => {
+    if (!loading && location.hash === '#tenants' && !searchParams.get('reservation')) document.getElementById('tenants')?.scrollIntoView?.();
+  }, [loading, location.hash, searchParams]);
+
+  return (
+    <Card id="tenants" title="Tenants & reservations" description="Approve requests, confirm move-ins and manage current tenants for this property. The Reservations page shows all your properties." className="mb-6">
+      <ErrorBanner message={error} />
+      {loading ? <LoadingState label="Loading reservations…" /> : (
+        <TenancyManager
+          reservations={reservations}
+          caretakers={caretakers}
+          onChanged={async () => { await load(); onChanged?.(); }}
+          highlightId={searchParams.get('reservation')}
+          landlordHasQr={Boolean(user?.hasPaymentQr)}
+          headingLevelOffset="-property"
+        />
+      )}
+    </Card>
+  );
+}
+
 export default function PropertyManagePage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -261,6 +309,15 @@ export default function PropertyManagePage() {
   };
 
   useEffect(load, [id]);
+
+  // Room occupancy changes when a reservation is approved, released or ended; refresh it without the page spinner.
+  const refreshRooms = () =>
+    PropertyApi.getForManagement(id)
+      .then((data) => {
+        setProperty(data.property);
+        setRooms(data.rooms);
+      })
+      .catch(() => {});
 
   // Runs only from the dialog's confirm button.
   const onDelete = async () => {
@@ -396,6 +453,8 @@ export default function PropertyManagePage() {
       />
 
       <CaretakerAssignment propertyId={id} />
+
+      <PropertyTenancies propertyId={id} onChanged={refreshRooms} />
 
       <ConfirmDialog
         open={deleteOpen}

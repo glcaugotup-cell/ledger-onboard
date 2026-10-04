@@ -16,7 +16,8 @@ vi.mock('../../services/UtilityApi.js', () => ({ default: { logReading: vi.fn(),
 const reservations = {
   reservations: [
     {
-      status: 'approved',
+      // Only tenants who moved in (current stay) are billed.
+      status: 'active',
       roomId: { _id: 'r1', roomNumber: '101' },
       // Meter readings apply to Apartment and Studio properties.
       propertyId: { _id: 'p1', propertyType: 'Apartment' },
@@ -29,7 +30,8 @@ const reservations = {
 const bedspaceReservations = {
   reservations: [
     {
-      status: 'approved',
+      // Only tenants who moved in (current stay) are billed.
+      status: 'active',
       roomId: { _id: 'r2', roomNumber: '202', monthlyBaseRent: 2500 },
       propertyId: { _id: 'p2', propertyType: 'Bedspace' },
       tenantId: { _id: 't2', fullName: 'Maria Santos' },
@@ -52,6 +54,19 @@ describe('UtilityEntryPage', () => {
     useNotificationsMock.mockReturnValue(mockNotificationsValue());
     ReservationApi.list.mockResolvedValue(reservations);
     UtilityApi.listMine.mockResolvedValue({ readings: [] });
+  });
+
+  it('R5: offers only rooms with moved-in tenants; reserved tenants are not billed yet', async () => {
+    ReservationApi.list.mockResolvedValue({
+      reservations: [
+        ...reservations.reservations,
+        { status: 'approved', roomId: { _id: 'r9', roomNumber: '909' }, propertyId: { _id: 'p9', propertyType: 'Apartment' }, tenantId: { _id: 't9', fullName: 'Reserved Only' } },
+      ],
+    });
+    renderPage();
+    await screen.findByText(/select a room/i);
+    expect(screen.queryByRole('option', { name: /909/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /101/ })).toBeInTheDocument();
   });
 
   it('reveals the reading form only after a room is selected', async () => {

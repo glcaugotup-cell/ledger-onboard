@@ -29,6 +29,15 @@ class PropertyApi extends BaseApiClient {
     return this.delete(`/properties/${id}`);
   }
 
+  /** The landlord's hidden (soft-deleted) properties, for the Archive. */
+  listArchived() {
+    return this.get('/properties/mine/archived');
+  }
+
+  restore(id) {
+    return this.patch(`/properties/${id}/restore`);
+  }
+
   listRooms(id) {
     return this.get(`/properties/${id}/rooms`);
   }

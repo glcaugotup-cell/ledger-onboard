@@ -1,6 +1,6 @@
-export default function Card({ className = '', children, title, description, action }) {
+export default function Card({ className = '', children, title, description, action, id }) {
   return (
-    <div className={`rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 ${className}`}>
+    <div id={id} className={`rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 ${className}`}>
       {(title || action) && (
         <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">

@@ -87,10 +87,16 @@ const SECTIONS = [
     icon: ShareIcon,
     title: 'Information Sharing',
     body: (
-      <p>
-        We do not sell your personal information. Information may only be shared when necessary to provide platform services, process
-        transactions/reservations, comply with legal requirements, or protect the security of the platform and its users.
-      </p>
+      <>
+        <p>
+          We do not sell your personal information. Information may only be shared when necessary to provide platform services, process
+          transactions/reservations, comply with legal requirements, or protect the security of the platform and its users.
+        </p>
+        <p className="mt-2">
+          Once a landlord approves your reservation, you can see that landlord&apos;s contact details (name, email and contact number) so you can
+          arrange your move-in. They are not shown before approval or on public listings.
+        </p>
+      </>
     ),
   },
   {

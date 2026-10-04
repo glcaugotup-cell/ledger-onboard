@@ -11,7 +11,7 @@ import { todayInputValue } from '../utils/validators.js';
 const { useAuthMock, navigateMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), navigateMock: vi.fn() }));
 vi.mock('../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../services/PropertyApi.js', () => ({ default: { getPublicDetail: vi.fn() } }));
-vi.mock('../services/ReservationApi.js', () => ({ default: { create: vi.fn() } }));
+vi.mock('../services/ReservationApi.js', () => ({ default: { create: vi.fn(), list: vi.fn(), cancel: vi.fn() } }));
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }) => <div data-testid="map-container">{children}</div>,
   TileLayer: () => <div />,
@@ -54,6 +54,8 @@ function renderContent() {
 describe('PropertyDetailContent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Signed-in tenants also load their own requests (R6: "Reservation sent" instead of "Reserve").
+    ReservationApi.list.mockResolvedValue({ reservations: [] });
   });
 
   it('shows a video tour player when the listing has a video', async () => {
@@ -128,6 +130,25 @@ describe('PropertyDetailContent', () => {
       expect(ReservationApi.create).toHaveBeenCalledWith({ roomId: 'r1', moveInDate: nextMonth });
     });
     expect(await screen.findByText(/reservation request submitted/i)).toBeInTheDocument();
+  });
+
+  it('R6: shows "Reservation sent" with a Cancel button instead of Reserve when the tenant already requested the room', async () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated' }));
+    PropertyApi.getPublicDetail.mockResolvedValue(detail);
+    ReservationApi.list.mockResolvedValue({ reservations: [{ _id: 'res1', status: 'pending', roomId: { _id: 'r1' } }] });
+    ReservationApi.cancel.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderContent();
+
+    expect(await screen.findByRole('button', { name: 'Reservation sent' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /reserve this room/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/already have an active reservation/i)).not.toBeInTheDocument();
+
+    ReservationApi.list.mockResolvedValue({ reservations: [] });
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Cancel reservation' }));
+    await waitFor(() => expect(ReservationApi.cancel).toHaveBeenCalledWith('res1'));
+    expect(await screen.findByRole('button', { name: /reserve this room/i })).toBeInTheDocument();
   });
 
   it('summarizes the starting rent and how many rooms are open near the title', async () => {

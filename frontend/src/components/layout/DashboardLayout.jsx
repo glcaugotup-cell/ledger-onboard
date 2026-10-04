@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
+  ArchiveBoxIcon,
   ArrowRightOnRectangleIcon,
   Bars3Icon,
   BellIcon,
@@ -14,6 +15,8 @@ import {
   ClipboardDocumentListIcon,
   CreditCardIcon,
   DocumentTextIcon,
+  ExclamationTriangleIcon,
+  HomeIcon,
   HomeModernIcon,
   MagnifyingGlassIcon,
   ArrowUpRightIcon,
@@ -37,8 +40,8 @@ const NAV_BY_ROLE = {
   tenant: [
     { to: '/tenant/discover', label: 'Discover', icon: MagnifyingGlassIcon },
     { to: '/tenant/reservations', label: 'My Reservations', icon: CalendarDaysIcon },
-    { to: '/tenant/billing', label: 'Billing', icon: DocumentTextIcon },
-    { to: '/tenant/issues', label: 'Maintenance Issues', icon: ClipboardDocumentListIcon },
+    // Billing and Maintenance issues live inside My Apartment.
+    { to: '/tenant/apartment', label: 'My Apartment', icon: HomeIcon },
   ],
   landlord: [
     { to: '/landlord/dashboard', label: 'Dashboard', icon: ChartBarIcon },
@@ -81,23 +84,26 @@ function useDismiss(open, ref, onClose) {
   }, [open, ref, onClose]);
 }
 
+/** Where a notification leads: its own deep link when it has one (newer notifications), otherwise the matching page. */
 function notificationPath(notification, role) {
+  if (notification.link && notification.link.startsWith('/')) return notification.link;
+  const id = notification.relatedId;
   if (notification.relatedType === 'MaintenanceIssue' || notification.type?.startsWith('MAINTENANCE_ISSUE_')) {
-    if (role === 'landlord') return '/landlord/issues';
-    if (role === 'caretaker') return '/caretaker/issues';
-    return '/tenant/issues';
+    if (role === 'landlord') return `/landlord/issues${id ? `?issue=${id}` : ''}`;
+    if (role === 'caretaker') return `/caretaker/issues${id ? `?issue=${id}` : ''}`;
+    return `/tenant/apartment?tab=issues${id ? `&issue=${id}` : ''}`;
   }
   if (notification.relatedType === 'Reservation' || notification.type?.startsWith('RESERVATION_')) {
     if (role === 'landlord') return '/landlord/reservations';
     if (role === 'caretaker') return '/caretaker/rooms';
     if (role === 'admin') return '/admin/users';
-    return '/tenant/reservations';
+    return `/tenant/reservations${id ? `?reservation=${id}` : ''}`;
   }
-  if (notification.relatedType === 'BillingSOA' || notification.type?.startsWith('BILL_')) return '/tenant/billing';
+  if (notification.relatedType === 'BillingSOA' || notification.type?.startsWith('BILL_')) return `/tenant/apartment?tab=billing${id ? `&bill=${id}` : ''}`;
   if (notification.relatedType === 'PaymentTransaction' || notification.type?.startsWith('PAYMENT_')) {
     if (role === 'landlord') return '/landlord/payments';
     if (role === 'caretaker') return '/caretaker/payments';
-    return '/tenant/billing';
+    return '/tenant/apartment?tab=billing';
   }
   if (notification.relatedType === 'LandlordVerification' || notification.type?.startsWith('BUSINESS_VERIFICATION_')) {
     return role === 'admin' ? '/admin/landlord-verifications' : '/landlord/verification';
@@ -172,7 +178,8 @@ function AccountMenu({ user, collapsed = false, mobile = false, dark = false, he
   const ref = useRef(null);
   useDismiss(open, ref, () => setOpen(false));
   const profilePath = `/${user?.role}/profile`;
-  const billingPath = user?.role === 'landlord' ? '/landlord/billing' : user?.role === 'tenant' ? '/tenant/billing' : null;
+  // M9: Archive for tenants, landlords and caretakers. Billing is no longer here (tenants: My Apartment; landlords: sidebar).
+  const archivePath = ['tenant', 'landlord', 'caretaker'].includes(user?.role) ? `/${user.role}/archive` : null;
 
   return (
     <div ref={ref} className={`relative mt-2 ${mobile ? 'w-full' : ''}`}>
@@ -202,7 +209,7 @@ function AccountMenu({ user, collapsed = false, mobile = false, dark = false, he
             <NavLink to={profilePath} onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 ${focusRing}`}>
               <UserCircleIcon className="h-4 w-4" aria-hidden="true" />Account
             </NavLink>
-            {billingPath && <NavLink to={billingPath} onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 ${focusRing}`}><CreditCardIcon className="h-4 w-4" aria-hidden="true" />Billing</NavLink>}
+            {archivePath && <NavLink to={archivePath} onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 ${focusRing}`}><ArchiveBoxIcon className="h-4 w-4" aria-hidden="true" />Archive</NavLink>}
           </div>
           <div className="border-t border-gray-100 p-1.5">
             <button type="button" onClick={onLogout} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 ${focusRing}`}><ArrowRightOnRectangleIcon className="h-4 w-4" aria-hidden="true" />Log out</button>
@@ -290,6 +297,9 @@ export default function DashboardLayout({ children }) {
   const mobileMenuRef = useRef(null);
 
   const links = NAV_BY_ROLE[user?.role] || [];
+  const { pathname } = useLocation();
+  // P1: landlords without a GCash QR are reminded everywhere except on the page where they upload it.
+  const showQrBanner = user?.role === 'landlord' && user?.hasPaymentQr === false && pathname !== '/landlord/profile';
   useDismiss(menuOpen, mobileMenuRef, () => setMenuOpen(false));
 
   // Runs only after the user confirms in the dialog; Cancel keeps them signed in.
@@ -385,6 +395,12 @@ export default function DashboardLayout({ children }) {
             </div>
           </header>
           <main id="main-content" className="px-4 py-5 sm:px-6 sm:py-6 xl:px-7 xl:py-7">
+            {showQrBanner && (
+              <div className="mb-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+                <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                <p>Upload your GCash QR code so tenants can pay their bills. You can’t confirm a move-in until it is uploaded. <Link to="/landlord/profile" className="font-semibold underline">Upload it in Account</Link></p>
+              </div>
+            )}
             {children}
           </main>
         </div>

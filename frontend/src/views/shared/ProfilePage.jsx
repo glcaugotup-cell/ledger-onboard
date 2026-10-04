@@ -14,13 +14,13 @@ import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
 import PhoneInput from '../../components/ui/PhoneInput.jsx';
+import { ReviewForm } from '../../components/ReviewForm.jsx';
 import { describeApiError } from '../../utils/errors.js';
-import { capitalizeFirst } from '../../utils/textFormat.js';
+import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
 import { formatDate, formatStatus } from '../../utils/format.js';
-import { PATTERNS, validatePassword, validatePhone } from '../../utils/validators.js';
+import { PATTERNS, validateName, validatePassword, validatePhone } from '../../utils/validators.js';
 
 const ROLE_LABEL = { tenant: 'Tenant', landlord: 'Landlord', caretaker: 'Caretaker', admin: 'Administrator' };
-const MAX_REVIEW_COMMENT = 2000;
 
 /** One read-only line of registered information. */
 function InfoRow({ label, value, hint }) {
@@ -35,67 +35,8 @@ function InfoRow({ label, value, hint }) {
   );
 }
 
-function ReviewForm({ reservation, onSubmitted }) {
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const submit = async () => {
-    if (comment.length > MAX_REVIEW_COMMENT) {
-      setError(`Keep your review under ${MAX_REVIEW_COMMENT} characters.`);
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      await ReviewApi.submit(reservation.propertyId._id || reservation.propertyId, { reservationId: reservation._id, rating, comment });
-      onSubmitted(reservation._id);
-    } catch (err) {
-      setError(describeApiError(err).message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="rounded-lg border border-gray-200 p-3">
-      <p className="mb-2 text-sm font-medium text-gray-800">{reservation.propertyId?.propertyName || 'Your stay'}</p>
-      <ErrorBanner message={error} />
-      <p className="mb-1.5 text-sm font-medium text-gray-700">Rating<FieldRequirement required /></p>
-      <div className="mb-2 flex gap-1" role="radiogroup" aria-label="Rating" aria-required="true">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            role="radio"
-            aria-checked={n === rating}
-            aria-label={`${n} star${n === 1 ? '' : 's'}`}
-            onClick={() => setRating(n)}
-            className={`text-xl ${n <= rating ? 'text-yellow-500' : 'text-gray-300'}`}
-          >
-            ★
-          </button>
-        ))}
-      </div>
-      <Field label="Review comment">
-      <TextArea
-        value={comment}
-        onChange={(e) => setComment(capitalizeFirst(e.target.value))}
-        placeholder="Share your experience (optional)"
-        maxLength={MAX_REVIEW_COMMENT}
-        className="mb-2"
-        rows={2}
-      />
-      </Field>
-      <Button onClick={submit} loading={loading} className="w-full">
-        Submit review
-      </Button>
-    </div>
-  );
-}
-
 function PaymentQrSettings({ hasQr }) {
+  const { refreshProfile } = useAuth();
   const [qrUrl, setQrUrl] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -125,6 +66,8 @@ function PaymentQrSettings({ hasQr }) {
       const url = await AuthApi.fetchPaymentQrObjectUrl();
       setQrUrl((old) => { if (old) URL.revokeObjectURL(old); return url; });
       setMessage('GCash QR code saved. Tenants can now view it on their statements.');
+      // Clears the "upload your GCash QR" banner and move-in gate on the other screens.
+      refreshProfile?.().catch(() => {});
     } catch (err) {
       setError(describeApiError(err).message);
     } finally {
@@ -134,11 +77,12 @@ function PaymentQrSettings({ hasQr }) {
 
   return (
     <Card title="GCash payment QR code" className="mt-6">
-      <p className="mb-3 text-sm text-gray-500">Upload your GCash QR code. It will appear privately on your tenants’ billing statements.</p>
+      <p className="mb-3 text-sm text-gray-500">Upload your GCash QR code. It will appear privately on your tenants’ billing statements. It is required: tenants can’t pay by GCash, and you can’t confirm a move-in, until it is uploaded.</p>
       <ErrorBanner message={error} />
       <SuccessBanner message={message} />
       {qrUrl && <img src={qrUrl} alt="Your GCash payment QR code" className="mb-3 max-h-56 rounded-lg border border-gray-200 object-contain" />}
-      <p className="mb-1.5 text-sm font-medium text-gray-700">GCash QR code<FieldRequirement /></p>
+      <p className="mb-1.5 text-sm font-medium text-gray-700">GCash QR code<FieldRequirement required /></p>
+      {!hasQr && !qrUrl && <p className="mb-2 text-xs font-medium text-red-600">No GCash QR code yet. Upload one to continue.</p>}
       <label className="inline-flex cursor-pointer items-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800">
         {loading ? 'Uploading…' : hasQr || qrUrl ? 'Replace QR code' : 'Upload QR code'}
         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={upload} disabled={loading} className="sr-only" />
@@ -149,8 +93,9 @@ function PaymentQrSettings({ hasQr }) {
 
 /**
  * Profile for every role (tenant, landlord, caretaker, admin): the registered
- * details (name and email are shown but can't be edited — the backend rejects
- * changes to them too), an editable phone number, password change by emailed
+ * email and role (shown but never editable — the backend rejects changes to them
+ * too), an editable name, phone and emergency contact (the admin edits only the
+ * phone), password change by emailed
  * code, email-code sign-in, and — for everyone except admins — closing the
  * account. Closing never deletes data; it deactivates the account.
  */
@@ -164,6 +109,21 @@ export default function ProfilePage() {
   const [profileMsg, setProfileMsg] = useState('');
   const [profileError, setProfileError] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
+
+  // Tenants, landlords and caretakers can edit their name, phone and emergency contact; email and role stay fixed.
+  const canEditDetails = role !== 'admin';
+  const [details, setDetails] = useState(() => ({
+    firstName: user?.firstName || '',
+    lastName: user?.lastName || '',
+    phone: user?.phone || '',
+    emergencyName: user?.emergencyContact?.name || '',
+    emergencyPhone: user?.emergencyContact?.phone || '',
+  }));
+  const [detailErrors, setDetailErrors] = useState({});
+  const setDetail = (key, value) => {
+    setDetails((prev) => ({ ...prev, [key]: value }));
+    if (detailErrors[key]) setDetailErrors((prev) => ({ ...prev, [key]: '' }));
+  };
 
   // Password change: 'idle' -> 'code' (a code was emailed) -> done (signed out).
   const [pwStep, setPwStep] = useState('idle');
@@ -210,6 +170,52 @@ export default function ProfilePage() {
       const { message, fieldErrors } = describeApiError(err);
       setProfileError(message);
       setPhoneError(fieldErrors.phone || '');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const saveDetails = async (e) => {
+    e.preventDefault();
+    setProfileError('');
+    setProfileMsg('');
+    const firstName = toNameCase(details.firstName.trim());
+    const lastName = toNameCase(details.lastName.trim());
+    const emergencyName = toNameCase(details.emergencyName.trim());
+    // Tenants registered with an emergency contact, so they keep one; for others it is optional (both fields or neither).
+    const wantsEmergency = role === 'tenant' || emergencyName || details.emergencyPhone;
+    const errors = {
+      firstName: validateName(firstName) || '',
+      lastName: validateName(lastName) || '',
+      phone: validatePhone(details.phone) || '',
+      emergencyName: wantsEmergency ? validateName(emergencyName) || '' : '',
+      emergencyPhone: wantsEmergency ? validatePhone(details.emergencyPhone) || '' : '',
+    };
+    setDetails((prev) => ({ ...prev, firstName, lastName, emergencyName }));
+    setDetailErrors(errors);
+    if (Object.values(errors).some(Boolean)) return;
+
+    setProfileLoading(true);
+    try {
+      // Email and role are never sent; the backend rejects them anyway.
+      await AuthApi.updateMe({
+        firstName,
+        lastName,
+        phone: details.phone,
+        ...(wantsEmergency ? { emergencyContact: { name: emergencyName, phone: details.emergencyPhone } } : {}),
+      });
+      await refreshProfile().catch(() => {});
+      setProfileMsg('Your details were updated.');
+    } catch (err) {
+      const { message, fieldErrors } = describeApiError(err);
+      setProfileError(message);
+      setDetailErrors({
+        firstName: fieldErrors.firstName || '',
+        lastName: fieldErrors.lastName || '',
+        phone: fieldErrors.phone || '',
+        emergencyName: fieldErrors['emergencyContact.name'] || '',
+        emergencyPhone: fieldErrors['emergencyContact.phone'] || '',
+      });
     } finally {
       setProfileLoading(false);
     }
@@ -333,15 +339,9 @@ export default function ProfilePage() {
       <div className={`grid grid-cols-1 gap-6 ${role === 'caretaker' ? 'lg:grid-cols-1' : 'lg:grid-cols-2'}`}>
         <Card title="Personal information">
           <dl className="mb-4">
-            <InfoRow label="Full name" value={user?.fullName} hint="Your registered name can’t be changed here." />
+            {!canEditDetails && <InfoRow label="Full name" value={user?.fullName} hint="Your registered name can’t be changed here." />}
             <InfoRow label="Email" value={user?.email} hint="Your sign-in email can’t be changed." />
-            <InfoRow label="Role" value={ROLE_LABEL[role] || role} />
-            {role === 'tenant' && (
-              <InfoRow
-                label="Emergency contact"
-                value={user?.emergencyContact?.name ? `${user.emergencyContact.name} · ${user.emergencyContact.phone || ''}` : null}
-              />
-            )}
+            <InfoRow label="Role" value={ROLE_LABEL[role] || role} hint={canEditDetails ? 'Your role can’t be changed.' : undefined} />
             {role === 'caretaker' && (
               <InfoRow label="Service barangay" value={user?.serviceBarangay} hint="Set by your landlord; used to match you with boarding houses nearby." />
             )}
@@ -351,24 +351,56 @@ export default function ProfilePage() {
             {user?.createdAt && <InfoRow label="Member since" value={formatDate(user.createdAt)} />}
           </dl>
 
-          <form onSubmit={savePhone} className="space-y-3" noValidate>
-            <ErrorBanner message={profileError} />
-            <SuccessBanner message={profileMsg} />
-            <Field required label="Phone" error={phoneError}>
-              <PhoneInput
-                value={phone}
-                onChange={(value) => {
-                  setPhone(value);
-                  if (phoneError) setPhoneError('');
-                }}
-                placeholder="917 123 4567"
-                error={phoneError}
-              />
-            </Field>
-            <Button type="submit" loading={profileLoading}>
-              Save phone number
-            </Button>
-          </form>
+          {canEditDetails ? (
+            <form onSubmit={saveDetails} className="space-y-3" noValidate>
+              <ErrorBanner message={profileError} />
+              <SuccessBanner message={profileMsg} />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field required label="First name" error={detailErrors.firstName}>
+                  <TextInput maxLength={80} value={details.firstName} onChange={(e) => setDetail('firstName', capitalizeFirst(e.target.value))} onBlur={() => setDetail('firstName', toNameCase(details.firstName))} error={detailErrors.firstName} />
+                </Field>
+                <Field required label="Last name" error={detailErrors.lastName}>
+                  <TextInput maxLength={80} value={details.lastName} onChange={(e) => setDetail('lastName', capitalizeFirst(e.target.value))} onBlur={() => setDetail('lastName', toNameCase(details.lastName))} error={detailErrors.lastName} />
+                </Field>
+              </div>
+              <Field required label="Phone" error={detailErrors.phone}>
+                <PhoneInput value={details.phone} onChange={(value) => setDetail('phone', value)} placeholder="917 123 4567" error={detailErrors.phone} />
+              </Field>
+              <fieldset className="rounded-lg border border-gray-200 p-3">
+                <legend className="px-1 text-sm font-medium text-gray-700">Emergency contact<FieldRequirement required={role === 'tenant'} /></legend>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field required={role === 'tenant'} label="Emergency contact name" error={detailErrors.emergencyName}>
+                    <TextInput maxLength={80} value={details.emergencyName} onChange={(e) => setDetail('emergencyName', capitalizeFirst(e.target.value))} onBlur={() => setDetail('emergencyName', toNameCase(details.emergencyName))} error={detailErrors.emergencyName} />
+                  </Field>
+                  <Field required={role === 'tenant'} label="Emergency contact phone" error={detailErrors.emergencyPhone}>
+                    <PhoneInput value={details.emergencyPhone} onChange={(value) => setDetail('emergencyPhone', value)} placeholder="917 123 4567" error={detailErrors.emergencyPhone} />
+                  </Field>
+                </div>
+              </fieldset>
+              <Button type="submit" loading={profileLoading}>
+                Save changes
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={savePhone} className="space-y-3" noValidate>
+              <ErrorBanner message={profileError} />
+              <SuccessBanner message={profileMsg} />
+              <Field required label="Phone" error={phoneError}>
+                <PhoneInput
+                  value={phone}
+                  onChange={(value) => {
+                    setPhone(value);
+                    if (phoneError) setPhoneError('');
+                  }}
+                  placeholder="917 123 4567"
+                  error={phoneError}
+                />
+              </Field>
+              <Button type="submit" loading={profileLoading}>
+                Save phone number
+              </Button>
+            </form>
+          )}
         </Card>
 
         <Card title="Change password">

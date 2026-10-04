@@ -51,16 +51,27 @@ describe('ProfilePage', () => {
     vi.clearAllMocks();
   });
 
-  it.each(['tenant', 'landlord', 'caretaker', 'admin'])('shows the %s’s registered name and email as read-only text', (role) => {
+  it.each(['tenant', 'landlord', 'caretaker'])('X2: the %s’s email and role are read-only text, and their name is editable', (role) => {
     renderPage(USERS[role]);
-    const info = screen.getByText('Full name').closest('dl');
-    expect(within(info).getByText(USERS[role].fullName)).toBeInTheDocument();
+    const info = screen.getByText('Email').closest('dl');
     expect(within(info).getByText(USERS[role].email)).toBeInTheDocument();
-    // No editable inputs for identity fields.
+    expect(within(info).getByText(role[0].toUpperCase() + role.slice(1))).toBeInTheDocument();
+    // Email and role are never inputs.
+    expect(screen.queryByDisplayValue(USERS[role].email)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('First name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Last name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Emergency contact name')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /email me a code/i })).toBeInTheDocument();
+  });
+
+  it('the admin profile is unchanged: registered name and email are read-only text', () => {
+    renderPage(USERS.admin);
+    const info = screen.getByText('Full name').closest('dl');
+    expect(within(info).getByText(USERS.admin.fullName)).toBeInTheDocument();
+    expect(within(info).getByText(USERS.admin.email)).toBeInTheDocument();
     expect(screen.queryByLabelText(/first name/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/last name/i)).not.toBeInTheDocument();
-    expect(screen.queryByDisplayValue(USERS[role].email)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /email me a code/i })).toBeInTheDocument();
+    expect(screen.queryByDisplayValue(USERS.admin.email)).not.toBeInTheDocument();
   });
 
   it('shows role-specific details', () => {
@@ -68,10 +79,10 @@ describe('ProfilePage', () => {
     expect(screen.getByText('Bonuan Gueset')).toBeInTheDocument();
   });
 
-  it('saves only the phone number', async () => {
+  it('admin: saves only the phone number', async () => {
     AuthApi.updateMe.mockResolvedValue({});
     const user = userEvent.setup();
-    renderPage();
+    renderPage(USERS.admin);
     // The +63 badge is aria-hidden, so the field's accessible name is just "Phone".
     const phone = screen.getByRole('textbox', { name: 'Phone' });
     await user.clear(phone);
@@ -87,9 +98,43 @@ describe('ProfilePage', () => {
     const phone = screen.getByRole('textbox', { name: 'Phone' });
     await user.clear(phone);
     await user.type(phone, '123');
-    await user.click(screen.getByRole('button', { name: /save phone number/i }));
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
     expect(AuthApi.updateMe).not.toHaveBeenCalled();
     expect(screen.getByText(/must be 09xxxxxxxxx/i)).toBeInTheDocument();
+  });
+
+  it('X2: saves name, phone and emergency contact (names auto-capitalized); never sends email or role', async () => {
+    AuthApi.updateMe.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage();
+    const first = screen.getByLabelText('First name');
+    await user.clear(first);
+    await user.type(first, 'maria');
+    const emergency = screen.getByLabelText('Emergency contact name');
+    await user.clear(emergency);
+    await user.type(emergency, "pedro o'neil");
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(AuthApi.updateMe).toHaveBeenCalledWith({
+      firstName: 'Maria',
+      lastName: "O'Connor",
+      phone: '09171234567',
+      emergencyContact: { name: "Pedro O'Neil", phone: '09181234567' },
+    }));
+    const sent = AuthApi.updateMe.mock.calls[0][0];
+    expect(sent).not.toHaveProperty('email');
+    expect(sent).not.toHaveProperty('role');
+    expect(await screen.findByText('Your details were updated.')).toBeInTheDocument();
+  });
+
+  it('X2: rejects an invalid name before sending', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const last = screen.getByLabelText('Last name');
+    await user.clear(last);
+    await user.type(last, 'x');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(AuthApi.updateMe).not.toHaveBeenCalled();
+    expect(screen.getByText(/min 2 characters/i)).toBeInTheDocument();
   });
 
   it('changes the password with a code emailed to the registered address, then signs out', async () => {
