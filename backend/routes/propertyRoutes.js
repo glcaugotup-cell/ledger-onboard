@@ -19,6 +19,7 @@ const router = express.Router();
 router.get('/', optionalAuthenticate, searchValidators, validate, PropertyController.search);
 // Must be registered before /:id so "mine" isn't parsed as an ObjectId param.
 router.get('/mine', authenticate, requireRole(ROLES.LANDLORD), PropertyController.listMine);
+router.get('/mine/archived', authenticate, requireRole(ROLES.LANDLORD), PropertyController.listArchived);
 router.get('/:id', objectIdParam('id'), validate, PropertyController.getPublicDetail);
 router.get('/:id/manage', authenticate, objectIdParam('id'), validate, PropertyController.getForManagement);
 
@@ -53,6 +54,7 @@ router.patch(
   PropertyController.update
 );
 router.delete('/:id', authenticate, requireRole(ROLES.LANDLORD, ROLES.ADMIN), objectIdParam('id'), validate, PropertyController.remove);
+router.patch('/:id/restore', authenticate, requireRole(ROLES.LANDLORD, ROLES.ADMIN), objectIdParam('id'), validate, PropertyController.restore);
 
 // Caretaker assignment: suggestions are ranked by location (same barangay as the property); assigning is an explicit landlord action.
 router.get(

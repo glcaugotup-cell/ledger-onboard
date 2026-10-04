@@ -5,8 +5,8 @@ const NotificationRepository = require('../repositories/NotificationRepository')
  * happens (reservation approved, payment verified, etc.).
  */
 class NotificationService {
-  async notify({ userId, type, title, message, relatedType = null, relatedId = null }) {
-    return NotificationRepository.create({ userId, type, title, message, relatedType, relatedId });
+  async notify({ userId, type, title, message, relatedType = null, relatedId = null, link = null }) {
+    return NotificationRepository.create({ userId, type, title, message, relatedType, relatedId, link });
   }
 
   async listForUser(userId, { onlyUnread, skip, limit } = {}) {

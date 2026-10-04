@@ -47,9 +47,13 @@ const ROOM_STATUS = Object.freeze({
   MAINTENANCE: 'maintenance',
 });
 
+// Tenancy lifecycle: pending -> approved (shown as "Reserved": the slot is held) -> active
+// ("Current stay", after the landlord confirms move-in) -> completed (moved out).
 const RESERVATION_STATUS = Object.freeze({
   PENDING: 'pending',
   APPROVED: 'approved',
+  ACTIVE: 'active',
+  NO_SHOW: 'no_show',
   REJECTED: 'rejected',
   CANCELLED: 'cancelled',
   COMPLETED: 'completed',
@@ -58,10 +62,22 @@ const RESERVATION_STATUS = Object.freeze({
 // Allowed reservation status transitions.
 const RESERVATION_TRANSITIONS = Object.freeze({
   [RESERVATION_STATUS.PENDING]: [RESERVATION_STATUS.APPROVED, RESERVATION_STATUS.REJECTED, RESERVATION_STATUS.CANCELLED],
-  [RESERVATION_STATUS.APPROVED]: [RESERVATION_STATUS.COMPLETED, RESERVATION_STATUS.CANCELLED],
+  [RESERVATION_STATUS.APPROVED]: [RESERVATION_STATUS.ACTIVE, RESERVATION_STATUS.CANCELLED, RESERVATION_STATUS.NO_SHOW],
+  [RESERVATION_STATUS.ACTIVE]: [RESERVATION_STATUS.COMPLETED],
+  [RESERVATION_STATUS.NO_SHOW]: [],
   [RESERVATION_STATUS.REJECTED]: [],
   [RESERVATION_STATUS.CANCELLED]: [],
   [RESERVATION_STATUS.COMPLETED]: [],
+});
+
+// Statuses that hold a room slot (reserved or moved in).
+const SLOT_HOLDING_RESERVATION_STATUSES = Object.freeze([RESERVATION_STATUS.APPROVED, RESERVATION_STATUS.ACTIVE]);
+
+const MAINTENANCE_STATUS = Object.freeze({
+  PENDING: 'pending',
+  IN_PROGRESS: 'in_progress',
+  AWAITING_CONFIRMATION: 'awaiting_confirmation',
+  RESOLVED: 'resolved',
 });
 
 const PAYMENT_STATUS = Object.freeze({
@@ -100,6 +116,8 @@ module.exports = {
   ROOM_STATUS,
   RESERVATION_STATUS,
   RESERVATION_TRANSITIONS,
+  SLOT_HOLDING_RESERVATION_STATUSES,
+  MAINTENANCE_STATUS,
   PAYMENT_STATUS,
   PAYMENT_METHOD,
   VERIFICATION_STATUS,

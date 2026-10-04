@@ -5,6 +5,7 @@ const ApiError = require('../utils/ApiError');
 const { roundMoney } = require('../utils/money');
 const { ROLES, PAYMENT_STATUS } = require('../utils/constants');
 const { withSoaContext } = require('./displayContext');
+const NotificationService = require('./NotificationService');
 
 const DUE_DAYS_AFTER_PERIOD = 10;
 
@@ -44,7 +45,8 @@ class BillingService {
     }
     const ReservationRepository = require('../repositories/ReservationRepository');
     const occupants = await ReservationRepository.findActiveTenantIdsForRoom(roomId);
-    if (!occupants.length) throw ApiError.badRequest('This room has no active tenants to bill', 'NO_OCCUPANTS');
+    // Billing starts only after the landlord confirms the move-in; reserved (held) slots are never billed.
+    if (!occupants.length) throw ApiError.badRequest('No tenant in this room has moved in yet. Bills start after the landlord confirms the move-in.', 'NO_OCCUPANTS');
     const soas = [];
     for (const occupant of occupants) {
       // eslint-disable-next-line no-await-in-loop
@@ -70,7 +72,7 @@ class BillingService {
     const dueDate = new Date(billingPeriod);
     dueDate.setUTCDate(dueDate.getUTCDate() + DUE_DAYS_AFTER_PERIOD);
 
-    return BillingSOARepository.create({
+    const soa = await BillingSOARepository.create({
       tenantId,
       roomId,
       billingPeriod,
@@ -86,6 +88,16 @@ class BillingService {
       dueDate,
       generatedAt: new Date(),
     });
+    await NotificationService.notify({
+      userId: tenantId,
+      type: 'BILL_CREATED',
+      title: 'New bill',
+      message: `Your bill for ${new Date(billingPeriod).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' })} is ready: ₱${totalAmountDue.toLocaleString('en-PH')}.`,
+      relatedType: 'BillingSOA',
+      relatedId: soa._id,
+      link: `/tenant/apartment?tab=billing&bill=${soa._id}`,
+    });
+    return soa;
   }
 
   async _computeOutstandingArrears(tenantId, beforePeriod) {

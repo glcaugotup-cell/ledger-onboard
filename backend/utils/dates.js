@@ -33,4 +33,14 @@ function calendarDaysBetween(from, to) {
   return Math.round((b - a) / DAY_MS);
 }
 
-module.exports = { APP_TIME_ZONE, appDateKey, inputDateKey, calendarDaysBetween };
+/** "YYYY-MM-DD" plus `days` calendar days. */
+function addDaysToKey(key, days) {
+  return new Date(Date.parse(`${key}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** "2026-10-20" -> "Oct 20, 2026". */
+function formatDateKey(key) {
+  return new Date(`${key}T00:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+module.exports = { APP_TIME_ZONE, appDateKey, inputDateKey, calendarDaysBetween, addDaysToKey, formatDateKey };

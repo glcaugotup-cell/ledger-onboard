@@ -89,6 +89,7 @@ class LandlordVerificationService {
           : `Your submitted documents could not be approved: ${updated.rejectionReason}`,
         relatedType: 'LandlordVerification',
         relatedId: submission._id,
+        link: '/landlord/verification',
       });
       if (approve) await EmailService.sendBusinessVerificationApprovedEmail(landlord.email, landlord.fullName);
       else await EmailService.sendBusinessVerificationRejectedEmail(landlord.email, landlord.fullName, updated.rejectionReason);

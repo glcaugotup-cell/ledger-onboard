@@ -3,6 +3,7 @@ const RoomRepository = require('../repositories/RoomRepository');
 const ReviewRepository = require('../repositories/PropertyReviewRepository');
 const UserRepository = require('../repositories/UserRepository');
 const ReservationRepository = require('../repositories/ReservationRepository');
+const AuditLogRepository = require('../repositories/AuditLogRepository');
 const FileStorageService = require('./FileStorageService');
 const { FILE_CATEGORIES } = require('./FileStorageService');
 const ApiError = require('../utils/ApiError');
@@ -179,7 +180,7 @@ class PropertyService {
     const property = await this._findManageable(propertyId);
     this._assertLandlordOwnsOrAdmin(property, requester);
 
-    const currentTenants = await ReservationRepository.count({ propertyId, status: RESERVATION_STATUS.APPROVED });
+    const currentTenants = await ReservationRepository.count({ propertyId, status: { $in: [RESERVATION_STATUS.APPROVED, RESERVATION_STATUS.ACTIVE] } });
     if (currentTenants > 0) {
       throw ApiError.conflict(
         `This property still has ${currentTenants} current tenant${currentTenants === 1 ? '' : 's'}. Complete or cancel their reservations before deleting it.`,
@@ -200,6 +201,21 @@ class PropertyService {
       deletedBy: requester.id,
     });
     return { deleted: true };
+  }
+
+  /** The landlord's hidden (soft-deleted) properties, shown in their Archive. */
+  async listArchived(landlordId) {
+    return (await PropertyRepository.findByLandlord(landlordId)).filter((p) => p.deletedAt);
+  }
+
+  /** Brings a hidden property back. Verified landlords' listings go live again, as when first created. */
+  async restore(propertyId, requester) {
+    const property = await PropertyRepository.findById(propertyId);
+    if (!property || !property.deletedAt) throw ApiError.notFound('Archived property not found', 'PROPERTY_NOT_FOUND');
+    this._assertLandlordOwnsOrAdmin(property, requester);
+    await PropertyRepository.updateById(propertyId, { listingStatus: LISTING_STATUS.APPROVED, deletedAt: null, deletedBy: null });
+    await AuditLogRepository.record({ action: 'PROPERTY_RESTORED', actorId: requester.id, actorRole: requester.role, targetType: 'Property', targetId: property._id });
+    return { restored: true };
   }
 
   /** Loads a property that hasn't been (soft-)deleted, for owner/admin management actions. */

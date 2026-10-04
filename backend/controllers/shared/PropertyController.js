@@ -45,6 +45,16 @@ class PropertyController {
     sendSuccess(res, { data: result });
   });
 
+  listArchived = asyncHandler(async (req, res) => {
+    const properties = await PropertyService.listArchived(req.user.id);
+    sendSuccess(res, { data: { properties } });
+  });
+
+  restore = asyncHandler(async (req, res) => {
+    const result = await PropertyService.restore(req.params.id, req.user);
+    sendSuccess(res, { data: result });
+  });
+
   listPendingModeration = asyncHandler(async (req, res) => {
     const properties = await PropertyService.listPendingModeration();
     sendSuccess(res, { data: { properties } });

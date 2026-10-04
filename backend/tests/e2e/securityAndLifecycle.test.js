@@ -170,6 +170,9 @@ describe('Account inactivity lifecycle (Section 7)', () => {
     const reserveRes = await request(app).post('/api/reservations').set('Authorization', `Bearer ${tenantToken}`).send({ roomId, moveInDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) });
     const reservationId = reserveRes.body.data.reservation._id;
     await request(app).patch(`/api/reservations/${reservationId}/status`).set('Authorization', `Bearer ${landlordToken}`).send({ status: 'approved' });
+    // A stay is completed (moved out) only after the move-in is confirmed, which needs the landlord's GCash QR.
+    await request(app).patch('/api/users/me/payment-qr').set('Authorization', `Bearer ${landlordToken}`).attach('paymentQr', Buffer.from('fake-qr-bytes'), { filename: 'qr.png', contentType: 'image/png' });
+    await request(app).patch(`/api/reservations/${reservationId}/status`).set('Authorization', `Bearer ${landlordToken}`).send({ status: 'active' });
     await request(app).patch(`/api/reservations/${reservationId}/status`).set('Authorization', `Bearer ${landlordToken}`).send({ status: 'completed' });
 
     const reviewRes = await request(app)

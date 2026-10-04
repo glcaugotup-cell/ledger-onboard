@@ -25,6 +25,17 @@ const updateReservationStatusValidators = [
     .optional({ nullable: true })
     .custom((v) => mongoose.isValidObjectId(v))
     .withMessage('Invalid caretakerAssignedId'),
+  body('reason').optional().trim().isLength({ max: 500 }).withMessage('Reason must be at most 500 characters'),
 ];
 
-module.exports = { createReservationValidators, updateReservationStatusValidators };
+const leaveRequestValidators = [
+  body('note').optional().trim().isLength({ max: 500 }).withMessage('Note must be at most 500 characters'),
+];
+
+const leaveDecisionValidators = [
+  body('decision').isIn(['approve', 'decline']).withMessage('Choose approve or decline'),
+  body('reason').optional().trim().isLength({ max: 500 }).withMessage('Reason must be at most 500 characters'),
+  body('acknowledgeBalance').optional().isBoolean().toBoolean(),
+];
+
+module.exports = { createReservationValidators, updateReservationStatusValidators, leaveRequestValidators, leaveDecisionValidators };

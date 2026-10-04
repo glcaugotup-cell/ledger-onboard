@@ -29,7 +29,7 @@ class ReservationRepository extends BaseRepository {
 
   findActiveByTenantAndRoom(tenantId, roomId) {
     return this.model
-      .findOne({ tenantId, roomId, status: { $in: ['pending', 'approved'] } })
+      .findOne({ tenantId, roomId, status: { $in: ['pending', 'approved', 'active'] } })
       .exec();
   }
 
@@ -37,17 +37,32 @@ class ReservationRepository extends BaseRepository {
     return this.model.findOne({ tenantId, roomId, status: 'completed' }).exec();
   }
 
+  /** The tenant's current stay (moved in), if any. */
+  findCurrentStayForTenant(tenantId, { excludeId } = {}) {
+    const filter = { tenantId, status: 'active' };
+    if (excludeId) filter._id = { $ne: excludeId };
+    return this.model.findOne(filter).exec();
+  }
+
+  /** The tenant's other open requests (pending or reserved), e.g. to cancel them after a move-in elsewhere. */
+  findOpenRequestsForTenant(tenantId, { excludeId } = {}) {
+    const filter = { tenantId, status: { $in: ['pending', 'approved'] } };
+    if (excludeId) filter._id = { $ne: excludeId };
+    return this.model.find(filter).populate('roomId propertyId').exec();
+  }
+
   async caretakerIsAssignedToRoom(caretakerId, roomId) {
     const match = await this.model.exists({
       roomId,
       caretakerAssignedId: caretakerId,
-      status: { $in: ['approved', 'completed'] },
+      status: { $in: ['approved', 'active', 'completed'] },
     });
     return Boolean(match);
   }
 
+  /** Occupants who have moved in. Billing uses only these, never reserved (held) slots. */
   findActiveTenantIdsForRoom(roomId) {
-    return this.model.find({ roomId, status: 'approved' }).select('tenantId').exec();
+    return this.model.find({ roomId, status: 'active' }).select('tenantId').exec();
   }
 }
 

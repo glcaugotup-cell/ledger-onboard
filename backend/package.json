@@ -10,7 +10,9 @@
     "preview:emails": "node utils/previewEmails.js",
     "test": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles",
     "seed": "node utils/seed.js",
-    "migrate:uploads": "node utils/migrateUploadsToGridFS.js"
+    "migrate:uploads": "node utils/migrateUploadsToGridFS.js",
+    "index:payment-references": "node utils/createPaymentReferenceIndex.js",
+    "reservations:confirm-move-ins": "node utils/confirmExistingMoveIns.js"
   },
   "jest": {
     "testEnvironment": "node"

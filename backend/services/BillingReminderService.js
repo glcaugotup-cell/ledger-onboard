@@ -72,6 +72,7 @@ class BillingReminderService {
       message: `Your ${periodLabel} bill (ref. ${reference}) of ₱${amount} is due on ${dueDateLabel}, ${when === 'today' ? 'today' : `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} from now`}.`,
       relatedType: 'BillingSOA',
       relatedId: soa._id,
+      link: `/tenant/apartment?tab=billing&bill=${soa._id}`,
     });
 
     if (tenant.notificationPreferences?.email !== false) {

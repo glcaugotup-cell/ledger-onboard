@@ -52,6 +52,30 @@ const propertyMediaUpload = multer({
   limits: { fileSize: env.maxVideoUploadMb * 1024 * 1024, files: 6 },
 });
 
+const MAX_ISSUE_PHOTOS = 5;
+
+const issuePhotoMulter = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    if (!IMAGE_MIME_TYPES.has(file.mimetype)) return cb(ApiError.badRequest('Only JPG, PNG, or WEBP photos are allowed', 'INVALID_FILE_TYPE'));
+    cb(null, true);
+  },
+  limits: { fileSize: env.maxUploadMb * 1024 * 1024, files: MAX_ISSUE_PHOTOS },
+});
+
+/** Maintenance photos (`photos` field): at most 5, with clear messages instead of raw multer errors. */
+function issuePhotosUpload(req, res, next) {
+  issuePhotoMulter.array('photos', MAX_ISSUE_PHOTOS)(req, res, (err) => {
+    if (err?.name === 'MulterError' && ['LIMIT_FILE_COUNT', 'LIMIT_UNEXPECTED_FILE'].includes(err.code)) {
+      return next(ApiError.badRequest(`You can attach up to ${MAX_ISSUE_PHOTOS} photos.`, 'TOO_MANY_PHOTOS'));
+    }
+    if (err?.name === 'MulterError' && err.code === 'LIMIT_FILE_SIZE') {
+      return next(ApiError.badRequest(`Each photo must be ${env.maxUploadMb}MB or smaller`, 'IMAGE_TOO_LARGE'));
+    }
+    return next(err);
+  });
+}
+
 /** Must run right after propertyMediaUpload.fields(...). */
 function assertMediaSizeLimits(req, res, next) {
   const images = req.files?.images || [];
@@ -71,4 +95,6 @@ module.exports = {
   landlordVerificationUpload,
   propertyMediaUpload,
   assertMediaSizeLimits,
+  issuePhotosUpload,
+  MAX_ISSUE_PHOTOS,
 };

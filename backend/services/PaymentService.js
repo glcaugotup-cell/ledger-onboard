@@ -12,6 +12,7 @@ const UserRepository = require('../repositories/UserRepository');
 const ApiError = require('../utils/ApiError');
 const { ROLES, PAYMENT_METHOD, VERIFICATION_STATUS } = require('../utils/constants');
 const { withPaymentContext } = require('./displayContext');
+const { ACTIVE_REFERENCE_STATUSES } = require('../utils/paymentReferenceIndex');
 
 class PaymentService {
   /** Tenant records the GCash transaction reference after paying with the landlord's QR. */
@@ -20,12 +21,26 @@ class PaymentService {
     if (!soa) throw ApiError.notFound('Statement of account not found', 'SOA_NOT_FOUND');
     if (String(soa.tenantId) !== String(tenantId)) throw ApiError.forbidden('This statement of account does not belong to you', 'FORBIDDEN_SOA_ACCESS');
     this._assertAmountWithinBalance(soa, amount);
-    const reference = String(referenceNumber || '').trim();
-    if (reference.length < 5 || reference.length > 100) throw ApiError.badRequest('Enter a valid GCash reference number', 'INVALID_REFERENCE_NUMBER');
-    return PaymentTransactionRepository.create({
-      soaId, tenantId, paymentMethod: PAYMENT_METHOD.GCASH_QR, amount,
-      referenceNumber: reference, verificationStatus: VERIFICATION_STATUS.PENDING, timestamp: new Date(),
-    });
+    // Same rules as the form: spaces and dashes are formatting, anything else must be 10-13 digits.
+    // Kept as a string so leading zeros survive.
+    const reference = String(referenceNumber || '').replace(/[\s-]/g, '');
+    if (!/^\d{10,13}$/.test(reference)) throw ApiError.badRequest('Reference number must be 10 to 13 digits.', 'INVALID_REFERENCE_NUMBER');
+
+    // A reference may be reused only after its earlier payment was rejected. The unique
+    // index (see utils/paymentReferenceIndex.js) backs this check up once it has been created.
+    const alreadyUsed = await PaymentTransactionRepository.findOne({ referenceNumber: reference, verificationStatus: { $in: ACTIVE_REFERENCE_STATUSES } });
+    if (alreadyUsed) throw ApiError.conflict('This reference number has already been used.', 'REFERENCE_NUMBER_USED');
+    try {
+      const payment = await PaymentTransactionRepository.create({
+        soaId, tenantId, paymentMethod: PAYMENT_METHOD.GCASH_QR, amount,
+        referenceNumber: reference, verificationStatus: VERIFICATION_STATUS.PENDING, timestamp: new Date(),
+      });
+      await this._notifyLandlordOfPayment(soa, tenantId, 'PAYMENT_SUBMITTED', 'Payment submitted', `A tenant submitted a GCash payment of ₱${Number(amount).toLocaleString('en-PH')} for verification.`, payment._id);
+      return payment;
+    } catch (err) {
+      if (err.code === 11000) throw ApiError.conflict('This reference number has already been used.', 'REFERENCE_NUMBER_USED');
+      throw err;
+    }
   }
 
   /** Tenant uploads a GCash payment screenshot as proof. */
@@ -39,8 +54,9 @@ class PaymentService {
     if (!proofFile) throw ApiError.badRequest('Proof of payment image is required', 'PROOF_IMAGE_REQUIRED');
 
     const proofImageURL = await FileStorageService.saveUpload(proofFile, FILE_CATEGORIES.PAYMENT_PROOFS);
+    let payment;
     try {
-      return await PaymentTransactionRepository.create({
+      payment = await PaymentTransactionRepository.create({
         soaId,
         tenantId,
         paymentMethod: PAYMENT_METHOD.GCASH_SCREENSHOT,
@@ -53,6 +69,8 @@ class PaymentService {
       await FileStorageService.deleteByUrls([proofImageURL]);
       throw err;
     }
+    await this._notifyLandlordOfPayment(soa, tenantId, 'PAYMENT_SUBMITTED', 'Payment proof submitted', `A tenant submitted proof of a GCash payment of ₱${Number(amount).toLocaleString('en-PH')}.`, payment._id);
+    return payment;
   }
 
   /** Caretaker logs cash collected in person. */
@@ -69,7 +87,7 @@ class PaymentService {
       throw ApiError.forbidden('You are not assigned to this property', 'NOT_ASSIGNED_TO_PROPERTY');
     }
 
-    return PaymentTransactionRepository.create({
+    const payment = await PaymentTransactionRepository.create({
       soaId,
       tenantId: soa.tenantId,
       paymentMethod: PAYMENT_METHOD.CASH_ON_SITE,
@@ -78,6 +96,21 @@ class PaymentService {
       verificationStatus: VERIFICATION_STATUS.PENDING,
       timestamp: new Date(),
     });
+    await this._notifyLandlordOfPayment(soa, soa.tenantId, 'CASH_PAYMENT_LOGGED', 'Cash collection logged', `Your caretaker logged a cash payment of ₱${Number(amount).toLocaleString('en-PH')}.`, payment._id);
+    return payment;
+  }
+
+  /** Tells the bill's landlord about a payment to review; a notification problem never fails the payment. */
+  async _notifyLandlordOfPayment(soa, tenantId, type, title, message, paymentId) {
+    try {
+      const room = await RoomRepository.findById(soa.roomId);
+      const property = room && await PropertyRepository.findById(room.propertyId);
+      if (!property) return;
+      await NotificationService.notify({ userId: property.landlordId, type, title, message, relatedType: 'PaymentTransaction', relatedId: paymentId, link: `/landlord/payments?payment=${paymentId}` });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[notifications] payment notification failed:', err.message);
+    }
   }
 
   /** A payment can't be more than what is still owed on the statement. */
@@ -168,6 +201,7 @@ class PaymentService {
         : `Your payment of PHP ${payment.amount} could not be verified: ${updated.rejectionReason}`,
       relatedType: 'PaymentTransaction',
       relatedId: payment._id,
+      link: `/tenant/apartment?tab=billing&bill=${payment.soaId}`,
     });
     if (tenant) {
       if (isApproved) await EmailService.sendPaymentVerifiedEmail(tenant.email, tenant.fullName, verifiedAmount);

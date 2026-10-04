@@ -362,16 +362,42 @@ describe('Objective 5 — bill due-date reminders', () => {
   });
 });
 
-describe('Objective 11 — profile identity fields are protected', () => {
-  test('name and email cannot be changed through the API; phone still can', async () => {
+describe('X2 — profile editing: email and role are locked, name, phone and emergency contact are editable', () => {
+  test('email, role, status and ownership fields cannot be changed through the API; phone still can', async () => {
     const { token } = await makeUser('landlord', 'profile.lock@gmail.com');
-    for (const body of [{ firstName: 'Hacked' }, { lastName: 'Hacked' }, { email: 'hacked@gmail.com' }, { fullName: 'Hacked Name' }]) {
+    for (const body of [{ email: 'hacked@gmail.com' }, { role: 'admin' }, { accountStatus: 'active' }, { fullName: 'Hacked Name' }, { assignedLandlordId: '64b000000000000000000001' }, { createdAt: '2020-01-01' }]) {
       const res = await request(app).patch('/api/users/me').set(auth(token)).send(body);
       expect(res.status).toBe(400);
     }
     const phone = await request(app).patch('/api/users/me').set(auth(token)).send({ phone: '09181112222' });
     expect(phone.status).toBe(200);
-    expect(phone.body.data.user).toMatchObject({ firstName: 'Test', email: 'profile.lock@gmail.com', phone: '+639181112222' });
+    expect(phone.body.data.user).toMatchObject({ firstName: 'Test', email: 'profile.lock@gmail.com', role: 'landlord', phone: '+639181112222' });
+  });
+
+  test.each(['tenant', 'landlord', 'caretaker'])('a %s can edit their name and emergency contact (validated and auto-capitalized)', async (role) => {
+    const { token } = await makeUser(role, `profile.edit.${role}@gmail.com`);
+    const bad = await request(app).patch('/api/users/me').set(auth(token)).send({ firstName: 'J4n3' });
+    expect(bad.status).toBe(400);
+    const badPhone = await request(app).patch('/api/users/me').set(auth(token)).send({ emergencyContact: { name: 'Ana Cruz', phone: '12345' } });
+    expect(badPhone.status).toBe(400);
+
+    const res = await request(app).patch('/api/users/me').set(auth(token)).send({ firstName: "maria o'connor", lastName: 'dela cruz', emergencyContact: { name: 'ana cruz', phone: '09181234567' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data.user).toMatchObject({
+      firstName: "Maria O'Connor",
+      lastName: 'Dela Cruz',
+      fullName: "Maria O'Connor Dela Cruz",
+      emergencyContact: { name: 'Ana Cruz', phone: '+639181234567' },
+      email: `profile.edit.${role}@gmail.com`,
+      role,
+    });
+  });
+
+  test('the admin profile is unchanged: name edits are ignored', async () => {
+    const { token } = await makeUser('admin', 'profile.admin@gmail.com');
+    const res = await request(app).patch('/api/users/me').set(auth(token)).send({ firstName: 'Renamed', phone: '09181113333' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.user).toMatchObject({ firstName: 'Test', phone: '+639181113333' });
   });
 
   test('landlords can update a caretaker\'s phone and service barangay, not their name', async () => {

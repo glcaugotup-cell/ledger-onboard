@@ -81,7 +81,7 @@ class UtilityCalculatorService {
     );
     for (const { tenantId } of occupantReadings) {
       if (!activeTenantIds.has(String(tenantId))) {
-        throw ApiError.badRequest(`Tenant ${tenantId} is not an active occupant of this room`, 'INVALID_OCCUPANT');
+        throw ApiError.badRequest(`Tenant ${tenantId} has not moved in to this room. Bills start after the landlord confirms the move-in.`, 'INVALID_OCCUPANT');
       }
     }
 

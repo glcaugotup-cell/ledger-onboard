@@ -19,6 +19,22 @@ const reservationSchema = new Schema(
     approvedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     approvedAt: { type: Date, default: null },
     rejectionReason: { type: String, default: null },
+    movedInAt: { type: Date, default: null },
+    movedOutAt: { type: Date, default: null },
+    noShowAt: { type: Date, default: null },
+    cancelledAt: { type: Date, default: null },
+    // 'tenant', 'landlord', 'admin' or 'system' (automatic cancellation after a move-in elsewhere).
+    cancelledBy: { type: String, default: null },
+    cancellationReason: { type: String, trim: true, maxlength: 500, default: null },
+    // Tenant's request to end a current stay; the landlord approves (then marks moved out) or declines.
+    leaveRequest: {
+      status: { type: String, enum: ['pending', 'approved', 'declined', null], default: null },
+      requestedAt: { type: Date, default: null },
+      note: { type: String, trim: true, maxlength: 500, default: '' },
+      decidedAt: { type: Date, default: null },
+      declineReason: { type: String, trim: true, maxlength: 500, default: null },
+      balanceAtDecision: { type: Number, default: null },
+    },
   },
   { timestamps: true }
 );

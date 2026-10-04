@@ -11,7 +11,12 @@ const submitPaymentValidators = [
     .withMessage('Amount can have at most 2 decimal places')
     .toFloat(),
   body('paymentMethod').isIn(['GCASH_SCREENSHOT', 'GCASH_QR', 'CASH_ON_SITE']).withMessage('Invalid payment method'),
-  body('referenceNumber').if(body('paymentMethod').equals('GCASH_QR')).trim().isLength({ min: 5, max: 100 }).withMessage('Enter a GCash reference number (5-100 characters)'),
+  // Spaces and dashes are formatting; what remains must be 10-13 digits (kept as a string for leading zeros).
+  body('referenceNumber')
+    .if(body('paymentMethod').equals('GCASH_QR'))
+    .customSanitizer((value) => String(value ?? '').replace(/[\s-]/g, ''))
+    .matches(/^\d{10,13}$/)
+    .withMessage('Reference number must be 10 to 13 digits.'),
 ];
 
 const verifyPaymentValidators = [

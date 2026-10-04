@@ -267,6 +267,24 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     expect(res.body.data.reservation.caretakerAssignedId).toBe(caretakerId);
   });
 
+  test('landlord confirms the move-in once a GCash QR is uploaded; billing can then start', async () => {
+    // Move-in confirmation waits for the landlord's GCash QR, so tenants can pay their bills.
+    const blocked = await request(app).patch(`/api/reservations/${reservationId}/status`).set('Authorization', `Bearer ${landlordToken}`).send({ status: 'active' });
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.code).toBe('LANDLORD_QR_REQUIRED');
+
+    const qr = await request(app)
+      .patch('/api/users/me/payment-qr')
+      .set('Authorization', `Bearer ${landlordToken}`)
+      .attach('paymentQr', Buffer.from('fake-qr-bytes'), { filename: 'qr.png', contentType: 'image/png' });
+    expect(qr.status).toBe(200);
+
+    const res = await request(app).patch(`/api/reservations/${reservationId}/status`).set('Authorization', `Bearer ${landlordToken}`).send({ status: 'active' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.reservation.status).toBe('active');
+    expect(res.body.data.reservation.movedInAt).toBeTruthy();
+  });
+
   test('caretaker not assigned to a room cannot log its utility reading (403)', async () => {
     // Register a second caretaker with no assignment to prove the guard works.
     const UserRepository = require('../../repositories/UserRepository');

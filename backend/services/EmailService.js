@@ -148,6 +148,35 @@ class EmailService {
     });
   }
 
+  /** Sent when a landlord approves a reservation: where, when, and who to contact to arrange the move-in. */
+  sendReservationApprovedEmail(to, { tenantName, propertyName, location, roomNumber, moveInDate, holdUntil, landlord, caretaker }) {
+    const details = [
+      ['Property', propertyName],
+      ['Address', location || '—'],
+      ['Room', roomNumber],
+      ['Move-in date', moveInDate],
+      ['Room held until', holdUntil],
+    ];
+    if (landlord) {
+      details.push(['Landlord', landlord.name], ['Landlord email', landlord.email], ['Landlord contact number', landlord.phone || 'Not provided']);
+    }
+    if (caretaker) {
+      details.push(['Caretaker', caretaker.name], ['Caretaker contact number', caretaker.phone || 'Not provided']);
+    }
+    return this._sendMessage(to, `Your reservation is approved: ${propertyName}, Room ${roomNumber}`, {
+      category: 'Reservation',
+      title: 'Your reservation is approved',
+      greeting: tenantName ? `Hi ${tenantName},` : 'Hello,',
+      paragraphs: [
+        `Good news! Your reservation for ${propertyName}, Room ${roomNumber} has been approved. You may move in on ${moveInDate}.`,
+        `Next steps: Contact your landlord to arrange your move-in. Your room is held until ${holdUntil}.`,
+      ],
+      details,
+      action: { label: 'View my reservation', url: this._appLink('/tenant/reservations') },
+      note: 'Your landlord will confirm your move-in in Ledger OnBoard once you arrive.',
+    });
+  }
+
   sendArchiveWarningEmail(to, fullName, daysRemaining) {
     return this._sendMessage(to, 'Ledger OnBoard — Your account will be archived soon', {
       category: 'Account activity', title: 'Keep your account active', greeting: `Hi ${fullName},`,

@@ -45,6 +45,9 @@ const env = {
   archiveDays: Number(process.env.ACCOUNT_ARCHIVE_DAYS) || 30,
   lifecycleCron: process.env.ACCOUNT_LIFECYCLE_CRON || '0 2 * * *',
 
+  // Days after the move-in date before a landlord may mark a reserved tenant as a no-show.
+  noShowGraceDays: /^\d+$/.test((process.env.NO_SHOW_GRACE_DAYS || '').trim()) ? Number(process.env.NO_SHOW_GRACE_DAYS) : 5,
+
   // 'console' prints emails to the log, 'smtp' sends through the SMTP_* server, and 'brevo'
   // sends through Brevo's HTTPS API (for hosts that block outgoing SMTP, like Render's free plan).
   // Tests always use the console transport so they never send real email.

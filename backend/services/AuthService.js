@@ -360,10 +360,23 @@ class AuthService {
    * editable here (the validators reject them too), nor are role, status and lifecycle fields.
    */
   async updateProfile(userId, updates) {
+    const user = await UserRepository.findById(userId);
+    if (!user) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
+
+    // Allow-list. Tenants, landlords and caretakers may also edit their name and emergency contact;
+    // the admin profile is unchanged. Email, role, status and ownership are never accepted here.
     const allowed = ['phone', 'profilePhotoUrl', 'notificationPreferences'];
+    if (user.role !== ROLES.ADMIN) allowed.push('firstName', 'lastName');
     const safeUpdates = {};
     for (const key of allowed) {
       if (updates[key] !== undefined) safeUpdates[key] = updates[key];
+    }
+    if (user.role !== ROLES.ADMIN && updates.emergencyContact && typeof updates.emergencyContact === 'object') {
+      if (updates.emergencyContact.name !== undefined) safeUpdates['emergencyContact.name'] = updates.emergencyContact.name;
+      if (updates.emergencyContact.phone !== undefined) safeUpdates['emergencyContact.phone'] = updates.emergencyContact.phone;
+    }
+    if (safeUpdates.firstName !== undefined || safeUpdates.lastName !== undefined) {
+      safeUpdates.fullName = deriveFullName(safeUpdates.firstName ?? user.firstName, safeUpdates.lastName ?? user.lastName);
     }
 
     const updated = await UserRepository.updateById(userId, safeUpdates);
@@ -395,7 +408,7 @@ class AuthService {
       const properties = await PropertyRepository.findByLandlord(userId);
       const open = await ReservationRepository.count({
         propertyId: { $in: properties.map((p) => p._id) },
-        status: { $in: [RESERVATION_STATUS.PENDING, RESERVATION_STATUS.APPROVED] },
+        status: { $in: [RESERVATION_STATUS.PENDING, RESERVATION_STATUS.APPROVED, RESERVATION_STATUS.ACTIVE] },
       });
       if (open > 0) {
         throw ApiError.conflict(
