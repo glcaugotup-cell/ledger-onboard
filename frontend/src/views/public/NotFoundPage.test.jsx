@@ -1,8 +1,15 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import NotFoundPage from './NotFoundPage.jsx';
+import { mockAuthValue } from '../../test/mockContexts.js';
+
+const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
+vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
+beforeEach(() => {
+  useAuthMock.mockReturnValue(mockAuthValue({ user: null, status: 'unauthenticated' }));
+});
 
 describe('NotFoundPage', () => {
   it('renders a 404 message with a link home', () => {
