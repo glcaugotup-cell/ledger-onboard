@@ -221,4 +221,66 @@ describe('DashboardLayout', () => {
     await user.click(screen.getAllByRole('button', { name: 'Open account menu' })[0]);
     expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute('href', `/${role}/profile`);
   });
+
+  describe('Back button', () => {
+    function renderAt(path, role, back) {
+      useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Test User', role } }));
+      useNotificationsMock.mockReturnValue(mockNotificationsValue());
+      return render(
+        <MemoryRouter initialEntries={[path]}>
+          <DashboardLayout back={back}>
+            <h1>Page title</h1>
+          </DashboardLayout>
+        </MemoryRouter>
+      );
+    }
+    const backButtons = () => screen.queryAllByRole('button', { name: /^(Go back|Back to )/ });
+
+    it.each([
+      ['tenant', '/tenant/discover'],
+      ['landlord', '/landlord/dashboard'],
+      ['caretaker', '/caretaker/rooms'],
+      ['admin', '/admin/users'],
+    ])('the %s dashboard home (%s) has no Back button', (role, path) => {
+      renderAt(path, role);
+      expect(backButtons()).toHaveLength(0);
+    });
+
+    it.each([
+      ['tenant', '/tenant/reservations', 'Back to Discover', '/tenant/discover'],
+      ['tenant', '/tenant/apartment', 'Back to Discover', '/tenant/discover'],
+      ['landlord', '/landlord/payments', 'Back to Dashboard', '/landlord/dashboard'],
+      ['caretaker', '/caretaker/utilities', 'Back to Assigned Rooms', '/caretaker/rooms'],
+      ['admin', '/admin/logs', 'Back to Users', '/admin/users'],
+    ])('a %s sidebar page (%s) goes back to the home page', async (role, path, label, home) => {
+      const user = userEvent.setup();
+      renderAt(path, role);
+      await user.click(screen.getByRole('button', { name: label }));
+      expect(navigateMock).toHaveBeenCalledWith(home);
+    });
+
+    it('sits above the page title, first in the content area', () => {
+      renderAt('/tenant/reservations', 'tenant');
+      const main = document.getElementById('main-content');
+      expect(main.firstElementChild).toBe(screen.getByRole('button', { name: 'Back to Discover' }));
+      expect(main.firstElementChild.compareDocumentPosition(screen.getByRole('heading', { name: 'Page title' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('other pages fall back to the page fallback (or home) when there is no previous in-app page', async () => {
+      const user = userEvent.setup();
+      renderAt('/landlord/properties/p1', 'landlord', { fallback: '/landlord/properties' });
+      await user.click(screen.getByRole('button', { name: 'Go back' }));
+      expect(navigateMock).toHaveBeenCalledWith('/landlord/properties');
+
+      navigateMock.mockClear();
+      renderAt('/caretaker/profile', 'caretaker');
+      await user.click(screen.getAllByRole('button', { name: 'Go back' }).at(-1));
+      expect(navigateMock).toHaveBeenCalledWith('/caretaker/rooms');
+    });
+
+    it('can be disabled by the page (e.g. while uploading)', () => {
+      renderAt('/landlord/verification', 'landlord', { disabled: true });
+      expect(screen.getByRole('button', { name: 'Back to Dashboard' })).toBeDisabled();
+    });
+  });
 });

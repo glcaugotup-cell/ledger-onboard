@@ -1,9 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DiscoverContent from './DiscoverContent.jsx';
 import PropertyApi from '../services/PropertyApi.js';
+import BackButton from './BackButton.jsx';
+import { resetNavigationHistory, useTrackNavigation } from '../routes/navigationHistory.js';
 
 const { mapStub } = vi.hoisted(() => ({
   mapStub: { setView: vi.fn(), fitBounds: vi.fn(), flyTo: vi.fn(), getZoom: vi.fn(() => 13) },
@@ -205,5 +207,95 @@ describe('DiscoverContent — tenant mapSection layout', () => {
     await user.click(screen.getAllByRole('button', { name: /show on map/i })[1]);
     expect(mapStub.flyTo).toHaveBeenCalledWith([16.044, 120.3364], 16, expect.any(Object));
     expect(scrollSpy).toHaveBeenCalled();
+  });
+});
+
+describe('DiscoverContent keeps its search in the URL (Back from a property page)', () => {
+  function Tracker() {
+    useTrackNavigation();
+    return null;
+  }
+  function Where() {
+    const { pathname, search } = useLocation();
+    return <p data-testid="where">{pathname + search}</p>;
+  }
+  function renderRoundTrip(initial, props) {
+    return render(
+      <MemoryRouter initialEntries={[initial]}>
+        <Tracker />
+        <Where />
+        <Routes>
+          <Route path="/tenant/discover" element={<DiscoverContent linkPrefix="/tenant/properties" {...props} />} />
+          <Route path="/" element={<DiscoverContent linkPrefix="/properties" {...props} />} />
+          <Route path="/tenant/properties/:id" element={<BackButton fallback="/tenant/discover" />} />
+          <Route path="/properties/:id" element={<BackButton fallback="/" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetNavigationHistory();
+    PropertyApi.search.mockResolvedValue({ properties });
+  });
+
+  it('Discover → property details → Back keeps the filters and search text', async () => {
+    const user = userEvent.setup();
+    renderRoundTrip('/tenant/discover', { mapSection: true });
+    await screen.findByText('1 property found');
+
+    await user.selectOptions(screen.getByLabelText('Barangay'), 'Bonuan Gueset');
+    await user.type(screen.getByPlaceholderText('Name, description…'), 'demo');
+    await user.type(screen.getByPlaceholderText('e.g. 3000'), '3000');
+    await waitFor(() => expect(PropertyApi.search).toHaveBeenLastCalledWith({ barangay: 'Bonuan Gueset', text: 'demo', maxRent: '3000' }));
+    expect(screen.getByTestId('where').textContent).toBe('/tenant/discover?barangay=Bonuan+Gueset&text=demo&maxRent=3000');
+
+    await user.click(screen.getAllByRole('link', { name: /Dagupan Demo Boarding House/ })[0]);
+    expect(screen.getByTestId('where').textContent).toBe('/tenant/properties/p1');
+
+    await user.click(screen.getByRole('button', { name: 'Go back' }));
+    expect(screen.getByTestId('where').textContent).toBe('/tenant/discover?barangay=Bonuan+Gueset&text=demo&maxRent=3000');
+    expect(screen.getByLabelText('Barangay')).toHaveValue('Bonuan Gueset');
+    expect(screen.getByPlaceholderText('Name, description…')).toHaveValue('demo');
+    expect(screen.getByPlaceholderText('e.g. 3000')).toHaveValue(3000);
+    await waitFor(() => expect(PropertyApi.search).toHaveBeenLastCalledWith({ barangay: 'Bonuan Gueset', text: 'demo', maxRent: '3000' }));
+  });
+
+  it('typing a search adds no extra Back steps (one Back still returns to Discover)', async () => {
+    const user = userEvent.setup();
+    renderRoundTrip('/tenant/discover', { mapSection: true });
+    await screen.findByText('1 property found');
+    await user.type(screen.getByPlaceholderText('Name, description…'), 'abc');
+    await user.click(screen.getAllByRole('link', { name: /Dagupan Demo Boarding House/ })[0]);
+    await user.click(screen.getByRole('button', { name: 'Go back' }));
+    expect(screen.getByTestId('where').textContent).toBe('/tenant/discover?text=abc');
+  });
+
+  it('landing page: the Grid/Map choice survives Back from a public property page', async () => {
+    const user = userEvent.setup();
+    renderRoundTrip('/');
+    await screen.findByText('1 property found');
+    await user.click(screen.getByRole('button', { name: 'Map' }));
+    expect(screen.getByTestId('where').textContent).toBe('/?view=map');
+    await user.click(screen.getByRole('link', { name: /view details/i }));
+    await user.click(screen.getByRole('button', { name: 'Go back' }));
+    expect(screen.getByTestId('where').textContent).toBe('/?view=map');
+    expect(await screen.findByTestId('map-container')).toBeInTheDocument();
+  });
+
+  it('reads filters from a shared link and ignores an invalid rent value', async () => {
+    renderRoundTrip('/tenant/discover?propertyType=Bedspace&minRent=abc&maxRent=2500', { mapSection: true });
+    await waitFor(() => expect(PropertyApi.search).toHaveBeenCalledWith({ propertyType: 'Bedspace', maxRent: '2500' }));
+    expect(screen.getByLabelText('Property type')).toHaveValue('Bedspace');
+    expect(screen.getByPlaceholderText('e.g. 1500')).toHaveValue(null);
+  });
+
+  it('Clear filters removes them from the URL', async () => {
+    const user = userEvent.setup();
+    renderRoundTrip('/tenant/discover?barangay=Bonuan+Gueset&text=demo', { mapSection: true });
+    await screen.findByText('1 property found');
+    await user.click(screen.getByRole('button', { name: /clear filters/i }));
+    expect(screen.getByTestId('where').textContent).toBe('/tenant/discover');
   });
 });

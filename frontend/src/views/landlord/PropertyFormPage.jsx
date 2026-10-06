@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeftIcon,
   ArrowUpTrayIcon,
   CheckCircleIcon,
   DocumentTextIcon,
@@ -14,6 +13,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
+import { skipCurrentEntry } from '../../routes/navigationHistory.js';
 import PropertyApi from '../../services/PropertyApi.js';
 import PropertyMap from '../../components/map/PropertyMap.jsx';
 import Card from '../../components/ui/Card.jsx';
@@ -282,6 +282,8 @@ export default function PropertyFormPage() {
       if (video) fd.append('video', video);
 
       const { property } = await PropertyApi.create(fd);
+      // Back from the new listing should not land on this (now empty) form again.
+      skipCurrentEntry();
       setCreated(property);
     } catch (err) {
       const { message, fieldErrors } = describeApiError(err);
@@ -298,7 +300,7 @@ export default function PropertyFormPage() {
 
   if (created) {
     return (
-      <DashboardLayout>
+      <DashboardLayout back={{ fallback: '/landlord/properties' }}>
         <div className="mx-auto max-w-xl">
           <Card>
             <div className="flex flex-col items-center gap-3 py-4 text-center">
@@ -323,12 +325,8 @@ export default function PropertyFormPage() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout back={{ fallback: '/landlord/properties', disabled: loading }}>
       <div className="mx-auto max-w-6xl">
-        <Link to="/landlord/properties" className="mb-4 flex w-fit items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-brand-700">
-          <ArrowLeftIcon className="h-4 w-4" /> Back to Properties
-        </Link>
-
         <div className="mb-6 flex items-start gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
             <HomeIcon className="h-6 w-6" />

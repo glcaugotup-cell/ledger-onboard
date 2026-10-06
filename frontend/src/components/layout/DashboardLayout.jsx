@@ -30,6 +30,8 @@ import {
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
 import ConfirmDialog from '../ui/ConfirmDialog.jsx';
+import BackButton from '../BackButton.jsx';
+import { ROLE_HOME } from '../../routes/roleHome.js';
 import { formatRelative, formatStatus, initials } from '../../utils/format.js';
 import logo from '../../assets/Logo.png';
 import sidebarHouse from '../../assets/housedesign1.webp';
@@ -286,7 +288,24 @@ function GlobalSearch({ role }) {
   );
 }
 
-export default function DashboardLayout({ children }) {
+/**
+ * The page's Back control, always first in the content area:
+ * - the role's home page has none;
+ * - sidebar pages go to the role's home ("Back to Dashboard" etc.);
+ * - every other page returns to the previous in-app page, else to `back.fallback` (default: the role's home).
+ * `back={false}` hides it; `back={{ fallback, label, disabled }}` adjusts it for a page.
+ */
+function PageBack({ role, links, pathname, back }) {
+  const home = ROLE_HOME[role];
+  if (back === false || !home || pathname === home) return null;
+  const homeLabel = links.find((link) => link.to === home)?.label || 'Home';
+  if (links.some((link) => link.to === pathname)) {
+    return <BackButton fallback={home} label={`Back to ${homeLabel}`} useHistory={false} disabled={Boolean(back?.disabled)} />;
+  }
+  return <BackButton fallback={back?.fallback || home} label={back?.label || 'Back'} disabled={Boolean(back?.disabled)} />;
+}
+
+export default function DashboardLayout({ children, back }) {
   const { user, logout } = useAuth();
   const { unreadCount, notifications, markRead, markAllRead } = useNotifications();
   const navigate = useNavigate();
@@ -395,6 +414,7 @@ export default function DashboardLayout({ children }) {
             </div>
           </header>
           <main id="main-content" className="px-4 py-5 sm:px-6 sm:py-6 xl:px-7 xl:py-7">
+            <PageBack role={user?.role} links={links} pathname={pathname} back={back} />
             {showQrBanner && (
               <div className="mb-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
                 <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
