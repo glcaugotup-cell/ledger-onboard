@@ -425,7 +425,8 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
       .set('Authorization', `Bearer ${tenantToken}`)
       .send({ reservationId, rating: 5, comment: 'Great place' });
     expect(good.status).toBe(201);
-    expect(good.body.data.review.status).toBe('PENDING');
+    // Reviews are published right away (no approval step); an admin can still hide one.
+    expect(good.body.data.review.status).toBe('APPROVED');
   });
 
   test('duplicate review for the same completed tenancy is rejected', async () => {
@@ -436,17 +437,24 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     expect(res.status).toBe(409);
   });
 
-  test('admin moderates the review to approved and it appears publicly, labeled verified former tenant', async () => {
-    const pending = await request(app).get('/api/reviews/pending').set('Authorization', `Bearer ${adminToken}`);
-    const reviewId = pending.body.data.reviews[0]._id;
-
-    const modRes = await request(app).patch(`/api/reviews/${reviewId}/moderate`).set('Authorization', `Bearer ${adminToken}`).send({ status: 'APPROVED' });
-    expect(modRes.status).toBe(200);
-
-    const publicReviews = await request(app).get(`/api/properties/${propertyId}/reviews`);
+  test('the review appears publicly at once, labeled verified former tenant; admin moderation can hide and restore it', async () => {
+    let publicReviews = await request(app).get(`/api/properties/${propertyId}/reviews`);
     expect(publicReviews.status).toBe(200);
     expect(publicReviews.body.data.reviews.length).toBe(1);
     expect(publicReviews.body.data.reviews[0].isVerifiedFormerTenant).toBe(true);
+
+    const all = await request(app).get('/api/reviews').set('Authorization', `Bearer ${adminToken}`);
+    const reviewId = all.body.data.reviews[0]._id;
+
+    const hide = await request(app).patch(`/api/reviews/${reviewId}/moderate`).set('Authorization', `Bearer ${adminToken}`).send({ status: 'HIDDEN' });
+    expect(hide.status).toBe(200);
+    publicReviews = await request(app).get(`/api/properties/${propertyId}/reviews`);
+    expect(publicReviews.body.data.reviews.length).toBe(0);
+
+    const modRes = await request(app).patch(`/api/reviews/${reviewId}/moderate`).set('Authorization', `Bearer ${adminToken}`).send({ status: 'APPROVED' });
+    expect(modRes.status).toBe(200);
+    publicReviews = await request(app).get(`/api/properties/${propertyId}/reviews`);
+    expect(publicReviews.body.data.reviews.length).toBe(1);
   });
 
   test('missing/expired JWT is rejected with 401', async () => {

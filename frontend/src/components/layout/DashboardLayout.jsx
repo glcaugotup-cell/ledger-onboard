@@ -105,6 +105,11 @@ function notificationPath(notification, role) {
     if (role === 'caretaker') return '/caretaker/payments';
     return '/tenant/apartment?tab=billing';
   }
+  if (notification.relatedType === 'PropertyReview' || notification.type?.startsWith('REVIEW_')) {
+    if (role === 'landlord') return '/landlord/properties';
+    if (role === 'admin') return '/admin/reviews';
+    return notification.type === 'REVIEW_PROMPT' ? '/tenant/reservations' : '/tenant/apartment#past-stays';
+  }
   if (notification.relatedType === 'LandlordVerification' || notification.type?.startsWith('BUSINESS_VERIFICATION_')) {
     return role === 'admin' ? '/admin/landlord-verifications' : '/landlord/verification';
   }

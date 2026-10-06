@@ -4,13 +4,14 @@ import { ArrowRightOnRectangleIcon, EnvelopeIcon, HomeModernIcon, MapPinIcon, Ph
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import PageHeader from '../../components/layout/PageHeader.jsx';
 import PropertyImage from '../../components/PropertyImage.jsx';
-import { ReviewPrompt } from '../../components/ReviewForm.jsx';
+import { ReviewForm, ReviewPrompt } from '../../components/ReviewForm.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { Field, TextArea } from '../../components/ui/Field.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import ReservationApi from '../../services/ReservationApi.js';
+import ReviewApi from '../../services/ReviewApi.js';
 import { BillingSection } from './MyBillingPage.jsx';
 import { MaintenanceIssuesContent } from '../shared/MaintenanceIssuesPage.jsx';
 import { formatDate } from '../../utils/format.js';
@@ -104,6 +105,91 @@ function CurrentStay({ stay, onChanged }) {
   );
 }
 
+const REVIEW_STATE = {
+  APPROVED: { tone: 'green', label: 'Shown on the property page' },
+  PENDING: { tone: 'yellow', label: 'Waiting for an admin' },
+  HIDDEN: { tone: 'red', label: 'Hidden by an admin' },
+  REJECTED: { tone: 'red', label: 'Hidden by an admin' },
+};
+
+/** A past stay's review: rate it, or edit / delete the review at any time (the landlord is notified). */
+function StayReview({ stay, review, onChanged }) {
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  const saved = (text) => { setEditing(false); setMessage(text); onChanged(); };
+
+  const remove = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await ReviewApi.remove(review._id);
+      setDeleting(false);
+      saved('Your review was deleted. You can rate this stay again anytime.');
+    } catch (err) {
+      setError(describeApiError(err).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="mt-3">
+        <ReviewForm
+          reservation={stay}
+          review={review}
+          onCancel={() => setEditing(false)}
+          onSubmitted={() => saved(review ? 'Your review was updated. Your landlord has been notified.' : 'Thanks! Your review is now on the property page.')}
+        />
+      </div>
+    );
+  }
+
+  const state = review && (REVIEW_STATE[review.status] || REVIEW_STATE.APPROVED);
+  return (
+    <div className="mt-3 border-t border-gray-100 pt-3">
+      <SuccessBanner message={message} />
+      {review ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-amber-500" role="img" aria-label={`Your rating: ${review.rating} out of 5 stars`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+              <Badge tone={state.tone}>{state.label}</Badge>
+              {review.editedAt && <span className="text-xs text-gray-500">Edited {formatDate(review.editedAt)}</span>}
+            </p>
+            {review.comment && <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{review.comment}</p>}
+            {['HIDDEN', 'REJECTED'].includes(review.status) && review.moderationReason && <p className="mt-1 text-xs text-red-700">Reason: {review.moderationReason}</p>}
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="secondary" onClick={() => { setMessage(''); setEditing(true); }}>Edit review</Button>
+            <Button variant="ghost" onClick={() => { setError(''); setMessage(''); setDeleting(true); }}>Delete review</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-gray-500">You haven’t rated this stay.</p>
+          <Button variant="secondary" onClick={() => { setMessage(''); setEditing(true); }}>Rate this stay</Button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={deleting}
+        tone="danger"
+        title="Delete your review?"
+        message="It will be removed from the property page and your landlord will be notified. You can rate this stay again later."
+        confirmLabel="Delete review"
+        loading={busy}
+        error={error}
+        onConfirm={remove}
+        onCancel={() => setDeleting(false)}
+      />
+    </div>
+  );
+}
+
 /**
  * R11: the tenant's apartment hub. The current stay at the top, then Billing and
  * Maintenance issues. Without a current stay, past bills, issues and stays stay
@@ -113,8 +199,10 @@ export default function MyApartmentPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') === 'issues' ? 'issues' : 'billing';
   const [reservations, setReservations] = useState([]);
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const highlightStayId = searchParams.get('stay');
 
   const load = () =>
     ReservationApi.list()
@@ -122,7 +210,18 @@ export default function MyApartmentPage() {
       .catch(() => setError('Could not load your apartment.'))
       .finally(() => setLoading(false));
 
-  useEffect(() => { load(); }, []);
+  const loadReviews = () =>
+    ReviewApi.listMine()
+      .then(({ reviews: list }) => setReviews(list || []))
+      .catch(() => {});
+
+  useEffect(() => { load(); loadReviews(); }, []);
+
+  useEffect(() => {
+    if (!loading && highlightStayId) document.getElementById(`stay-${highlightStayId}`)?.scrollIntoView?.({ block: 'center' });
+  }, [loading, highlightStayId]);
+
+  const reviewFor = (stayId) => reviews.find((r) => String(r.reservationId?._id || r.reservationId) === String(stayId)) || null;
 
   const current = reservations.find((r) => r.status === 'active');
   const pastStays = reservations.filter((r) => r.status === 'completed');
@@ -170,11 +269,11 @@ export default function MyApartmentPage() {
           </div>
 
           {pastStays.length > 0 && (
-            <section aria-labelledby="past-stays-heading" className="mt-8">
+            <section id="past-stays" aria-labelledby="past-stays-heading" className="mt-8">
               <h2 id="past-stays-heading" className="mb-3 text-base font-semibold text-gray-900">Past stays</h2>
               <div className="space-y-2">
                 {pastStays.map((stay) => (
-                  <Card key={stay._id}>
+                  <Card key={stay._id} id={`stay-${stay._id}`} className={highlightStayId === stay._id ? 'ring-2 ring-amber-300' : ''}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="font-medium text-gray-900">{stay.propertyId?.propertyName} · Room {stay.roomId?.roomNumber}</p>
@@ -182,6 +281,7 @@ export default function MyApartmentPage() {
                       </div>
                       <Badge tone="gray">Moved out</Badge>
                     </div>
+                    <StayReview stay={stay} review={reviewFor(stay._id)} onChanged={loadReviews} />
                   </Card>
                 ))}
               </div>
@@ -189,7 +289,7 @@ export default function MyApartmentPage() {
           )}
         </>
       )}
-      <ReviewPrompt />
+      <ReviewPrompt onSubmitted={loadReviews} />
     </DashboardLayout>
   );
 }

@@ -19,7 +19,21 @@ class PropertyService {
     const excludeLandlordIds = await this._inactiveLandlordIds();
     const properties = await PropertyRepository.search(filters, pagination, { excludeLandlordIds });
     const list = await this._withLandlordVerifiedFlag(properties);
+    await this._withRatings(list);
     return this._withStartingRent(list);
+  }
+
+  /** Adds `averageRating` (one decimal, or null) and `reviewCount` from published reviews, for cards and map popups. */
+  async _withRatings(list) {
+    if (list.length === 0) return list;
+    const rows = await ReviewRepository.ratingSummaryByProperty(list.map((p) => p._id));
+    const byId = new Map(rows.map((r) => [String(r._id), r]));
+    for (const p of list) {
+      const row = byId.get(String(p._id));
+      p.averageRating = row ? Math.round(row.averageRating * 10) / 10 : null;
+      p.reviewCount = row ? row.reviewCount : 0;
+    }
+    return list;
   }
 
   /** Adds `startingRent` (cheapest room's monthlyBaseRent, or null if there are no rooms) for display. */

@@ -112,8 +112,8 @@ const caretakerNameChain = (field, maxLength) =>
   body(field)
     .trim()
     .customSanitizer(toNameCase)
-    .matches(new RegExp(`^(?=.{2,${maxLength}}$)(?=.*[A-Za-z].*[A-Za-z])[A-Za-z][A-Za-z ]+$`))
-    .withMessage(`Name must contain 2-${maxLength} characters, including at least 2 letters, and use only letters and spaces`);
+    .matches(new RegExp(`^(?=.{2,${maxLength}}$)(?=.*[A-Za-z].*[A-Za-z])[A-Za-z][A-Za-z ']+$`))
+    .withMessage(`Name must contain 2-${maxLength} characters, including at least 2 letters, and use only letters, spaces and apostrophes`);
 
 const createCaretakerValidators = [caretakerNameChain('firstName', 15), caretakerNameChain('lastName', 20), emailChain, phoneChain, buildServiceBarangayChain()];
 

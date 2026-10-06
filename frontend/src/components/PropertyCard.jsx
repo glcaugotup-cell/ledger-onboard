@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { CheckBadgeIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { Badge } from './ui/Feedback.jsx';
 import PropertyImage from './PropertyImage.jsx';
-import { formatPeso } from '../utils/format.js';
+import { formatPeso, formatRatingSummary } from '../utils/format.js';
 
 /**
  * `onShowOnMap` is optional (tenant Discover only): when given, a "Show on
@@ -12,6 +12,7 @@ import { formatPeso } from '../utils/format.js';
 export default function PropertyCard({ property, linkPrefix = '/tenant/properties', onShowOnMap }) {
   const hasCoords = property.locationCoordinates?.lat && property.locationCoordinates?.lng;
   const hasRent = property.startingRent !== null && property.startingRent !== undefined;
+  const rating = formatRatingSummary(property);
   return (
     <div className="group flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md motion-reduce:transition-none motion-reduce:hover:translate-y-0">
       <Link
@@ -30,6 +31,7 @@ export default function PropertyCard({ property, linkPrefix = '/tenant/propertie
             <MapPinIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
             {property.address?.barangay}, {property.address?.city}
           </p>
+          <p className={`mt-1 text-sm ${rating ? 'font-medium text-amber-600' : 'text-gray-400'}`}>{rating || 'No reviews yet'}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Badge tone="gray">{property.tenantGenderPolicy}</Badge>
             {property.landlordVerified && (

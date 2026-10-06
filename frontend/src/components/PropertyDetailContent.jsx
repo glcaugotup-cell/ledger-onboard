@@ -309,7 +309,7 @@ export default function PropertyDetailContent() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Stars rating={r.rating} />
-                    {r.createdAt && <span className="text-xs text-gray-500">{formatDate(r.createdAt)}</span>}
+                    {r.createdAt && <span className="text-xs text-gray-500">{formatDate(r.createdAt)}{r.editedAt ? ' · Edited' : ''}</span>}
                   </div>
                   {r.comment && <p className="mt-1 text-sm text-gray-600">{r.comment}</p>}
                 </Card>

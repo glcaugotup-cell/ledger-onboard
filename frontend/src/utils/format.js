@@ -49,6 +49,12 @@ export function initials(name) {
 }
 
 /** "just now", "5 min ago", "3 h ago", "2 d ago", then the date. */
+/** "★ 4.5 · 2 reviews" from the search fields averageRating/reviewCount, or null when there are no reviews. */
+export function formatRatingSummary({ averageRating, reviewCount } = {}) {
+  if (!reviewCount || typeof averageRating !== 'number') return null;
+  return `★ ${averageRating.toFixed(1)} · ${reviewCount} review${reviewCount === 1 ? '' : 's'}`;
+}
+
 export function formatRelative(value, now = new Date()) {
   if (!value) return '';
   const diff = Math.max(0, now.getTime() - new Date(value).getTime());

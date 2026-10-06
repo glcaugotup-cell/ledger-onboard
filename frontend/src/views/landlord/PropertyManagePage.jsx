@@ -6,6 +6,7 @@ import PageHeader from '../../components/layout/PageHeader.jsx';
 import PropertyApi from '../../services/PropertyApi.js';
 import ReservationApi from '../../services/ReservationApi.js';
 import CaretakerApi from '../../services/CaretakerApi.js';
+import ReviewApi from '../../services/ReviewApi.js';
 import TenancyManager from '../../components/TenancyManager.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import Card from '../../components/ui/Card.jsx';
@@ -15,7 +16,7 @@ import { Field, TextInput } from '../../components/ui/Field.jsx';
 import { Badge, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst } from '../../utils/textFormat.js';
-import { formatPeso } from '../../utils/format.js';
+import { formatDate, formatPeso } from '../../utils/format.js';
 
 const STATUS_TONE = { draft: 'gray', pending_moderation: 'yellow', approved: 'green', rejected: 'red', inactive: 'gray', available: 'green', occupied: 'red', maintenance: 'yellow' };
 
@@ -282,6 +283,65 @@ function PropertyTenancies({ propertyId, onChanged }) {
   );
 }
 
+/** Reviews from former tenants, as shown on the public listing. Notification links point at one with ?review=<id>#reviews. */
+function PropertyReviews({ propertyId }) {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const highlightId = searchParams.get('review');
+
+  useEffect(() => {
+    let active = true;
+    ReviewApi.listForProperty(propertyId)
+      .then(({ reviews: list }) => { if (active) { setReviews(list || []); setError(''); } })
+      .catch(() => { if (active) setError('Could not load reviews.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [propertyId]);
+
+  useEffect(() => {
+    if (loading) return;
+    const target = highlightId ? document.getElementById(`review-${highlightId}`) : location.hash === '#reviews' ? document.getElementById('reviews') : null;
+    target?.scrollIntoView?.({ block: 'center' });
+  }, [loading, highlightId, location.hash]);
+
+  const average = reviews.length ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : null;
+
+  return (
+    <Card
+      id="reviews"
+      title="Tenant reviews"
+      description="Ratings and comments from former tenants, as shown on your public listing. You're notified whenever a tenant posts, edits or deletes one. Only an admin can hide a review."
+      className="mb-6"
+    >
+      <ErrorBanner message={error} />
+      {loading && <LoadingState label="Loading reviews…" />}
+      {!loading && !error && reviews.length === 0 && <p className="text-sm text-gray-500">No reviews yet.</p>}
+      {!loading && reviews.length > 0 && (
+        <>
+          <p className="mb-3 text-sm text-gray-700">
+            <span className="font-semibold text-amber-600">★ {average.toFixed(1)}</span> average from {reviews.length} review{reviews.length === 1 ? '' : 's'}
+          </p>
+          <ul className="space-y-2">
+            {reviews.map((r) => (
+              <li key={r._id} id={`review-${r._id}`} className={`rounded-lg border border-gray-200 p-3 ${highlightId === r._id ? 'ring-2 ring-amber-300' : ''}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-gray-900">{r.tenantId?.fullName || 'Former tenant'}</p>
+                  <span className="text-amber-500" role="img" aria-label={`${r.rating} out of 5 stars`}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                </div>
+                <p className="text-xs text-gray-500">{formatDate(r.createdAt)}{r.editedAt ? ` · Edited ${formatDate(r.editedAt)}` : ''}</p>
+                {r.comment && <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{r.comment}</p>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Card>
+  );
+}
+
 export default function PropertyManagePage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -455,6 +515,8 @@ export default function PropertyManagePage() {
       <CaretakerAssignment propertyId={id} />
 
       <PropertyTenancies propertyId={id} onChanged={refreshRooms} />
+
+      <PropertyReviews propertyId={id} />
 
       <ConfirmDialog
         open={deleteOpen}

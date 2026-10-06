@@ -65,4 +65,25 @@ describe('PropertyCard', () => {
     );
     expect(screen.getByText('No rooms listed yet')).toBeInTheDocument();
   });
+
+  it('shows the average rating and review count, or "No reviews yet"', () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <PropertyCard property={{ ...property, averageRating: 4.5, reviewCount: 2 }} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('★ 4.5 · 2 reviews')).toBeInTheDocument();
+    rerender(
+      <MemoryRouter>
+        <PropertyCard property={{ ...property, averageRating: 4, reviewCount: 1 }} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('★ 4.0 · 1 review')).toBeInTheDocument();
+    rerender(
+      <MemoryRouter>
+        <PropertyCard property={{ ...property, averageRating: null, reviewCount: 0 }} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('No reviews yet')).toBeInTheDocument();
+  });
 });

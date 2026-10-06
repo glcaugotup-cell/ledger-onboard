@@ -126,6 +126,9 @@ describe('MyReservationsPage', () => {
     await user.click(within(dialog).getByRole('radio', { name: '4 stars' }));
     await user.click(within(dialog).getByRole('button', { name: 'Submit review' }));
     await waitFor(() => expect(ReviewApi.submit).toHaveBeenCalledWith('p1', { reservationId: 'res9', rating: 4, comment: '' }));
+    // Reviews are published at once: the window confirms that, then closes.
+    expect(await within(dialog).findByText(/your review is now on the property page/i)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Rate your stay' })).not.toBeInTheDocument());
   });
 });

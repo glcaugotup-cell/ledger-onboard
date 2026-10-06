@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PropertyManagePage from './PropertyManagePage.jsx';
 import PropertyApi from '../../services/PropertyApi.js';
+import ReviewApi from '../../services/ReviewApi.js';
 import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.js';
 
 const { useAuthMock, useNotificationsMock, navigateMock } = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const { useAuthMock, useNotificationsMock, navigateMock } = vi.hoisted(() => ({
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
 vi.mock('../../services/PropertyApi.js', () => ({ default: { getForManagement: vi.fn(), remove: vi.fn(), createRoom: vi.fn(), updateRoom: vi.fn(), listCaretakerSuggestions: vi.fn(), assignCaretaker: vi.fn() } }));
+vi.mock('../../services/ReviewApi.js', () => ({ default: { listForProperty: vi.fn() } }));
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return { ...actual, useNavigate: () => navigateMock };
@@ -29,9 +31,9 @@ const managementData = {
   rooms: [{ _id: 'r1', roomNumber: '101', monthlyBaseRent: 2500, currentOccupancy: 1, capacity: 2, status: 'available' }],
 };
 
-function renderPage() {
+function renderPage(entry = '/landlord/properties/p1') {
   return render(
-    <MemoryRouter initialEntries={['/landlord/properties/p1']}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route path="/landlord/properties/:id" element={<PropertyManagePage />} />
       </Routes>
@@ -45,6 +47,27 @@ describe('PropertyManagePage', () => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 'l1', fullName: 'Landlord Cruz', role: 'landlord' } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());
     PropertyApi.listCaretakerSuggestions.mockResolvedValue({ propertyBarangay: 'Bonuan', caretakers: [] });
+    ReviewApi.listForProperty.mockResolvedValue({ reviews: [] });
+  });
+
+  it('shows tenant reviews with the average, and highlights the one a notification links to', async () => {
+    PropertyApi.getForManagement.mockResolvedValue(managementData);
+    ReviewApi.listForProperty.mockResolvedValue({
+      reviews: [
+        { _id: 'rev1', rating: 5, comment: 'Very clean.', createdAt: '2026-10-01', tenantId: { fullName: 'Juan Reyes' } },
+        { _id: 'rev2', rating: 2, comment: 'Noisy at night.', createdAt: '2026-10-02', editedAt: '2026-10-05', tenantId: { fullName: 'Ana Cruz' } },
+      ],
+    });
+    renderPage('/landlord/properties/p1?review=rev2#reviews');
+
+    const section = (await screen.findByRole('heading', { name: 'Tenant reviews' })).closest('#reviews');
+    expect(await within(section).findByText(/average from 2 reviews/)).toBeInTheDocument();
+    expect(within(section).getByText('★ 3.5')).toBeInTheDocument();
+    expect(within(section).getByText('Very clean.')).toBeInTheDocument();
+    expect(within(section).getByText(/Edited Oct 5, 2026/)).toBeInTheDocument();
+    expect(section.querySelector('#review-rev2')).toHaveClass('ring-2');
+    expect(section.querySelector('#review-rev1')).not.toHaveClass('ring-2');
+    expect(ReviewApi.listForProperty).toHaveBeenCalledWith('p1');
   });
 
   it('renders the property header and its rooms', async () => {

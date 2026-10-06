@@ -52,6 +52,13 @@ describe('PropertyMap', () => {
     expect(screen.getByTestId('map-container')).toHaveAttribute('data-center', JSON.stringify([16.05, 120.34]));
   });
 
+  it('shows the rating summary in the popup only when the property has reviews', () => {
+    renderMap({ properties: [{ ...propertyWithCoords, averageRating: 3.7, reviewCount: 3 }, { ...propertyWithCoords, _id: 'p3', propertyName: 'Unrated House', reviewCount: 0, averageRating: null }] });
+    const popups = screen.getAllByTestId('popup');
+    expect(popups[0]).toHaveTextContent('★ 3.7 · 3 reviews');
+    expect(popups[1]).not.toHaveTextContent('★');
+  });
+
   it('renders a marker only for properties with coordinates', () => {
     renderMap({ properties: [propertyWithCoords, propertyWithoutCoords] });
     expect(screen.getAllByTestId('marker')).toHaveLength(1);

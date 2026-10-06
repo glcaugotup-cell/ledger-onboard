@@ -181,3 +181,25 @@ describe('Caretaker invitation email', () => {
     expect(login.body.data.user.accountStatus).toBe('active');
   });
 });
+
+describe('Caretaker names', () => {
+  const invite = (firstName, lastName, email, phone) => request(app)
+    .post('/api/landlord/caretakers')
+    .set('Authorization', `Bearer ${landlordToken}`)
+    .send({ firstName, lastName, email, phone, serviceBarangay: 'Poblacion Oeste' });
+
+  test('apostrophes are allowed (straight or curly) and the name is saved in name case', async () => {
+    const res = await invite("o'connor", 'D’angelo', 'caretaker.apostrophe@gmail.com', '09302845660');
+    expect(res.status).toBe(201);
+    const saved = await UserRepository.findByEmail('caretaker.apostrophe@gmail.com');
+    expect(saved.firstName).toBe("O'Connor");
+    expect(saved.lastName).toBe("D'Angelo");
+    expect(saved.fullName).toBe("O'Connor D'Angelo");
+  });
+
+  test('digits and other symbols are still refused', async () => {
+    const res = await invite('Pedro2', 'Reyes-Cruz', 'caretaker.symbols@gmail.com', '09302845661');
+    expect(res.status).toBe(400);
+    expect(res.body.error.details.map((d) => d.field).sort()).toEqual(['firstName', 'lastName']);
+  });
+});

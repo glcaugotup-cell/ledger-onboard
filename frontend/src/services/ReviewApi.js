@@ -13,6 +13,25 @@ class ReviewApi extends BaseApiClient {
     return this.get('/reviews/eligible');
   }
 
+  /** The signed-in tenant's own reviews. */
+  listMine() {
+    return this.get('/reviews/mine');
+  }
+
+  update(id, payload) {
+    return this.patch(`/reviews/${id}`, payload);
+  }
+
+  /** Soft delete: the review is hidden but kept on record. */
+  remove(id) {
+    return this.delete(`/reviews/${id}`);
+  }
+
+  /** Admin: every review that hasn't been deleted, newest first. */
+  listAll() {
+    return this.get('/reviews');
+  }
+
   listPendingModeration() {
     return this.get('/reviews/pending');
   }

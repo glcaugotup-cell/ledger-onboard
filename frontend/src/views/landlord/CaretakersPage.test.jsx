@@ -23,7 +23,8 @@ function renderPage() {
 async function fillValidForm(user) {
   await user.type(screen.getByLabelText('First name'), 'Pedro');
   await user.type(screen.getByLabelText('Last name'), 'Reyes');
-  await user.type(screen.getByLabelText(/email/i), 'pedro.reyes@gmail.com');
+  // The box holds only the Gmail username; "@gmail.com" is a fixed suffix the form adds.
+  await user.type(screen.getByLabelText(/email/i), 'pedro.reyes');
   await user.type(screen.getByLabelText(/phone/i), '09171234567');
   await user.selectOptions(screen.getByLabelText('Service barangay'), 'Bonuan Gueset');
 }
@@ -55,7 +56,9 @@ describe('CaretakersPage', () => {
 
     await user.type(screen.getByLabelText('First name'), 'pedro');
     await user.type(screen.getByLabelText('Last name'), 'reyes');
-    await user.type(screen.getByLabelText(/email/i), 'pedro@yahoo.com');
+    // Only characters a Gmail username can't contain: the box strips them all, leaving no username.
+    await user.type(screen.getByLabelText(/email/i), '#!()');
+    expect(screen.getByLabelText(/email/i)).toHaveValue('');
     await user.type(screen.getByLabelText(/phone/i), '12345');
     await user.click(screen.getByRole('button', { name: /send activation invite/i }));
 
@@ -94,14 +97,33 @@ describe('CaretakersPage', () => {
 
     await user.type(screen.getByLabelText('First name'), "o'connor");
     expect(screen.getByLabelText('First name')).toHaveValue("O'connor");
-    await user.type(screen.getByLabelText(/email/i), 'pedro@gmail.com');
-    expect(screen.getByLabelText(/email/i)).toHaveValue('pedro@gmail.com');
+    await user.type(screen.getByLabelText(/email/i), 'pedro');
+    expect(screen.getByLabelText(/email/i)).toHaveValue('pedro');
 
     await user.click(screen.getByRole('button', { name: /send activation invite/i }));
     expect(CaretakerApi.create).not.toHaveBeenCalled();
     expect(screen.getByText('Select the barangay this caretaker works in')).toBeInTheDocument();
     // Submitting normalizes the name the same way the server does.
     expect(screen.getByLabelText('First name')).toHaveValue("O'Connor");
+  });
+
+  it('sends a name with an apostrophe (a curly one from a phone keyboard becomes straight)', async () => {
+    CaretakerApi.create.mockResolvedValue({ caretaker: { _id: 'c8', email: 'liam.oconnor@gmail.com' }, temporaryPassword: 'caretaker1234' });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(/no caretakers yet/i);
+
+    await user.type(screen.getByLabelText('First name'), 'liam');
+    await user.type(screen.getByLabelText('Last name'), 'o’connor');
+    expect(screen.getByLabelText('Last name')).toHaveValue("O'connor");
+    await user.type(screen.getByLabelText(/email/i), 'liam.oconnor');
+    await user.type(screen.getByLabelText(/phone/i), '09171234567');
+    await user.selectOptions(screen.getByLabelText('Service barangay'), 'Bonuan Gueset');
+    await user.click(screen.getByRole('button', { name: /send activation invite/i }));
+
+    await waitFor(() => expect(CaretakerApi.create).toHaveBeenCalledWith({
+      firstName: 'Liam', lastName: "O'Connor", email: 'liam.oconnor@gmail.com', phone: '09171234567', serviceBarangay: 'Bonuan Gueset',
+    }));
   });
 
   it('lets the landlord set an existing caretaker\'s service barangay', async () => {

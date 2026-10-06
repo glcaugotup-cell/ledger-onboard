@@ -23,11 +23,16 @@ const caretakerSince = (c) => new Date(c.activatedAt || c.createdAt || 0).getTim
 const FIRST_NAME_MAX_LENGTH = 15;
 const LAST_NAME_MAX_LENGTH = 20;
 
+/** Keeps letters, spaces and apostrophes as the landlord types (curly ’ from phone keyboards becomes '). */
+function caretakerNameInput(value) {
+  return value.replace(/[‘’]/g, "'").replace(/[^A-Za-z ']/g, '');
+}
+
 function validateCaretakerName(value, maxLength) {
   if (!value) return 'This field is required';
   if ((value.match(/[A-Za-z]/g) || []).length < 2) return 'Must contain at least 2 letters';
   if (value.length > maxLength) return `Must be ${maxLength} characters or fewer`;
-  if (!/^[A-Za-z ]+$/.test(value)) return 'Use letters and spaces only';
+  if (!/^[A-Za-z][A-Za-z ']*$/.test(value)) return 'Use letters, spaces and apostrophes only';
   return null;
 }
 
@@ -162,6 +167,8 @@ export default function CaretakersPage() {
     setCreatedTemporaryPassword('');
 
     const payload = { ...form, firstName: toNameCase(form.firstName.trim()), lastName: toNameCase(form.lastName.trim()), email: `${form.email.trim().toLowerCase()}@gmail.com` };
+    // Show the names the way they will be saved (e.g. "o'connor" -> "O'Connor"); the email box keeps just the username.
+    setForm((f) => ({ ...f, firstName: payload.firstName, lastName: payload.lastName }));
     // Validate each field before the request goes out.
     const errors = {
       firstName: validateCaretakerName(payload.firstName, FIRST_NAME_MAX_LENGTH),
@@ -206,10 +213,10 @@ export default function CaretakersPage() {
             {createdTemporaryPassword && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-semibold">Temporary password</p><p className="mt-1 font-mono text-base">{createdTemporaryPassword}</p><p className="mt-1 text-xs">Share it with the caretaker. The activation page requires them to set a new password before they can use the account.</p></div>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field required label="First name" error={formErrors.firstName}>
-                <TextInput maxLength={FIRST_NAME_MAX_LENGTH} value={form.firstName} onChange={(e) => setField('firstName', capitalizeFirst(e.target.value.replace(/[^A-Za-z ]/g, '')))} error={formErrors.firstName} />
+                <TextInput maxLength={FIRST_NAME_MAX_LENGTH} value={form.firstName} onChange={(e) => setField('firstName', capitalizeFirst(caretakerNameInput(e.target.value)))} error={formErrors.firstName} />
               </Field>
               <Field required label="Last name" error={formErrors.lastName}>
-                <TextInput maxLength={LAST_NAME_MAX_LENGTH} value={form.lastName} onChange={(e) => setField('lastName', capitalizeFirst(e.target.value.replace(/[^A-Za-z ]/g, '')))} error={formErrors.lastName} />
+                <TextInput maxLength={LAST_NAME_MAX_LENGTH} value={form.lastName} onChange={(e) => setField('lastName', capitalizeFirst(caretakerNameInput(e.target.value)))} error={formErrors.lastName} />
               </Field>
             </div>
             <Field required label="Email (Gmail only)" error={formErrors.email}>

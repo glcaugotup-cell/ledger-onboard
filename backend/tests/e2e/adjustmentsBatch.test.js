@@ -12,14 +12,16 @@ const MaintenanceIssueRepository = require('../../repositories/MaintenanceIssueR
 const PaymentTransactionRepository = require('../../repositories/PaymentTransactionRepository');
 const { hashPassword } = require('../../utils/password');
 const { ensurePaymentReferenceIndex } = require('../../utils/paymentReferenceIndex');
+const { appDateKey } = require('../../utils/dates');
 
 let app;
 const PASSWORD = 'Str0ng!Pass';
 let seq = 0;
 const auth = (token) => ({ Authorization: `Bearer ${token}` });
 const day = 24 * 60 * 60 * 1000;
-const dateOnly = (offsetDays = 0) => new Date(Date.now() + offsetDays * day).toISOString().slice(0, 10);
-const currentMonth = () => `${new Date().toISOString().slice(0, 7)}-01`;
+// Dates in the app's time zone (Asia/Manila), like the services use; UTC dates are a day behind before 8 a.m. there.
+const dateOnly = (offsetDays = 0) => appDateKey(new Date(Date.now() + offsetDays * day));
+const currentMonth = () => `${appDateKey().slice(0, 7)}-01`;
 
 beforeAll(async () => {
   await startTestDb();
@@ -113,7 +115,7 @@ describe('R1-R5: reservation and tenancy lifecycle', () => {
     expect(noRating.status).toBe(400);
     const review = await request(app).post(`/api/properties/${setup.property._id}/reviews`).set(auth(tenant.token)).send({ reservationId: id, rating: 4 });
     expect(review.status).toBe(201);
-    expect(review.body.data.review).toMatchObject({ status: 'PENDING', isVerifiedFormerTenant: true });
+    expect(review.body.data.review).toMatchObject({ status: 'APPROVED', isVerifiedFormerTenant: true });
     const duplicate = await request(app).post(`/api/properties/${setup.property._id}/reviews`).set(auth(tenant.token)).send({ reservationId: id, rating: 5 });
     expect(duplicate.status).toBe(409);
     const prompt = await NotificationRepository.findOne({ userId: tenant.user._id, type: 'REVIEW_PROMPT' });

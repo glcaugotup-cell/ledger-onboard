@@ -16,7 +16,7 @@ vi.mock('../../services/ReservationApi.js', () => ({ default: { list: vi.fn(), r
 vi.mock('../../services/BillingApi.js', () => ({ default: { list: vi.fn(), fetchPaymentQrObjectUrl: vi.fn() } }));
 vi.mock('../../services/PaymentApi.js', () => ({ default: { submitQr: vi.fn() } }));
 vi.mock('../../services/MaintenanceIssueApi.js', () => ({ default: { list: vi.fn(), getMedia: vi.fn() } }));
-vi.mock('../../services/ReviewApi.js', () => ({ default: { listEligible: vi.fn(), submit: vi.fn() } }));
+vi.mock('../../services/ReviewApi.js', () => ({ default: { listEligible: vi.fn(), submit: vi.fn(), listMine: vi.fn(), update: vi.fn(), remove: vi.fn() } }));
 
 const stay = {
   _id: 'res1', status: 'active', movedInAt: '2026-09-01', moveInDate: '2026-09-01',
@@ -43,6 +43,7 @@ describe('MyApartmentPage', () => {
     BillingApi.list.mockResolvedValue({ soas: [bill] });
     MaintenanceIssueApi.list.mockResolvedValue({ issues: [] });
     ReviewApi.listEligible.mockResolvedValue({ eligibleReservations: [] });
+    ReviewApi.listMine.mockResolvedValue({ reviews: [] });
   });
 
   it('shows the current stay with the landlord and caretaker contacts, and billing inside', async () => {
@@ -94,5 +95,67 @@ describe('MyApartmentPage', () => {
     expect(screen.getByRole('heading', { name: 'Past stays' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Report an issue' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /request to leave/i })).not.toBeInTheDocument();
+  });
+
+  describe('reviews of past stays', () => {
+    const past = { ...stay, _id: 'old', status: 'completed', movedOutAt: '2026-09-30' };
+    const review = { _id: 'rev1', reservationId: 'old', rating: 2, comment: 'Water was often off.', status: 'APPROVED' };
+
+    it('shows the review with its status and lets the tenant edit the stars and comment', async () => {
+      ReservationApi.list.mockResolvedValue({ reservations: [past] });
+      ReviewApi.listMine.mockResolvedValue({ reviews: [review] });
+      ReviewApi.update.mockResolvedValue({ review: { ...review, rating: 4 } });
+      const user = userEvent.setup();
+      renderPage();
+
+      expect(await screen.findByRole('img', { name: 'Your rating: 2 out of 5 stars' })).toBeInTheDocument();
+      expect(screen.getByText('Shown on the property page')).toBeInTheDocument();
+      expect(screen.getByText('Water was often off.')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Edit review' }));
+      await user.click(screen.getByRole('radio', { name: '4 stars' }));
+      const comment = screen.getByLabelText('Review comment');
+      await user.clear(comment);
+      await user.type(comment, 'fixed after we talked');
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => expect(ReviewApi.update).toHaveBeenCalledWith('rev1', { rating: 4, comment: 'Fixed after we talked' }));
+      expect(await screen.findByText(/your review was updated/i)).toBeInTheDocument();
+      expect(ReviewApi.listMine).toHaveBeenCalledTimes(2);
+    });
+
+    it('deletes the review only after confirmation', async () => {
+      ReservationApi.list.mockResolvedValue({ reservations: [past] });
+      ReviewApi.listMine.mockResolvedValue({ reviews: [review] });
+      ReviewApi.remove.mockResolvedValue({});
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Delete review' }));
+      const dialog = screen.getByRole('dialog', { name: /delete your review/i });
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(ReviewApi.remove).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole('button', { name: 'Delete review' }));
+      ReviewApi.listMine.mockResolvedValue({ reviews: [] });
+      await user.click(within(screen.getByRole('dialog', { name: /delete your review/i })).getByRole('button', { name: 'Delete review' }));
+      await waitFor(() => expect(ReviewApi.remove).toHaveBeenCalledWith('rev1'));
+      expect(await screen.findByRole('button', { name: 'Rate this stay' })).toBeInTheDocument();
+    });
+
+    it('a stay without a review can be rated from here; a hidden review shows the admin reason', async () => {
+      ReservationApi.list.mockResolvedValue({ reservations: [past, { ...past, _id: 'old2', propertyId: { _id: 'p2', propertyName: 'Riverside Dorm' } }] });
+      ReviewApi.listMine.mockResolvedValue({ reviews: [{ ...review, reservationId: 'old2', status: 'HIDDEN', moderationReason: 'Contains a phone number' }] });
+      ReviewApi.submit.mockResolvedValue({ review: { _id: 'rev2' } });
+      const user = userEvent.setup();
+      renderPage();
+
+      expect(await screen.findByText('Hidden by an admin')).toBeInTheDocument();
+      expect(screen.getByText('Reason: Contains a phone number')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Rate this stay' }));
+      await user.click(screen.getByRole('radio', { name: '5 stars' }));
+      await user.click(screen.getByRole('button', { name: 'Submit review' }));
+      await waitFor(() => expect(ReviewApi.submit).toHaveBeenCalledWith('p1', { reservationId: 'old', rating: 5, comment: '' }));
+    });
   });
 });

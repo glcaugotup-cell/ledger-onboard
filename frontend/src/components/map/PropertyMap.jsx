@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Link } from 'react-router-dom';
+import { formatRatingSummary } from '../../utils/format.js';
 
 // Vite doesn't resolve Leaflet's default marker image URLs out of the box;
 // point them at the CDN copies that ship in the same package version.
@@ -79,6 +80,7 @@ export default function PropertyMap({ properties = [], height = 400, center, lin
               {p.address?.barangay}, {p.address?.city}
             </p>
             {p.propertyType && <p className="text-xs text-gray-600">{p.propertyType}</p>}
+            {formatRatingSummary(p) && <p className="text-xs font-medium text-amber-600">{formatRatingSummary(p)}</p>}
             {typeof p.startingRent === 'number' && (
               <p className="text-xs font-medium text-gray-800">From ₱{p.startingRent.toLocaleString('en-PH')} / month</p>
             )}

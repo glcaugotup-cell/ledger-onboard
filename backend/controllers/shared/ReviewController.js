@@ -19,6 +19,26 @@ class ReviewController {
     sendSuccess(res, { data: { eligibleReservations: reservations } });
   });
 
+  listMine = asyncHandler(async (req, res) => {
+    const reviews = await ReviewService.listForTenant(req.user.id);
+    sendSuccess(res, { data: { reviews } });
+  });
+
+  update = asyncHandler(async (req, res) => {
+    const review = await ReviewService.updateReview(req.user.id, req.params.id, req.body);
+    sendSuccess(res, { data: { review } });
+  });
+
+  remove = asyncHandler(async (req, res) => {
+    const review = await ReviewService.deleteReview(req.user.id, req.params.id);
+    sendSuccess(res, { data: { review } });
+  });
+
+  listForAdmin = asyncHandler(async (req, res) => {
+    const reviews = await ReviewService.listForAdmin();
+    sendSuccess(res, { data: { reviews } });
+  });
+
   listPendingModeration = asyncHandler(async (req, res) => {
     const reviews = await ReviewService.listPendingModeration();
     sendSuccess(res, { data: { reviews } });

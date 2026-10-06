@@ -11,15 +11,19 @@ const propertyReviewSchema = new Schema(
     reservationId: { type: Schema.Types.ObjectId, ref: 'Reservation', required: true },
     rating: { type: Number, required: true, min: 1, max: 5 },
     comment: { type: String, trim: true, maxlength: 2000, default: '' },
+    // New reviews are published right away (APPROVED). PENDING only remains on reviews made before that change.
     status: {
       type: String,
       enum: Object.values(REVIEW_STATUS),
-      default: REVIEW_STATUS.PENDING,
+      default: REVIEW_STATUS.APPROVED,
     },
     isVerifiedFormerTenant: { type: Boolean, default: true },
     moderationReason: { type: String, default: null },
     moderatedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     moderatedAt: { type: Date, default: null },
+    editedAt: { type: Date, default: null },
+    // Soft delete by the tenant: hidden everywhere but kept on record. Rating the stay again revives it.
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
