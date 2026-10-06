@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import PageHeader from '../../components/layout/PageHeader.jsx';
 import PropertyApi from '../../services/PropertyApi.js';
@@ -419,23 +418,20 @@ export default function PropertyManagePage() {
 
   if (loading)
     return (
-      <DashboardLayout>
+      <DashboardLayout back={{ fallback: '/landlord/properties' }}>
         <LoadingState />
       </DashboardLayout>
     );
   if (error && !property)
     return (
-      <DashboardLayout>
+      <DashboardLayout back={{ fallback: '/landlord/properties' }}>
         <ErrorBanner message={error} />
       </DashboardLayout>
     );
   if (!property) return null;
 
   return (
-    <DashboardLayout>
-      <Link to="/landlord/properties" className="mb-3 inline-flex items-center gap-1 rounded text-sm font-medium text-brand-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
-        <ArrowLeftIcon className="h-4 w-4" aria-hidden="true" /> All properties
-      </Link>
+    <DashboardLayout back={{ fallback: '/landlord/properties' }}>
       <PageHeader
         title={property.propertyName}
         description={`${property.address.street}, ${property.address.barangay}, ${property.address.city}`}

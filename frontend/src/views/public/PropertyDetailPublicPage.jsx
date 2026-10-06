@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import PropertyDetailContent from '../../components/PropertyDetailContent.jsx';
+import BackButton from '../../components/BackButton.jsx';
 import logo from '../../assets/Logo.png';
 
 export default function PropertyDetailPublicPage() {
@@ -17,6 +18,8 @@ export default function PropertyDetailPublicPage() {
         </div>
       </header>
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        {/* Returns to the landing page's search with its filters and scroll position, else to the landing page. */}
+        <BackButton fallback="/" />
         <PropertyDetailContent />
       </div>
     </div>

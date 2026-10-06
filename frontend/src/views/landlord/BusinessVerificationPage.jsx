@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeftIcon,
   ArrowRightIcon,
   ArrowUpTrayIcon,
   CheckCircleIcon,
@@ -125,7 +123,6 @@ function Step({ number, icon: Icon, title, description }) {
 
 export default function BusinessVerificationPage() {
   const { user, refreshProfile } = useAuth();
-  const navigate = useNavigate();
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
   const [permit, setPermit] = useState(null);
@@ -170,7 +167,7 @@ export default function BusinessVerificationPage() {
   const documentsRemaining = (permit ? 0 : 1) + (bir ? 0 : 1);
 
   return (
-    <DashboardLayout>
+    <DashboardLayout back={{ disabled: submitting }}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-6 flex items-start gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
@@ -306,14 +303,6 @@ export default function BusinessVerificationPage() {
             </div>
           </Card>
         )}
-
-        <button
-          type="button"
-          onClick={() => navigate('/landlord/dashboard')}
-          className="mt-6 flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline"
-        >
-          <ArrowLeftIcon className="h-4 w-4" /> Back to Dashboard
-        </button>
       </div>
     </DashboardLayout>
   );

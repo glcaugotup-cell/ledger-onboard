@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PropertyDetailPublicPage from './PropertyDetailPublicPage.jsx';
@@ -50,5 +51,20 @@ describe('PropertyDetailPublicPage', () => {
 
     expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/');
     expect(await screen.findByRole('heading', { name: 'Dagupan Demo Boarding House' })).toBeInTheDocument();
+  });
+
+  it('a visitor who opened a shared link goes Back to the landing page', async () => {
+    PropertyApi.getPublicDetail.mockResolvedValue({ property: { _id: 'p1', propertyName: 'Shared House', propertyType: 'Bedspace', tenantGenderPolicy: 'Co-Ed', address: { street: '1 St', barangay: 'Bonuan', city: 'Dagupan' }, amenities: [], houseRules: [], images: [], locationCoordinates: { lat: 16.05, lng: 120.34 } }, rooms: [], reviews: [] });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/properties/p1']}>
+        <Routes>
+          <Route path="/" element={<p>Landing page</p>} />
+          <Route path="/properties/:id" element={<PropertyDetailPublicPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await user.click(screen.getByRole('button', { name: 'Go back' }));
+    expect(screen.getByText('Landing page')).toBeInTheDocument();
   });
 });

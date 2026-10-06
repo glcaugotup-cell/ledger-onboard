@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { MagnifyingGlassIcon, MapIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import PropertyApi from '../services/PropertyApi.js';
 import PropertyCard from './PropertyCard.jsx';
@@ -15,15 +16,45 @@ import { scrollBehavior } from '../utils/motion.js';
  * and markers together. Without it (landing page) the original toggle stays.
  */
 const EMPTY_FILTERS = { barangay: '', propertyType: '', tenantGenderPolicy: '', minRent: '', maxRent: '', text: '' };
+const FILTER_KEYS = Object.keys(EMPTY_FILTERS);
+const RENT_VALUE = /^\d{1,7}$/;
+
+/** Filters live in the URL query string, so they survive Back from a property page, a refresh and a shared link. */
+function filtersFromParams(params) {
+  const filters = Object.fromEntries(FILTER_KEYS.map((key) => [key, params.get(key) ?? '']));
+  for (const key of ['minRent', 'maxRent']) {
+    if (filters[key] !== '' && (!RENT_VALUE.test(filters[key]) || Number(filters[key]) > 1000000)) filters[key] = '';
+  }
+  return filters;
+}
 
 export default function DiscoverContent({ linkPrefix = '/tenant/properties', mapSection = false }) {
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterKey = FILTER_KEYS.map((key) => searchParams.get(key) ?? '').join('\u0000');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const filters = useMemo(() => filtersFromParams(searchParams), [filterKey]);
+  const view = searchParams.get('view') === 'map' ? 'map' : 'grid';
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [view, setView] = useState('grid');
   const [mapFocus, setMapFocus] = useState(null);
   const mapRef = useRef(null);
+
+  // Replaces the current history entry, so typing a search doesn't add a Back step per keystroke.
+  const writeParams = (changes) =>
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        for (const [key, value] of Object.entries(changes)) {
+          if (value === '' || value === null || value === undefined) next.delete(key);
+          else next.set(key, value);
+        }
+        return next;
+      },
+      { replace: true, preventScrollReset: true }
+    );
+  const setFilters = (next) => writeParams(next);
+  const setView = (next) => writeParams({ view: next === 'map' ? 'map' : '' });
 
   useEffect(() => {
     if (filters.minRent !== '' && filters.maxRent !== '' && Number(filters.minRent) > Number(filters.maxRent)) return undefined;
@@ -49,7 +80,7 @@ export default function DiscoverContent({ linkPrefix = '/tenant/properties', map
       // exponent notation, decimals, negatives, and values above the limit.
       if (value !== '' && (!/^\d{1,7}$/.test(value) || Number(value) > 1000000)) return;
     }
-    setFilters((current) => ({ ...current, [key]: value }));
+    setFilters({ [key]: value });
   };
   const activeFilters = Object.values(filters).filter((v) => v !== '').length;
   const rentRangeInvalid = filters.minRent !== '' && filters.maxRent !== '' && Number(filters.minRent) > Number(filters.maxRent);

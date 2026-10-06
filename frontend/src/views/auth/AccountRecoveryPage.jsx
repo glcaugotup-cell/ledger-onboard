@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import AuthLayout from './AuthLayout.jsx';
 import AuthApi from '../../services/AuthApi.js';
 import { Field, TextInput } from '../../components/ui/Field.jsx';
@@ -82,11 +82,6 @@ export default function AccountRecoveryPage() {
           Recover account
         </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-gray-500">
-        <Link to="/" className="hover:underline">
-          Back to sign in
-        </Link>
-      </p>
     </AuthLayout>
   );
 }

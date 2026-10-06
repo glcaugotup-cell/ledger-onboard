@@ -1,4 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import BackButton from '../../components/BackButton.jsx';
 import logo from '../../assets/Logo.png';
 import houseWelcome from '../../assets/housedesign1.webp';
 import houseExplore from '../../assets/housedesign2.webp';
@@ -14,6 +15,8 @@ export default function AuthSplitLayout() {
 
   const formPanel = (
     <div className="auth-route-form order-1 flex w-full flex-col justify-center px-6 py-10 sm:px-10 md:px-14 lg:px-20">
+      {/* Back goes to the landing page's sliding sign-in card, never between /login and /register. */}
+      <BackButton fallback="/" label="Back to sign in" useHistory={false} className="self-start" />
       <Link to="/" className="mb-8 flex items-center gap-3">
         <img src={logo} alt="Ledger OnBoard" className="h-12 w-12 rounded-2xl object-cover shadow-md" />
         <span>
