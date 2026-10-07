@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -372,5 +372,31 @@ describe('PropertyFormPage', () => {
     await waitFor(() => expect(PropertyApi.create).toHaveBeenCalledTimes(1));
     const [formData] = PropertyApi.create.mock.calls[0];
     expect(formData.get('video').name).toBe('tour.mp4');
+  });
+
+  it('amenities and house rules from suggestions and typing are sent as plain string lists, in order', async () => {
+    PropertyApi.create.mockResolvedValue({ property: { _id: 'p1' } });
+    const user = userEvent.setup();
+    renderPage();
+    await fillRequiredFields(user);
+
+    const amenityPills = screen.getByRole('group', { name: 'Suggested amenities' });
+    await user.click(within(amenityPills).getByRole('button', { name: 'Wi-Fi' }));
+    await user.type(screen.getByLabelText(/^amenities/i), 'wifi{enter}');
+    expect(screen.getByText('“Wi-Fi” is already in the list.')).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/^amenities/i), 'Rooftop deck{enter}');
+
+    const rulePills = screen.getByRole('group', { name: 'Suggested rules' });
+    await user.click(within(rulePills).getByRole('button', { name: 'No smoking' }));
+    const ruleInput = screen.getByLabelText(/^house rules/i);
+    await user.type(ruleInput, 'quiet hours, please{enter}');
+    // Typed but not added with Enter: still saved, so nothing the landlord typed is lost.
+    await user.type(ruleInput, 'no pets');
+
+    await user.click(screen.getByRole('button', { name: /create listing/i }));
+    await waitFor(() => expect(PropertyApi.create).toHaveBeenCalledTimes(1));
+    const [formData] = PropertyApi.create.mock.calls[0];
+    expect(formData.getAll('amenities[]')).toEqual(['Wi-Fi', 'Rooftop deck']);
+    expect(formData.getAll('houseRules[]')).toEqual(['No smoking', 'Quiet hours, please', 'No pets']);
   });
 });

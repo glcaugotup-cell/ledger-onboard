@@ -13,6 +13,9 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
+import ListInput from '../../components/ListInput.jsx';
+import { listItemKey, MAX_LIST_ITEM_LENGTH, MAX_LIST_ITEMS } from '../../utils/listItems.js';
+import { AMENITY_SUGGESTIONS, HOUSE_RULE_SUGGESTIONS } from '../../data/propertyListSuggestions.js';
 import { skipCurrentEntry } from '../../routes/navigationHistory.js';
 import PropertyApi from '../../services/PropertyApi.js';
 import PropertyMap from '../../components/map/PropertyMap.jsx';
@@ -33,10 +36,8 @@ const MAX_PHOTOS = 5;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_TAGS = 30;
-const MAX_TAG_LENGTH = 200;
-const MAX_HOUSE_RULES = 30;
-const MAX_HOUSE_RULE_LENGTH = 200;
+const MAX_HOUSE_RULES = MAX_LIST_ITEMS;
+const MAX_HOUSE_RULE_LENGTH = MAX_LIST_ITEM_LENGTH;
 const VIDEO_MIME_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
 
 const initialForm = {
@@ -46,58 +47,13 @@ const initialForm = {
   // No default: the landlord must choose one explicitly.
   propertyType: '',
   tenantGenderPolicy: '',
-  houseRules: '',
 };
 
-/**
- * Chip/tag input for Nearby Universities and Amenities. `format` runs when a
- * tag is added; Amenities uses none so values like "WiFi" or "CCTV" keep their case.
- */
-function TagInput({ label, hint, values, onAdd, onRemove, placeholder, format = (v) => v }) {
-  const [text, setText] = useState('');
-  const [error, setError] = useState('');
-
-  function commit() {
-    const cleaned = format(text.trim());
-    if (!cleaned) return setText('');
-    if (cleaned.length > MAX_TAG_LENGTH) return setError(`Keep each entry to ${MAX_TAG_LENGTH} characters or fewer.`);
-    if (values.length >= MAX_TAGS) return setError(`You can add up to ${MAX_TAGS} entries.`);
-    if (!values.includes(cleaned)) onAdd(cleaned);
-    setError('');
-    setText('');
-  }
-
-  function onKeyDown(e) {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      commit();
-    }
-  }
-
-  return (
-    <Field label={label} error={error} hint={hint || `${values.length}/${MAX_TAGS} entries · up to ${MAX_TAG_LENGTH} characters each`}>
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-gray-300 bg-white p-2 focus-within:ring-2 focus-within:ring-brand-400">
-        {values.map((v) => (
-          <span key={v} className="flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
-            {v}
-            <button type="button" onClick={() => onRemove(v)} className="text-brand-400 hover:text-brand-700" aria-label={`Remove ${v}`}>
-              <XMarkIcon className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        <input
-          value={text}
-          maxLength={MAX_TAG_LENGTH}
-          disabled={values.length >= MAX_TAGS}
-          onChange={(e) => { setText(e.target.value); setError(''); }}
-          onKeyDown={onKeyDown}
-          onBlur={commit}
-          placeholder={values.length ? 'Add more…' : placeholder}
-          className="min-w-[140px] flex-1 border-none bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
-        />
-      </div>
-    </Field>
-  );
+/** A rule typed but not yet added (no Enter) still counts on submit, so nothing the landlord typed is lost. */
+function rulesWithDraft(rules, draft) {
+  const pending = toSentenceCase(draft.replace(/\s+/g, ' ').trim());
+  if (!pending || rules.some((rule) => listItemKey(rule) === listItemKey(pending))) return rules;
+  return [...rules, pending];
 }
 
 export default function PropertyFormPage() {
@@ -109,6 +65,8 @@ export default function PropertyFormPage() {
   const [videoError, setVideoError] = useState('');
   const [universities, setUniversities] = useState([]);
   const [amenities, setAmenities] = useState([]);
+  const [houseRules, setHouseRules] = useState([]);
+  const [houseRuleDraft, setHouseRuleDraft] = useState('');
   const [error, setError] = useState('');
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -203,17 +161,6 @@ export default function PropertyFormPage() {
     setForm((f) => ({ ...f, propertyName: toTitleCase(f.propertyName) }));
   }
 
-  function onHouseRulesBlur() {
-    // Sentence-case each line; title-casing would mangle rules like "No visitors after 10pm".
-    setForm((f) => ({
-      ...f,
-      houseRules: f.houseRules
-        .split('\n')
-        .map((line) => toSentenceCase(line))
-        .join('\n'),
-    }));
-  }
-
   function onBarangayInputChange(e) {
     const value = e.target.value;
     setBarangayQuery(value);
@@ -238,7 +185,7 @@ export default function PropertyFormPage() {
     if (!form.street.trim()) nextErrors.street = 'Street is required.';
     else if (form.street.trim().length > 200) nextErrors.street = 'Street must be at most 200 characters.';
     if (form.description.length > 4000) nextErrors.description = 'Description must be at most 4000 characters.';
-    const rules = form.houseRules.split(/[\n,]/).map((rule) => rule.trim()).filter(Boolean);
+    const rules = rulesWithDraft(houseRules, houseRuleDraft);
     if (rules.length > MAX_HOUSE_RULES) nextErrors.houseRules = `You can add up to ${MAX_HOUSE_RULES} house rules.`;
     else if (rules.some((rule) => rule.length > MAX_HOUSE_RULE_LENGTH)) nextErrors.houseRules = `Each house rule must be ${MAX_HOUSE_RULE_LENGTH} characters or fewer.`;
     if (!selectedBarangay) nextErrors.barangay = 'Select the exact barangay from the list.';
@@ -273,11 +220,7 @@ export default function PropertyFormPage() {
       fd.append('tenantGenderPolicy', form.tenantGenderPolicy);
       amenities.forEach((v) => fd.append('amenities[]', v));
       universities.forEach((v) => fd.append('nearbyUniversities[]', v));
-      form.houseRules
-        .split(/[\n,]/)
-        .map((s) => toSentenceCase(s.trim()))
-        .filter(Boolean)
-        .forEach((v) => fd.append('houseRules[]', v));
+      rulesWithDraft(houseRules, houseRuleDraft).forEach((v) => fd.append('houseRules[]', v));
       images.forEach((img) => fd.append('images', img));
       if (video) fd.append('video', video);
 
@@ -397,33 +340,47 @@ export default function PropertyFormPage() {
                   </Field>
                 </div>
 
-                <TagInput
+                <ListInput
                   label="Nearby universities"
                   values={universities}
-                  onAdd={(v) => setUniversities((prev) => [...prev, v])}
-                  onRemove={(v) => setUniversities((prev) => prev.filter((u) => u !== v))}
+                  onChange={setUniversities}
                   placeholder="e.g., PHINMA University of Pangasinan, University of Luzon"
                   format={toTitleCase}
+                  itemName="university"
+                  itemNamePlural="universities"
                 />
 
-                <TagInput
+                {/* Amenities keep the case the landlord types, so "WiFi" or "CCTV" stay as written. */}
+                <ListInput
                   label="Amenities"
                   values={amenities}
-                  onAdd={(v) => setAmenities((prev) => [...prev, v])}
-                  onRemove={(v) => setAmenities((prev) => prev.filter((a) => a !== v))}
+                  onChange={setAmenities}
+                  suggestions={AMENITY_SUGGESTIONS}
                   placeholder="e.g., WiFi, Aircon, CCTV, Parking"
+                  itemName="amenity"
+                  itemNamePlural="amenities"
                 />
 
-                <Field label="House rules" error={errors.houseRules} hint={`One per line or comma-separated · up to ${MAX_HOUSE_RULES} rules, ${MAX_HOUSE_RULE_LENGTH} characters each`}>
-                  <TextArea
-                    rows={3}
-                    value={form.houseRules}
-                    onChange={update('houseRules')}
-                    onBlur={onHouseRulesBlur}
-                    maxLength={MAX_HOUSE_RULES * MAX_HOUSE_RULE_LENGTH + MAX_HOUSE_RULES - 1}
-                    placeholder="e.g., No visitors after 10 PM, No smoking"
-                  />
-                </Field>
+                {/* Rules are sentence-cased (not title-cased, which would mangle "No visitors after 10pm"); commas stay inside a rule. */}
+                <ListInput
+                  variant="list"
+                  label="House rules"
+                  values={houseRules}
+                  onChange={(next) => {
+                    setHouseRules(next);
+                    setErrors((prev) => ({ ...prev, houseRules: undefined }));
+                  }}
+                  draft={houseRuleDraft}
+                  onDraftChange={setHouseRuleDraft}
+                  suggestions={HOUSE_RULE_SUGGESTIONS}
+                  placeholder="e.g., No visitors after 10 PM"
+                  format={toSentenceCase}
+                  blurFormat={toSentenceCase}
+                  itemName="rule"
+                  itemNamePlural="rules"
+                  hint={`Press Enter to add a rule. One rule per line when pasting. Up to ${MAX_HOUSE_RULE_LENGTH} characters each.`}
+                  error={errors.houseRules}
+                />
               </div>
 
               <hr className="my-6 border-gray-100" />
