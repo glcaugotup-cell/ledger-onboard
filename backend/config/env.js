@@ -28,6 +28,12 @@ if (!EMAIL_TRANSPORTS.includes(configuredEmailTransport)) {
   throw new Error(`EMAIL_TRANSPORT must be one of: ${EMAIL_TRANSPORTS.join(', ')} (got "${configuredEmailTransport}")`);
 }
 
+// Tests use a low hashing cost for speed (tests/helpers/jestEnv.js); production must never run with one.
+const bcryptSaltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12;
+if (process.env.NODE_ENV === 'production' && bcryptSaltRounds < 10) {
+  throw new Error(`BCRYPT_SALT_ROUNDS must be at least 10 in production (got ${bcryptSaltRounds})`);
+}
+
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
@@ -46,7 +52,7 @@ const env = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || (process.env.NODE_ENV === 'test' ? 'test-refresh-secret' : required('JWT_REFRESH_SECRET')),
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
 
-  bcryptSaltRounds: Number(process.env.BCRYPT_SALT_ROUNDS) || 12,
+  bcryptSaltRounds,
 
   archiveWarningDays: Number(process.env.ACCOUNT_ARCHIVE_WARNING_DAYS) || 25,
   archiveDays: Number(process.env.ACCOUNT_ARCHIVE_DAYS) || 30,

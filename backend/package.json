@@ -15,7 +15,10 @@
     "reservations:confirm-move-ins": "node utils/confirmExistingMoveIns.js"
   },
   "jest": {
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/tests/helpers/jestEnv.js"
+    ]
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
