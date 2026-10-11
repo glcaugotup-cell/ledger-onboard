@@ -4,6 +4,7 @@ import AdminApi from '../../services/AdminApi.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import ReasonDialog from '../../components/ReasonDialog.jsx';
+import ResetCodeDialog from '../../components/ResetCodeDialog.jsx';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import PageHeader from '../../components/layout/PageHeader.jsx';
 import { Select, TextInput } from '../../components/ui/Field.jsx';
@@ -57,6 +58,8 @@ export default function UsersPage() {
   const [pending, setPending] = useState(null);
   const [dialogError, setDialogError] = useState('');
   const [dialogBusy, setDialogBusy] = useState(false);
+  // The user an admin is creating a one-time password reset code for.
+  const [resetFor, setResetFor] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -174,6 +177,11 @@ export default function UsersPage() {
                   <StatusBadge status={u.accountStatus} tones={STATUS_TONE} />
                   {u.role !== 'admin' && (
                     <>
+                      {u.accountStatus !== 'pending_activation' && (
+                        <Button variant="ghost" onClick={() => { setSuccess(''); setResetFor(u); }}>
+                          Reset code
+                        </Button>
+                      )}
                       {u.accountStatus !== 'active' && (
                         <Button variant="secondary" loading={busyId === u._id} onClick={() => reactivate(u)}>
                           Activate
@@ -203,6 +211,8 @@ export default function UsersPage() {
           );
         })}
       </div>
+
+      {resetFor && <ResetCodeDialog key={resetFor._id} user={resetFor} onClose={() => setResetFor(null)} />}
 
       {pending && (
         <ReasonDialog

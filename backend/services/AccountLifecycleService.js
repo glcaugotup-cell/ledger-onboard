@@ -104,6 +104,7 @@ class AccountLifecycleService {
       archivedAt: new Date(),
       archiveReason: 'INACTIVITY',
       refreshTokenHash: null,
+      $inc: { tokenVersion: 1 }, // ends every session; recovery starts fresh
     });
     const delivery = await EmailService.sendArchivedNoticeEmail(user.email, user.fullName);
     await AuditLogRepository.record({

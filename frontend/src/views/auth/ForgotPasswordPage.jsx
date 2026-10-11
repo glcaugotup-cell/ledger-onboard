@@ -31,7 +31,12 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <AuthLayout title="Forgot your password?" subtitle="We'll email a verification code if an account exists for that address.">
+    <AuthLayout title="Forgot your password?" subtitle="No email is sent. You can reset it with a code you already have.">
+      <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-gray-600" aria-label="Ways to reset your password">
+        <li>a 6-digit code from your authenticator app, if two-factor sign-in is on;</li>
+        <li>one of your backup codes; or</li>
+        <li>a reset code from an administrator, who will confirm who you are first.</li>
+      </ul>
       <form onSubmit={onSubmit} className="space-y-4">
         <ErrorBanner message={error} />
         <SuccessBanner message={message} />
@@ -39,7 +44,7 @@ export default function ForgotPasswordPage() {
           <TextInput type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} required />
         </Field>
         <Button type="submit" className="w-full" loading={loading}>
-          Send verification code
+          Continue
         </Button>
       </form>
       {submitted && (

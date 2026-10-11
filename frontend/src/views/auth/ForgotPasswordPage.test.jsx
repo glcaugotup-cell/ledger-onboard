@@ -23,11 +23,27 @@ describe('ForgotPasswordPage', () => {
     );
 
     await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
-    await user.click(screen.getByRole('button', { name: /send verification code/i }));
+    await user.click(screen.getByRole('button', { name: /^continue$/i }));
 
     expect(AuthApi.forgotPassword).toHaveBeenCalledWith({ email: 'demo.tenant@gmail.com' });
     expect(await screen.findByText("If that account exists, we've sent a code.")).toBeInTheDocument();
     expect(screen.getByText(/i have a code/i)).toBeInTheDocument();
+  });
+
+  // Phase 4 rule: nothing is emailed; the page lists the codes that can reset a password.
+  it('lists the three ways to reset and never says a code will be emailed', () => {
+    render(
+      <MemoryRouter>
+        <ForgotPasswordPage />
+      </MemoryRouter>
+    );
+    const options = screen.getByRole('list', { name: /ways to reset your password/i });
+    expect(options).toHaveTextContent(/authenticator app/i);
+    expect(options).toHaveTextContent(/backup codes/i);
+    expect(options).toHaveTextContent(/reset code from an administrator/i);
+    expect(screen.getByText(/no email is sent/i)).toBeInTheDocument();
+    expect(screen.queryByText(/we.ll email/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /send verification code/i })).not.toBeInTheDocument();
   });
 
   it('shows an error banner and no reset link when the request fails', async () => {
@@ -40,7 +56,7 @@ describe('ForgotPasswordPage', () => {
     );
 
     await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
-    await user.click(screen.getByRole('button', { name: /send verification code/i }));
+    await user.click(screen.getByRole('button', { name: /^continue$/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Too many requests');
     expect(screen.queryByText(/i have a code/i)).not.toBeInTheDocument();

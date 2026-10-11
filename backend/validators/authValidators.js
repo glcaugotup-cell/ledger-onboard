@@ -102,9 +102,21 @@ const resendOtpValidators = [emailChain];
 
 const cancelRegistrationValidators = [emailChain];
 
-const resetPasswordValidators = [emailChain, body('code').matches(OTP).withMessage('Code must be exactly 6 digits'), strongPasswordChain('newPassword')];
+// An authenticator code (6 digits), an admin reset code (XXXX-XXXX) or a backup code (XXXXX-XXXXX);
+// any case, the dash or a space optional.
+const RESET_CODE = /^(\d{6}|[A-Za-z0-9]{4}[-\s]?[A-Za-z0-9]{4}|[A-Za-z0-9]{5}[-\s]?[A-Za-z0-9]{5})$/;
+const resetPasswordValidators = [
+  emailChain,
+  body('code').isString().withMessage('Enter your authenticator, backup or reset code').bail().trim().matches(RESET_CODE).withMessage('Enter your authenticator, backup or reset code'),
+  strongPasswordChain('newPassword'),
+];
 
-const changePasswordValidators = [body('currentPassword').notEmpty(), strongPasswordChain('newPassword')];
+// The code (authenticator or backup) is required by AuthService only when two-factor is on.
+const changePasswordValidators = [
+  body('currentPassword').notEmpty(),
+  strongPasswordChain('newPassword'),
+  body('code').optional().isString().bail().trim().matches(MFA_CODE).withMessage('Enter the 6-digit code from your authenticator app, or a backup code'),
+];
 
 // Caretakers only: the barangay they work in, used to suggest them for properties there.
 // Chains are built fresh each time: calling .optional() on a shared chain would change it everywhere it's used.

@@ -15,6 +15,9 @@ const ACCOUNT_STATUS = Object.freeze({
   ARCHIVED: 'archived',
 });
 
+// Admin-issued password reset codes (POST /api/admin/users/:id/reset-code): shown once as XXXX-XXXX.
+const PASSWORD_RESET_CODE = Object.freeze({ LENGTH: 8, TTL_MINUTES: 30 });
+
 const MFA_METHOD = Object.freeze({
   NONE: 'none',
   EMAIL: 'email', // retired: kept only so older records stay valid (they sign in with just a password)
@@ -111,6 +114,7 @@ module.exports = {
   ROLES,
   ACCOUNT_STATUS,
   MFA_METHOD,
+  PASSWORD_RESET_CODE,
   LISTING_STATUS,
   PROPERTY_TYPE,
   GENDER_POLICY,

@@ -97,6 +97,36 @@ describe('Security — authenticator-app two-factor login', () => {
   });
 });
 
+// Phase 4 rule: with two-factor on, an authenticator code or a backup code resets the password; no email.
+describe('Security — password reset with two-factor codes', () => {
+  test('an authenticator code and then a backup code each reset the password, and two-factor stays on', async () => {
+    const { generateTotp } = require('../../utils/totp');
+    await registerAndVerify({
+      firstName: 'Reset', lastName: 'Twofactor', email: 'reset.twofactor@gmail.com', phone: '09171234509', password: 'Str0ng!Pass',
+      role: 'tenant', privacyConsent: true, emergencyContact: { name: 'Ana User', phone: '09171234598' },
+    });
+    const token = (await request(app).post('/api/auth/login').send({ email: 'reset.twofactor@gmail.com', password: 'Str0ng!Pass' })).body.data.accessToken;
+    const { secret } = (await request(app).post('/api/auth/mfa/setup').set('Authorization', `Bearer ${token}`).send({ password: 'Str0ng!Pass' })).body.data;
+    const { backupCodes } = (await request(app).post('/api/auth/mfa/enable').set('Authorization', `Bearer ${token}`).send({ code: generateTotp(secret) })).body.data;
+    const EmailService = require('../../services/EmailService');
+    const sendSpy = jest.spyOn(EmailService, 'send');
+
+    const byApp = await request(app).post('/api/auth/reset-password').send({ email: 'reset.twofactor@gmail.com', code: generateTotp(secret, { nowMs: Date.now() + 30000 }), newPassword: 'N3w!Password' });
+    expect(byApp.status).toBe(200);
+    const byBackup = await request(app).post('/api/auth/reset-password').send({ email: 'reset.twofactor@gmail.com', code: backupCodes[0], newPassword: 'An0ther!Pass' });
+    expect(byBackup.status).toBe(200);
+    const spent = await request(app).post('/api/auth/reset-password').send({ email: 'reset.twofactor@gmail.com', code: backupCodes[0], newPassword: 'Thr33!Pass' });
+    expect(spent.body.error.code).toBe('INVALID_OTP');
+    expect(sendSpy).not.toHaveBeenCalled();
+    sendSpy.mockRestore();
+
+    // The newest password works, and sign-in still asks for the second step.
+    const login = await request(app).post('/api/auth/login').send({ email: 'reset.twofactor@gmail.com', password: 'An0ther!Pass' });
+    expect(login.status).toBe(200);
+    expect(login.body.data.mfaRequired).toBe(true);
+  });
+});
+
 describe('Account inactivity lifecycle (Section 7)', () => {
   const UserRepository = require('../../repositories/UserRepository');
   const AuditLogRepository = require('../../repositories/AuditLogRepository');

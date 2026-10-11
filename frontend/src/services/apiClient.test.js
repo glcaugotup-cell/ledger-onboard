@@ -7,6 +7,7 @@ import instance, {
   mediaUrl,
   normalizeApiOrigin,
   onServerSlowChange,
+  onSessionRevoked,
   setAccessToken,
 } from './apiClient.js';
 
@@ -220,5 +221,24 @@ describe('API base URL and media URLs (VITE_API_URL unset in tests)', () => {
     expect(mediaUrl('https://cdn.example.com/a.jpg')).toBe('https://cdn.example.com/a.jpg');
     expect(mediaUrl('blob:http://localhost/abc')).toBe('blob:http://localhost/abc');
     expect(mediaUrl(undefined)).toBeUndefined();
+  });
+});
+
+describe('session revoked elsewhere', () => {
+  it('tells listeners when a request is refused with SESSION_REVOKED, and only then', async () => {
+    const listener = vi.fn();
+    const stop = onSessionRevoked(listener);
+    const refused = (code) => ({ response: { status: 401, data: { success: false, error: { code, message: 'x' } } } });
+
+    await expect(responseRejected(refused('SESSION_REVOKED'))).rejects.toMatchObject({ code: 'SESSION_REVOKED', statusCode: 401 });
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    await expect(responseRejected(refused('TOKEN_EXPIRED'))).rejects.toMatchObject({ code: 'TOKEN_EXPIRED' });
+    await expect(responseRejected(refused('INCORRECT_PASSWORD'))).rejects.toMatchObject({ code: 'INCORRECT_PASSWORD' });
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    stop();
+    await expect(responseRejected(refused('SESSION_REVOKED'))).rejects.toBeTruthy();
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 });

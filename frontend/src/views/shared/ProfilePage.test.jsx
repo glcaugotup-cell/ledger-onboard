@@ -39,14 +39,15 @@ const USERS = {
 function renderPage(user = USERS.tenant) {
   const refreshProfile = vi.fn().mockResolvedValue(user);
   const logout = vi.fn().mockResolvedValue(undefined);
-  useAuthMock.mockReturnValue(mockAuthValue({ user, refreshProfile, logout }));
+  const changePassword = vi.fn().mockResolvedValue({});
+  useAuthMock.mockReturnValue(mockAuthValue({ user, refreshProfile, logout, changePassword }));
   useNotificationsMock.mockReturnValue(mockNotificationsValue());
   render(
     <MemoryRouter>
       <ProfilePage />
     </MemoryRouter>
   );
-  return { refreshProfile, logout };
+  return { refreshProfile, logout, changePassword };
 }
 
 describe('ProfilePage', () => {
@@ -64,7 +65,8 @@ describe('ProfilePage', () => {
     expect(screen.getByLabelText('First name')).toBeInTheDocument();
     expect(screen.getByLabelText('Last name')).toBeInTheDocument();
     expect(screen.getByLabelText('Emergency contact name')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /email me a code/i })).toBeInTheDocument();
+    // Phase 4 rule: the password is changed with the current password, not an emailed code.
+    expect(screen.getByRole('button', { name: /^change password$/i })).toBeInTheDocument();
   });
 
   it('the admin profile is unchanged: registered name and email are read-only text', () => {
@@ -140,40 +142,69 @@ describe('ProfilePage', () => {
     expect(screen.getByText(/min 2 characters/i)).toBeInTheDocument();
   });
 
-  it('changes the password with a code emailed to the registered address, then signs out', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    AuthApi.forgotPassword.mockResolvedValue({});
-    AuthApi.resetPassword.mockResolvedValue({});
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    const { logout } = renderPage();
+  // Phase 4 rule: change with the current password (no email); this device stays signed in.
+  it('changes the password with the current password, sends no email and stays signed in', async () => {
+    const user = userEvent.setup();
+    const { logout, changePassword } = renderPage();
 
-    await user.click(screen.getByRole('button', { name: /email me a code/i }));
-    expect(AuthApi.forgotPassword).toHaveBeenCalledWith({ email: 'juan@gmail.com' });
-
-    await user.type(await screen.findByLabelText('Code from the email'), '123456');
+    expect(screen.queryByText(/we.ll email/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^change password$/i }));
+    expect(screen.queryByLabelText(/authenticator or backup code/i)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Current password'), 'Str0ng!Pass');
     await user.type(screen.getByLabelText('New password'), 'N3w!Password');
     await user.type(screen.getByLabelText('Confirm password'), 'N3w!Password');
     await user.click(screen.getByRole('button', { name: /update password/i }));
 
-    await waitFor(() => expect(AuthApi.resetPassword).toHaveBeenCalledWith({ email: 'juan@gmail.com', code: '123456', newPassword: 'N3w!Password' }));
-    vi.advanceTimersByTime(1600);
-    await waitFor(() => expect(logout).toHaveBeenCalled());
-    vi.useRealTimers();
-  });
+    await waitFor(() => expect(changePassword).toHaveBeenCalledWith({ currentPassword: 'Str0ng!Pass', newPassword: 'N3w!Password', code: undefined }));
+    expect(await screen.findByText(/you are still signed in here; other devices have been signed out/i)).toBeInTheDocument();
+    expect(logout).not.toHaveBeenCalled();
+    expect(AuthApi.forgotPassword).not.toHaveBeenCalled();
+    expect(AuthApi.resetPassword).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('with two-factor on, also asks for an authenticator or backup code', async () => {
+    const user = userEvent.setup();
+    const { changePassword } = renderPage({ ...USERS.tenant, mfaEnabled: true, mfaMethod: 'totp' });
+
+    await user.click(screen.getByRole('button', { name: /^change password$/i }));
+    await user.type(screen.getByLabelText('Current password'), 'Str0ng!Pass');
+    await user.type(screen.getByLabelText('New password'), 'N3w!Password');
+    await user.type(screen.getByLabelText('Confirm password'), 'N3w!Password');
+    await user.click(screen.getByRole('button', { name: /update password/i }));
+    expect(await screen.findByText('Enter the 6-digit code from your authenticator app, or a backup code.')).toBeInTheDocument();
+    expect(changePassword).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText(/authenticator or backup code/i), 'abcde-fghjk');
+    await user.click(screen.getByRole('button', { name: /update password/i }));
+    await waitFor(() => expect(changePassword).toHaveBeenCalledWith({ currentPassword: 'Str0ng!Pass', newPassword: 'N3w!Password', code: 'ABCDE-FGHJK' }));
+  }, 15000); // types into four fields; same headroom as the other form-heavy tests under full-suite load
+
+  it('shows a wrong current password from the server', async () => {
+    const user = userEvent.setup();
+    const { changePassword } = renderPage();
+    changePassword.mockRejectedValue(Object.assign(new Error('Current password is incorrect'), { code: 'INVALID_CURRENT_PASSWORD' }));
+
+    await user.click(screen.getByRole('button', { name: /^change password$/i }));
+    await user.type(screen.getByLabelText('Current password'), 'Wrong1!Pass');
+    await user.type(screen.getByLabelText('New password'), 'N3w!Password');
+    await user.type(screen.getByLabelText('Confirm password'), 'N3w!Password');
+    await user.click(screen.getByRole('button', { name: /update password/i }));
+
+    expect(await screen.findByText('Current password is incorrect')).toBeInTheDocument();
+  }, 15000);
 
   it('refuses a new password containing a space', async () => {
-    AuthApi.forgotPassword.mockResolvedValue({});
     const user = userEvent.setup();
-    renderPage();
-    await user.click(screen.getByRole('button', { name: /email me a code/i }));
-    await user.type(await screen.findByLabelText('Code from the email'), '123456');
+    const { changePassword } = renderPage();
+    await user.click(screen.getByRole('button', { name: /^change password$/i }));
+    await user.type(screen.getByLabelText('Current password'), 'Str0ng!Pass');
     await user.type(screen.getByLabelText('New password'), 'N3w Password!');
     // Immediate feedback under the field...
     expect(screen.getAllByText('Password must not contain spaces.').length).toBeGreaterThan(0);
     await user.type(screen.getByLabelText('Confirm password'), 'N3w Password!');
     await user.click(screen.getByRole('button', { name: /update password/i }));
     // ...and the request is never sent.
-    expect(AuthApi.resetPassword).not.toHaveBeenCalled();
+    expect(changePassword).not.toHaveBeenCalled();
   });
 
   it('admins have no delete-account option', () => {

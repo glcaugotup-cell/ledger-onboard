@@ -4,18 +4,29 @@ const env = require('../config/env');
 
 const ALGORITHMS = ['HS256'];
 
+/** A random ID for every token, so two tokens issued in the same second are never identical. */
+const newTokenId = () => crypto.randomUUID();
+
+/**
+ * The account's session version. Every access and refresh token carries it as `tv`; raising it
+ * on the account (password reset or change, suspension, ...) ends every session issued before.
+ * Tokens from before this existed have no `tv` and count as version 0.
+ */
+const tokenVersionOf = (value) => (Number.isInteger(value) ? value : 0);
+
 /** Short-lived access token carrying only what RBAC middleware needs. */
 function signAccessToken(user) {
   return jwt.sign(
-    { sub: String(user._id), role: user.role, accountStatus: user.accountStatus },
+    { sub: String(user._id), role: user.role, accountStatus: user.accountStatus, tv: tokenVersionOf(user.tokenVersion) },
     env.jwtSecret,
-    { expiresIn: env.jwtExpiresIn }
+    { expiresIn: env.jwtExpiresIn, jwtid: newTokenId() }
   );
 }
 
 function signRefreshToken(user) {
-  return jwt.sign({ sub: String(user._id), type: 'refresh' }, env.jwtRefreshSecret, {
+  return jwt.sign({ sub: String(user._id), type: 'refresh', tv: tokenVersionOf(user.tokenVersion) }, env.jwtRefreshSecret, {
     expiresIn: env.jwtRefreshExpiresIn,
+    jwtid: newTokenId(),
   });
 }
 
@@ -47,7 +58,7 @@ function mfaChallengeKey() {
 }
 
 function signMfaChallengeToken(user) {
-  return jwt.sign({ sub: String(user._id), purpose: MFA_CHALLENGE_PURPOSE }, mfaChallengeKey(), { expiresIn: MFA_CHALLENGE_TTL });
+  return jwt.sign({ sub: String(user._id), purpose: MFA_CHALLENGE_PURPOSE }, mfaChallengeKey(), { expiresIn: MFA_CHALLENGE_TTL, jwtid: newTokenId() });
 }
 
 function verifyMfaChallengeToken(token) {
@@ -57,6 +68,8 @@ function verifyMfaChallengeToken(token) {
 }
 
 module.exports = {
+  newTokenId,
+  tokenVersionOf,
   signAccessToken,
   signRefreshToken,
   verifyAccessToken,

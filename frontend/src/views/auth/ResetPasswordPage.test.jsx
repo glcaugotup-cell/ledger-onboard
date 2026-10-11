@@ -22,16 +22,44 @@ describe('ResetPasswordPage', () => {
     expect(screen.getByLabelText('Email')).toHaveValue('demo.tenant@gmail.com');
   });
 
-  it('strips non-digits from the code field and caps it at 6 characters', async () => {
+  // Phase 4 rule: the field takes an authenticator code, a backup code or an admin reset code, so it
+  // keeps letters, digits and the dash (upper-cased) up to XXXXX-XXXXX.
+  it('keeps letters, digits and the dash in the code field, upper-cased and capped at 11 characters', async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
         <ResetPasswordPage />
       </MemoryRouter>
     );
-    const code = screen.getByLabelText('Verification code');
-    await user.type(code, 'a1b2c3d4e5f6g7');
-    expect(code).toHaveValue('123456');
+    const code = screen.getByLabelText('Authenticator, backup or reset code');
+    await user.type(code, 'ab#cd e-fg!hjkLMN');
+    expect(code).toHaveValue('ABCDE-FGHJK');
+  });
+
+  it('explains the three kinds of code and never mentions email', () => {
+    render(
+      <MemoryRouter>
+        <ResetPasswordPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/authenticator app, one of your backup codes, or a reset code from an administrator/i)).toBeInTheDocument();
+    expect(screen.queryByText(/emailed/i)).not.toBeInTheDocument();
+  });
+
+  it('sends an admin reset code as typed', async () => {
+    AuthApi.resetPassword.mockResolvedValue({ message: 'Password has been reset. You can now log in.' });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <ResetPasswordPage />
+      </MemoryRouter>
+    );
+    await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
+    await user.type(screen.getByLabelText('Authenticator, backup or reset code'), 'abcd-efgh');
+    await user.type(screen.getByLabelText(/^new password/i), 'Str0ng!Pass');
+    await user.type(screen.getByLabelText(/^confirm password/i), 'Str0ng!Pass');
+    await user.click(screen.getByRole('button', { name: /reset password/i }));
+    await waitFor(() => expect(AuthApi.resetPassword).toHaveBeenCalledWith({ email: 'demo.tenant@gmail.com', code: 'ABCD-EFGH', newPassword: 'Str0ng!Pass' }));
   });
 
   it('submits email/code/new password and shows a success message', async () => {
@@ -44,7 +72,7 @@ describe('ResetPasswordPage', () => {
     );
 
     await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
-    await user.type(screen.getByLabelText('Verification code'), '123456');
+    await user.type(screen.getByLabelText('Authenticator, backup or reset code'), '123456');
     await user.type(screen.getByLabelText(/^new password/i), 'Str0ng!Pass');
     await user.type(screen.getByLabelText(/^confirm password/i), 'Str0ng!Pass');
     await user.click(screen.getByRole('button', { name: /reset password/i }));
@@ -69,7 +97,7 @@ describe('ResetPasswordPage', () => {
     );
 
     await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
-    await user.type(screen.getByLabelText('Verification code'), '000000');
+    await user.type(screen.getByLabelText('Authenticator, backup or reset code'), '000000');
     await user.type(screen.getByLabelText(/^new password/i), 'Str0ng!Pass');
     await user.type(screen.getByLabelText(/^confirm password/i), 'Str0ng!Pass');
     await user.click(screen.getByRole('button', { name: /reset password/i }));
@@ -85,7 +113,7 @@ describe('ResetPasswordPage', () => {
       </MemoryRouter>
     );
     await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
-    await user.type(screen.getByLabelText('Verification code'), '123456');
+    await user.type(screen.getByLabelText('Authenticator, backup or reset code'), '123456');
     await user.type(screen.getByLabelText(/^new password/i), 'weakpass');
     await user.type(screen.getByLabelText(/^confirm password/i), 'weakpass');
     await user.click(screen.getByRole('button', { name: /reset password/i }));

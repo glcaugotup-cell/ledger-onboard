@@ -6,6 +6,7 @@ const ApiError = require('../utils/ApiError');
 const { comparePassword } = require('../utils/password');
 const { generateSecret, verifyTotp, buildOtpauthUri } = require('../utils/totp');
 const { encryptSecret, decryptSecret } = require('../utils/secretCrypto');
+const { randomCode, normalizeCode } = require('../utils/oneTimeCodes');
 const { sanitizeUser } = require('../utils/sanitize');
 const { MFA_METHOD } = require('../utils/constants');
 const env = require('../config/env');
@@ -13,8 +14,7 @@ const env = require('../config/env');
 /** Shown in the authenticator app next to the code. */
 const MFA_ISSUER = 'Ledger OnBoard';
 const BACKUP_CODE_COUNT = 10;
-// No look-alike characters (0/O, 1/I/L): 31 symbols, so a 10-character code carries about 49 random bits.
-const BACKUP_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+// 10 characters without look-alikes (utils/oneTimeCodes.js): about 49 random bits, shown as XXXXX-XXXXX.
 const BACKUP_CODE_LENGTH = 10;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_MINUTES = 15;
@@ -112,39 +112,50 @@ class MfaService {
   }
 
   /**
-   * Accepts a current authenticator code (never one already used) or an unused backup code
-   * (spent on use). Five wrong codes lock code entry for 15 minutes. Returns 'totp' or 'backup'.
+   * Two-factor check for sign-in and account settings: accepts a current authenticator code or an
+   * unused backup code. Uses the two-factor failure counter: five wrong codes lock code entry for
+   * 15 minutes. Returns 'totp' or 'backup'.
    */
   async verifyCode(user, code) {
     this._assertNotLocked(user);
+    const method = await this.consumeCode(user, code, { clearFailures: true });
+    if (method) return method;
+    await this._recordFailure(user);
+    throw invalidCode();
+  }
+
+  /**
+   * Checks and spends an authenticator code (never one already used) or a backup code (gone
+   * once used), returning 'totp', 'backup' or null. It neither checks nor changes the two-factor
+   * failure counter or lock, so callers with their own limits (password reset) stay separate.
+   */
+  async consumeCode(user, code, { clearFailures = false } = {}) {
+    if (!this.isEnrolled(user)) return null;
     const candidate = String(code || '').trim();
+    const onSuccess = clearFailures ? { 'mfaTotp.failedAttempts': 0 } : {};
 
     if (/^\d{6}$/.test(candidate)) {
       const secret = decryptSecret(user.mfaTotp.secretEnc, this._key(), this._context(user));
       const step = verifyTotp(secret, candidate);
-      if (step !== null) {
-        // Atomic: only a step newer than the last accepted one is taken, so a code works once.
-        const claimed = await UserRepository.model.findOneAndUpdate(
-          { _id: user._id, $or: [{ 'mfaTotp.lastUsedStep': null }, { 'mfaTotp.lastUsedStep': { $lt: step } }] },
-          { $set: { 'mfaTotp.lastUsedStep': step, 'mfaTotp.failedAttempts': 0 } },
-        ).exec();
-        if (claimed) return 'totp';
-      }
-    } else {
-      const hash = this._hashBackupCode(candidate);
-      // Atomic: the code is removed by the same update that accepts it, so it works once.
+      if (step === null) return null;
+      // Atomic: only a step newer than the last accepted one is taken, so a code works once.
       const claimed = await UserRepository.model.findOneAndUpdate(
-        { _id: user._id, 'mfaTotp.backupCodeHashes': hash },
-        { $pull: { 'mfaTotp.backupCodeHashes': hash }, $set: { 'mfaTotp.failedAttempts': 0 } },
+        { _id: user._id, $or: [{ 'mfaTotp.lastUsedStep': null }, { 'mfaTotp.lastUsedStep': { $lt: step } }] },
+        { $set: { 'mfaTotp.lastUsedStep': step, ...onSuccess } },
       ).exec();
-      if (claimed) {
-        await AuditLogRepository.record({ action: 'MFA_BACKUP_CODE_USED', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id });
-        return 'backup';
-      }
+      return claimed ? 'totp' : null;
     }
 
-    await this._recordFailure(user);
-    throw invalidCode();
+    if (normalizeCode(candidate).length !== BACKUP_CODE_LENGTH) return null;
+    const hash = this._hashBackupCode(candidate);
+    // Atomic: the code is removed by the same update that accepts it, so it works once.
+    const claimed = await UserRepository.model.findOneAndUpdate(
+      { _id: user._id, 'mfaTotp.backupCodeHashes': hash },
+      { $pull: { 'mfaTotp.backupCodeHashes': hash }, ...(clearFailures ? { $set: onSuccess } : {}) },
+    ).exec();
+    if (!claimed) return null;
+    await AuditLogRepository.record({ action: 'MFA_BACKUP_CODE_USED', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id });
+    return 'backup';
   }
 
   // ── internals ──────────────────────────────────────────────────────────
@@ -198,17 +209,12 @@ class MfaService {
   }
 
   _newBackupCodes() {
-    return Array.from({ length: BACKUP_CODE_COUNT }, () => {
-      let raw = '';
-      for (let i = 0; i < BACKUP_CODE_LENGTH; i += 1) raw += BACKUP_CODE_ALPHABET[crypto.randomInt(BACKUP_CODE_ALPHABET.length)];
-      return `${raw.slice(0, 5)}-${raw.slice(5)}`;
-    });
+    return Array.from({ length: BACKUP_CODE_COUNT }, () => randomCode(BACKUP_CODE_LENGTH, 5));
   }
 
   /** Keyed hash (the encryption key is the pepper), so a database copy alone can't be brute-forced offline. */
   _hashBackupCode(code) {
-    const normalized = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    return crypto.createHmac('sha256', this._key()).update(`backup-code:${normalized}`).digest('hex');
+    return crypto.createHmac('sha256', this._key()).update(`backup-code:${normalizeCode(code)}`).digest('hex');
   }
 }
 

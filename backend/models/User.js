@@ -124,6 +124,16 @@ const userSchema = new Schema(
       failedAttempts: { type: Number, select: false, default: 0 },
       lockedUntil: { type: Date, select: false, default: null },
     },
+    // Wrong codes on POST /auth/reset-password. Kept apart from mfaTotp.failedAttempts: a reset
+    // needs no password, so its failures must never lock sign-in codes, and the reverse.
+    passwordReset: {
+      failedAttempts: { type: Number, select: false, default: 0 },
+      lockedUntil: { type: Date, select: false, default: null },
+    },
+    // Session version, carried as `tv` in every access and refresh token. Raising it ends every
+    // session issued before (password reset or change, suspension, deactivation, archiving).
+    // Older records without it, and tokens without the claim, count as 0.
+    tokenVersion: { type: Number, default: 0 },
     // Hash of the current valid refresh token, so logout/rotation can
     // revoke it server-side instead of relying purely on JWT expiry.
     refreshTokenHash: { type: String, select: false, default: null },

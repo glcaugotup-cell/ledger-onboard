@@ -8,6 +8,7 @@ const SECRET_FIELDS = [
   '+refreshTokenHash',
   '+mfaTotp.secretEnc', '+mfaTotp.pendingSecretEnc', '+mfaTotp.lastUsedStep',
   '+mfaTotp.backupCodeHashes', '+mfaTotp.failedAttempts', '+mfaTotp.lockedUntil',
+  '+passwordReset.failedAttempts', '+passwordReset.lockedUntil',
 ].join(' ');
 
 class UserRepository extends BaseRepository {

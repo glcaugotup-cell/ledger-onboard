@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AuthApi from '../services/AuthApi.js';
-import { setAccessToken } from '../services/apiClient.js';
+import { onSessionRevoked, setAccessToken } from '../services/apiClient.js';
 
 const REFRESH_TOKEN_KEY = 'ledgerOnboard.refreshToken';
 
@@ -119,9 +119,24 @@ export function AuthProvider({ children }) {
   // "Back to sign in" from the code step.
   const cancelMfaChallenge = useCallback(() => setMfaChallenge(null), []);
 
+  // Signed-in password change. The backend signs every other device out and returns fresh tokens
+  // for this one, so this device stays signed in.
+  const changePassword = useCallback(
+    async ({ currentPassword, newPassword, code }) => {
+      const result = await AuthApi.changePassword({ currentPassword, newPassword, ...(code ? { code } : {}) });
+      persistSession(result);
+      return result;
+    },
+    [persistSession]
+  );
+
+  // A request was refused because the session was ended elsewhere (password changed or reset,
+  // account suspended...): sign out here too, so the person lands on the sign-in page.
+  useEffect(() => onSessionRevoked(() => clearSession()), [clearSession]);
+
   const value = useMemo(
-    () => ({ user, status, mfaChallenge, register, login, verifyLoginOtp, cancelMfaChallenge, logout, refreshProfile }),
-    [user, status, mfaChallenge, register, login, verifyLoginOtp, cancelMfaChallenge, logout, refreshProfile]
+    () => ({ user, status, mfaChallenge, register, login, verifyLoginOtp, cancelMfaChallenge, changePassword, logout, refreshProfile }),
+    [user, status, mfaChallenge, register, login, verifyLoginOtp, cancelMfaChallenge, changePassword, logout, refreshProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

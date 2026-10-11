@@ -16,10 +16,11 @@ import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndic
 import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import { ReviewForm } from '../../components/ReviewForm.jsx';
 import TwoFactorCard from '../../components/TwoFactorCard.jsx';
+import { MFA_CODE_PROMPT, cleanMfaCode } from '../../utils/mfa.js';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
 import { formatDate, formatStatus } from '../../utils/format.js';
-import { PATTERNS, validateName, validatePassword, validatePhone } from '../../utils/validators.js';
+import { validateName, validatePassword, validatePhone } from '../../utils/validators.js';
 
 const ROLE_LABEL = { tenant: 'Tenant', landlord: 'Landlord', caretaker: 'Caretaker', admin: 'Administrator' };
 
@@ -96,14 +97,16 @@ function PaymentQrSettings({ hasQr }) {
  * Profile for every role (tenant, landlord, caretaker, admin): the registered
  * email and role (shown but never editable — the backend rejects changes to them
  * too), an editable name, phone and emergency contact (the admin edits only the
- * phone), password change by emailed
- * code, email-code sign-in, and — for everyone except admins — closing the
- * account. Closing never deletes data; it deactivates the account.
+ * phone), password change with the current password (plus an authenticator or
+ * backup code when two-factor is on), authenticator-app two-factor, and — for
+ * everyone except admins — closing the account. Closing never deletes data; it
+ * deactivates the account.
  */
 export default function ProfilePage() {
-  const { user, refreshProfile, logout } = useAuth();
+  const { user, refreshProfile, logout, changePassword } = useAuth();
   const navigate = useNavigate();
   const role = user?.role;
+  const twoFactorOn = Boolean(user?.mfaEnabled && user?.mfaMethod === 'totp');
 
   const [phone, setPhone] = useState(user?.phone || '');
   const [phoneError, setPhoneError] = useState('');
@@ -127,8 +130,9 @@ export default function ProfilePage() {
   };
 
   // Password change: 'idle' -> 'code' (a code was emailed) -> done (signed out).
-  const [pwStep, setPwStep] = useState('idle');
-  const [pwCode, setPwCode] = useState('');
+  const [pwStep, setPwStep] = useState('idle'); // idle | form
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwCode, setPwCode] = useState(''); // authenticator or backup code, only when two-factor is on
   const [pwNew, setPwNew] = useState('');
   const [pwConfirm, setPwConfirm] = useState('');
   const [pwErrors, setPwErrors] = useState({});
@@ -219,43 +223,35 @@ export default function ProfilePage() {
     }
   };
 
-  const sendPasswordCode = async () => {
-    setPwError('');
+  const startPasswordChange = () => {
     setPwMsg('');
-    setPwLoading(true);
-    try {
-      // Reuses the secure reset flow: a short-lived code goes to the registered email only.
-      await AuthApi.forgotPassword({ email: user.email });
-      setPwStep('code');
-      setPwMsg(`We sent a 6-digit code to ${user.email}. It expires in a few minutes.`);
-    } catch (err) {
-      setPwError(describeApiError(err).message);
-    } finally {
-      setPwLoading(false);
-    }
+    setPwError('');
+    setPwStep('form');
   };
 
   const submitPasswordChange = async (e) => {
     e.preventDefault();
     setPwError('');
     const errors = {};
-    if (!PATTERNS.OTP.test(pwCode)) errors.code = 'Enter the 6-digit code from the email.';
+    if (!pwCurrent) errors.current = 'Enter your current password.';
     const passwordError = validatePassword(pwNew);
     if (passwordError) errors.newPassword = passwordError.endsWith('.') ? passwordError : `${passwordError}.`;
     if (!pwConfirm) errors.confirm = 'Please confirm your new password.';
     else if (pwConfirm !== pwNew) errors.confirm = 'Passwords do not match.';
+    if (twoFactorOn && !/^(\d{6}|[A-Z0-9]{5}-?[A-Z0-9]{5})$/.test(pwCode)) errors.code = 'Enter the 6-digit code from your authenticator app, or a backup code.';
     setPwErrors(errors);
     if (Object.keys(errors).length) return;
 
     setPwLoading(true);
     try {
-      await AuthApi.resetPassword({ email: user.email, code: pwCode, newPassword: pwNew });
-      setPwMsg('Password changed. Please sign in again with your new password.');
-      setTimeout(() => logout().then(() => navigate('/')), 1500);
+      // Every other device is signed out; this one gets fresh tokens and stays signed in.
+      await changePassword({ currentPassword: pwCurrent, newPassword: pwNew, code: twoFactorOn ? pwCode : undefined });
+      cancelPasswordChange();
+      setPwMsg('Password changed. You are still signed in here; other devices have been signed out.');
     } catch (err) {
       const { message, fieldErrors } = describeApiError(err);
       setPwError(message);
-      setPwErrors({ code: fieldErrors.code, newPassword: fieldErrors.newPassword });
+      setPwErrors({ current: fieldErrors.currentPassword, code: fieldErrors.code, newPassword: fieldErrors.newPassword });
     } finally {
       setPwLoading(false);
     }
@@ -263,6 +259,7 @@ export default function ProfilePage() {
 
   const cancelPasswordChange = () => {
     setPwStep('idle');
+    setPwCurrent('');
     setPwCode('');
     setPwNew('');
     setPwConfirm('');
@@ -394,26 +391,30 @@ export default function ProfilePage() {
           {pwStep === 'idle' && (
             <div className="space-y-3">
               <p className="text-sm text-gray-500">
-                For your security, we’ll email a 6-digit code to <span className="font-medium text-gray-700">{user?.email}</span>. Enter it here with your new
-                password. Your current password is never shown.
+                Enter your current password and choose a new one{twoFactorOn ? ', with a code from your authenticator app' : ''}. You stay signed in
+                here; every other device is signed out.
               </p>
-              <Button onClick={sendPasswordCode} loading={pwLoading}>
-                Email me a code
-              </Button>
+              <Button onClick={startPasswordChange}>Change password</Button>
             </div>
           )}
-          {pwStep === 'code' && (
+          {pwStep === 'form' && (
             <form onSubmit={submitPasswordChange} className="mt-3 space-y-3" noValidate>
-              <Field required label="Code from the email" error={pwErrors.code}>
-                <TextInput
-                  inputMode="numeric"
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                  value={pwCode}
-                  onChange={(e) => setPwCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  error={pwErrors.code}
-                />
+              <Field required label="Current password" error={pwErrors.current}>
+                <PasswordInput value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} autoComplete="current-password" />
               </Field>
+              {twoFactorOn && (
+                <Field required label="Authenticator or backup code" error={pwErrors.code} hint={MFA_CODE_PROMPT}>
+                  <TextInput
+                    autoComplete="one-time-code"
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    maxLength={11}
+                    value={pwCode}
+                    onChange={(e) => setPwCode(cleanMfaCode(e.target.value))}
+                    error={pwErrors.code}
+                  />
+                </Field>
+              )}
               <div>
                 <Field required label="New password" error={pwErrors.newPassword}>
                   <PasswordInput value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" />
@@ -429,9 +430,6 @@ export default function ProfilePage() {
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" loading={pwLoading}>
                   Update password
-                </Button>
-                <Button type="button" variant="ghost" onClick={sendPasswordCode} disabled={pwLoading}>
-                  Resend code
                 </Button>
                 <Button type="button" variant="ghost" onClick={cancelPasswordChange} disabled={pwLoading}>
                   Cancel

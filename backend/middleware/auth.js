@@ -1,4 +1,4 @@
-const { verifyAccessToken } = require('../utils/jwt');
+const { verifyAccessToken, tokenVersionOf } = require('../utils/jwt');
 const UserRepository = require('../repositories/UserRepository');
 const AccountLifecycleService = require('../services/AccountLifecycleService');
 const ApiError = require('../utils/ApiError');
@@ -21,6 +21,10 @@ async function authenticate(req, res, next) {
 
     const user = await UserRepository.findById(payload.sub);
     if (!user) throw ApiError.unauthorized('Account no longer exists', 'ACCOUNT_NOT_FOUND');
+    // Issued before the account's session version was raised (password reset or change, suspension...).
+    if (tokenVersionOf(payload.tv) !== tokenVersionOf(user.tokenVersion)) {
+      throw ApiError.unauthorized('Your session has ended. Please sign in again.', 'SESSION_REVOKED');
+    }
 
     if (user.accountStatus === ACCOUNT_STATUS.ARCHIVED) {
       throw ApiError.forbidden('This account has been archived due to inactivity', 'ACCOUNT_ARCHIVED');

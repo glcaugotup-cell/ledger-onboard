@@ -10,6 +10,7 @@ import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { validatePassword } from '../../utils/validators.js';
+import { cleanMfaCode } from '../../utils/mfa.js';
 
 export default function ResetPasswordPage() {
   const location = useLocation();
@@ -52,19 +53,24 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <AuthLayout title="Reset your password" subtitle="Enter the 6-digit code we emailed you and choose a new password.">
+    <AuthLayout
+      title="Reset your password"
+      subtitle="Enter a code from your authenticator app, one of your backup codes, or a reset code from an administrator, then choose a new password."
+    >
       <form onSubmit={onSubmit} className="space-y-4">
         <ErrorBanner message={error} />
         <SuccessBanner message={success} />
         <Field required label="Email">
           <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         </Field>
-        <Field required label="Verification code">
+        <Field required label="Authenticator, backup or reset code" hint="123456, XXXXX-XXXXX or XXXX-XXXX">
           <TextInput
             value={form.code}
-            onChange={(e) => setForm({ ...form, code: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-            inputMode="numeric"
-            maxLength={6}
+            onChange={(e) => setForm({ ...form, code: cleanMfaCode(e.target.value) })}
+            autoComplete="one-time-code"
+            autoCapitalize="characters"
+            spellCheck={false}
+            maxLength={11}
             required
           />
         </Field>

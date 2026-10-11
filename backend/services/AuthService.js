@@ -7,15 +7,23 @@ const EmailService = require('./EmailService');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { generateOtp, hashOtp, compareOtp } = require('../utils/otp');
-const { signAccessToken, signRefreshToken, verifyRefreshToken, signMfaChallengeToken, verifyMfaChallengeToken } = require('../utils/jwt');
+const { signAccessToken, signRefreshToken, verifyRefreshToken, signMfaChallengeToken, verifyMfaChallengeToken, newTokenId, tokenVersionOf } = require('../utils/jwt');
 const MfaService = require('./MfaService');
 const { sanitizeUser } = require('../utils/sanitize');
 const { deriveFullName } = require('../utils/name');
-const { ROLES, ACCOUNT_STATUS, RESERVATION_STATUS } = require('../utils/constants');
+const { ROLES, ACCOUNT_STATUS, RESERVATION_STATUS, PASSWORD_RESET_CODE } = require('../utils/constants');
+const { normalizeCode } = require('../utils/oneTimeCodes');
 const env = require('../config/env');
 
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_RESEND_COOLDOWN_SECONDS = 45;
+
+// Password reset by code (no password needed): its own limit, separate from sign-in codes.
+const RESET_MAX_FAILED_ATTEMPTS = 5;
+const RESET_LOCK_MINUTES = 15;
+const FORGOT_PASSWORD_MESSAGE = 'To reset your password, use a code from your authenticator app or one of your backup codes. '
+  + 'If you have neither, ask an administrator for a reset code.';
+const invalidResetCode = () => ApiError.badRequest('Invalid or expired code', 'INVALID_OTP');
 const PUBLIC_REGISTRATION_ROLES = new Set([ROLES.TENANT, ROLES.LANDLORD]);
 
 // Per-account (by email) failed-login lockout: 10 wrong email/password
@@ -197,16 +205,20 @@ class AuthService {
     return this._finalizeLogin(user);
   }
 
-  async _finalizeLogin(user) {
-    const now = new Date();
+  /** New access and refresh tokens at the account's current session version; only this refresh token stays valid. */
+  async _issueTokens(user, extraUpdates = {}) {
     const accessToken = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
     const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    await UserRepository.updateById(user._id, { refreshTokenHash, ...extraUpdates });
+    return { accessToken, refreshToken };
+  }
 
-    await UserRepository.updateById(user._id, {
+  async _finalizeLogin(user) {
+    const now = new Date();
+    const { accessToken, refreshToken } = await this._issueTokens(user, {
       lastLoginAt: now,
       lastActivityAt: now,
-      refreshTokenHash,
       archiveWarningSentAt: null,
       scheduledArchiveAt: null,
     });
@@ -283,7 +295,8 @@ class AuthService {
 
     const user = await UserRepository.findByIdWithSecrets(payload.sub);
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    if (!user || user.refreshTokenHash !== tokenHash) {
+    // A raised session version (password reset or change, suspension...) ends this session too.
+    if (!user || user.refreshTokenHash !== tokenHash || tokenVersionOf(payload.tv) !== tokenVersionOf(user.tokenVersion)) {
       throw ApiError.unauthorized('Invalid or expired refresh token', 'INVALID_REFRESH_TOKEN');
     }
     this._assertLoginableStatus(user);
@@ -294,35 +307,97 @@ class AuthService {
   // ── Forgot / reset password ──────────────────────────────────────────
   // Never confirm or deny whether an email is registered.
 
-  async forgotPassword({ email }) {
-    const user = await UserRepository.findByEmail(email, { withSecrets: true });
-    if (user && user.accountStatus !== ACCOUNT_STATUS.ARCHIVED) {
-      await this._issueOtp(user, 'password_reset');
-    }
-    return { message: 'If an account with that email exists, a verification code has been sent.' };
+  /** Nothing is looked up or sent: the same instructions for every email. */
+  async forgotPassword() {
+    return { message: FORGOT_PASSWORD_MESSAGE };
   }
 
+  /**
+   * Resets a password with one of: an admin-issued reset code (8 characters), an authenticator
+   * code (6 digits) or a backup code (10 characters), told apart by length. No password is needed,
+   * so failures use their own counter (passwordReset.*) and never touch the sign-in code lock,
+   * which in turn never blocks a reset. Unknown emails get the same generic error.
+   */
   async resetPassword({ email, code, newPassword }) {
     const user = await UserRepository.findByEmail(email, { withSecrets: true });
-    if (!user) throw ApiError.badRequest('Invalid or expired code', 'INVALID_OTP');
+    if (!user) throw invalidResetCode();
+    this._assertResetNotLocked(user);
 
-    await this._consumeOtp(user, code, 'password_reset');
+    const normalized = normalizeCode(code);
+    let method = null;
+    if (normalized.length === PASSWORD_RESET_CODE.LENGTH) {
+      if (await this._matchesAdminResetCode(user, normalized)) method = 'admin_code';
+    } else {
+      method = await MfaService.consumeCode(user, code); // 'totp' | 'backup' | null; null when two-factor is off
+    }
+    if (!method) {
+      await this._recordResetFailure(user);
+      throw invalidResetCode();
+    }
 
     const passwordHash = await hashPassword(newPassword);
-    await UserRepository.updateById(user._id, { passwordHash, refreshTokenHash: null });
+    // Signs every device out (session version up) and signs no one in: the person goes to the sign-in page.
+    await UserRepository.updateById(user._id, {
+      passwordHash,
+      refreshTokenHash: null,
+      $inc: { tokenVersion: 1 },
+      // An admin code is spent by its use; any other pending code in the slot goes too.
+      otp: { codeHash: null, purpose: null, expiresAt: null, attempts: 0 },
+      'passwordReset.failedAttempts': 0,
+      'passwordReset.lockedUntil': null,
+    });
+    await AuditLogRepository.record({ action: 'PASSWORD_RESET', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id, metadata: { method } });
     return { message: 'Password has been reset. You can now log in.' };
   }
 
-  async changePassword(userId, { currentPassword, newPassword }) {
+  async _matchesAdminResetCode(user, normalized) {
+    const otp = user.otp;
+    if (!otp?.codeHash || otp.purpose !== 'password_reset') return false;
+    if (!otp.expiresAt || otp.expiresAt.getTime() < Date.now()) return false;
+    return compareOtp(normalized, otp.codeHash);
+  }
+
+  _assertResetNotLocked(user) {
+    const lockedUntil = user.passwordReset?.lockedUntil;
+    if (lockedUntil && lockedUntil.getTime() > Date.now()) {
+      const retryAfterSeconds = Math.ceil((lockedUntil.getTime() - Date.now()) / 1000);
+      throw ApiError.tooManyRequests('Too many incorrect attempts. Try again later.', 'OTP_ATTEMPTS_EXCEEDED', { retryAfterSeconds });
+    }
+  }
+
+  async _recordResetFailure(user) {
+    const updated = await UserRepository.model
+      .findByIdAndUpdate(user._id, { $inc: { 'passwordReset.failedAttempts': 1 } }, { new: true })
+      .select('+passwordReset.failedAttempts')
+      .exec();
+    if ((updated?.passwordReset?.failedAttempts || 0) >= RESET_MAX_FAILED_ATTEMPTS) {
+      await UserRepository.updateById(user._id, {
+        'passwordReset.failedAttempts': 0,
+        'passwordReset.lockedUntil': new Date(Date.now() + RESET_LOCK_MINUTES * 60 * 1000),
+      });
+      await AuditLogRepository.record({ action: 'PASSWORD_RESET_LOCKED', targetType: 'User', targetId: user._id, metadata: { minutes: RESET_LOCK_MINUTES } });
+    }
+  }
+
+  /**
+   * Signed-in password change: the current password, plus an authenticator or backup code when
+   * two-factor is on. Every other device is signed out (session version up); this device gets
+   * fresh tokens in the response and stays signed in.
+   */
+  async changePassword(userId, { currentPassword, newPassword, code }) {
     const user = await UserRepository.findByIdWithSecrets(userId);
     if (!user) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
 
     const valid = await comparePassword(currentPassword, user.passwordHash);
     if (!valid) throw ApiError.badRequest('Current password is incorrect', 'INVALID_CURRENT_PASSWORD');
+    // Checked only after the password, so the code counter can't be moved without it.
+    if (MfaService.isEnrolled(user)) await MfaService.verifyCode(user, code);
 
     const passwordHash = await hashPassword(newPassword);
-    await UserRepository.updateById(userId, { passwordHash, refreshTokenHash: null });
-    return { message: 'Password updated. Please log in again.' };
+    const updated = await UserRepository.updateById(userId, { passwordHash, $inc: { tokenVersion: 1 } });
+    const { accessToken, refreshToken } = await this._issueTokens(updated);
+    await AuditLogRepository.record({ action: 'PASSWORD_CHANGED', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id });
+    return { message: 'Password updated. Other devices have been signed out.', user: sanitizeUser(updated), accessToken, refreshToken };
   }
 
   // ── OTP plumbing (shared by login-MFA and password reset) ───────────
@@ -442,6 +517,7 @@ class AuthService {
       statusReason: reason.trim(),
       statusChangedAt: new Date(),
       refreshTokenHash: null,
+      $inc: { tokenVersion: 1 }, // ends every session
     });
     await AuditLogRepository.record({
       action: 'ACCOUNT_CLOSED_BY_OWNER',
@@ -479,6 +555,7 @@ class AuthService {
 
     const activationToken = jwt.sign({ sub: String(caretaker._id), purpose: 'caretaker_activation' }, env.jwtSecret, {
       expiresIn: '3d',
+      jwtid: newTokenId(),
     });
     const activationUrl = `${env.emailAppUrl}/activate-caretaker?token=${encodeURIComponent(activationToken)}`;
 
@@ -522,6 +599,7 @@ class AuthService {
     const temporaryPassword = 'caretaker1234';
     const activationToken = jwt.sign({ sub: String(caretaker._id), purpose: 'caretaker_activation' }, env.jwtSecret, {
       expiresIn: '3d',
+      jwtid: newTokenId(),
     });
     const activationUrl = `${env.emailAppUrl}/activate-caretaker?token=${encodeURIComponent(activationToken)}`;
 
@@ -580,6 +658,7 @@ class AuthService {
       statusReason: reason.trim(),
       statusChangedAt: new Date(),
       refreshTokenHash: null,
+      $inc: { tokenVersion: 1 }, // ends every session
     });
     await AuditLogRepository.record({
       action: 'CARETAKER_REMOVED_BY_LANDLORD',

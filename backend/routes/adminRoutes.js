@@ -17,6 +17,8 @@ router.use(authenticate, requireRole(ROLES.ADMIN));
 router.get('/users', listUsersValidators, validate, AdminController.listUsers);
 router.get('/logs', AdminController.listAuditLogs);
 router.patch('/users/:id/status', objectIdParam('id'), setUserStatusValidators, validate, AdminController.setUserStatus);
+// One-time password reset code (8 characters, 30 minutes), shown once to the admin to hand over in person.
+router.post('/users/:id/reset-code', objectIdParam('id'), validate, AdminController.issuePasswordResetCode);
 // Manual, admin-confirmed deactivation of accounts inactive for 60+ days (never automatic).
 router.post('/users/:id/deactivate-inactive', objectIdParam('id'), deactivateInactiveValidators, validate, AdminController.deactivateForInactivity);
 

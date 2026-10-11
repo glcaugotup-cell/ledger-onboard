@@ -76,6 +76,17 @@ export function isServerSlow() {
   return slowRequests > 0;
 }
 
+// Called when the backend says this session was ended elsewhere (SESSION_REVOKED); AuthContext signs out.
+const sessionRevokedListeners = new Set();
+
+/** Calls `listener()` whenever a request is refused because the session was revoked; returns an unsubscribe function. */
+export function onSessionRevoked(listener) {
+  sessionRevokedListeners.add(listener);
+  return () => {
+    sessionRevokedListeners.delete(listener);
+  };
+}
+
 /** Calls `listener(isSlow)` whenever that changes; returns an unsubscribe function. */
 export function onServerSlowChange(listener) {
   slowListeners.add(listener);
@@ -128,6 +139,9 @@ instance.interceptors.response.use(
           : 'Something went wrong with that request. Please try again.');
       const code = envelope?.error?.code || 'UNKNOWN_ERROR';
       const details = envelope?.error?.details;
+      if (status === 401 && code === 'SESSION_REVOKED') {
+        for (const listener of sessionRevokedListeners) listener();
+      }
       return Promise.reject(new ApiClientError(message, code, status, details));
     }
     // Browsers also report a plain abort as ECONNABORTED, so check the message too.

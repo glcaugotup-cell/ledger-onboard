@@ -1,7 +1,9 @@
 const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const ApiError = require('../utils/ApiError');
-const { ACCOUNT_STATUS } = require('../utils/constants');
+const { hashOtp } = require('../utils/otp');
+const { randomCode, normalizeCode } = require('../utils/oneTimeCodes');
+const { ACCOUNT_STATUS, PASSWORD_RESET_CODE } = require('../utils/constants');
 
 const ADMIN_SETTABLE_STATUSES = new Set([
   ACCOUNT_STATUS.ACTIVE,
@@ -40,7 +42,11 @@ class AdminService {
     }
 
     const updates = { accountStatus: status, statusChangedAt: new Date(), statusReason: status === ACCOUNT_STATUS.ACTIVE ? null : reason.trim() };
-    if (status !== ACCOUNT_STATUS.ACTIVE) updates.refreshTokenHash = null;
+    if (status !== ACCOUNT_STATUS.ACTIVE) {
+      updates.refreshTokenHash = null;
+      // Ends every session, so a later reactivation doesn't bring old ones back.
+      updates.$inc = { tokenVersion: 1 };
+    }
     if (status === ACCOUNT_STATUS.ACTIVE) {
       updates.archivedAt = null;
       updates.archiveReason = null;
@@ -61,6 +67,38 @@ class AdminService {
     });
 
     return updated;
+  }
+
+  /**
+   * One-time password reset code for someone who can't use an authenticator or backup code.
+   * The admin hands it over after confirming who they are; it is returned only here, stored only
+   * as a bcrypt hash (in the shared OTP slot, replacing anything pending there), lasts 30 minutes
+   * and works once. The audit entry never contains the code.
+   */
+  async issuePasswordResetCode(adminId, userId) {
+    const user = await UserRepository.findById(userId);
+    if (!user) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
+    if (user.role === 'admin') {
+      throw ApiError.forbidden('Admin accounts cannot be modified through this endpoint', 'CANNOT_MODIFY_ADMIN');
+    }
+    if (user.accountStatus === ACCOUNT_STATUS.PENDING_ACTIVATION) {
+      throw ApiError.badRequest('This caretaker has not activated their account yet. Resend their invitation instead.', 'ACCOUNT_NOT_ACTIVATED');
+    }
+
+    const code = randomCode(PASSWORD_RESET_CODE.LENGTH, 4);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_CODE.TTL_MINUTES * 60 * 1000);
+    await UserRepository.updateById(userId, {
+      otp: { codeHash: await hashOtp(normalizeCode(code)), purpose: 'password_reset', expiresAt, attempts: 0 },
+    });
+    await AuditLogRepository.record({
+      action: 'PASSWORD_RESET_CODE_ISSUED',
+      actorId: adminId,
+      actorRole: 'admin',
+      targetType: 'User',
+      targetId: userId,
+      metadata: { expiresAt },
+    });
+    return { code, expiresAt };
   }
 
   /**
@@ -96,6 +134,7 @@ class AdminService {
       statusReason: `Inactive for ${daysInactive} days: ${reason.trim()}`,
       statusChangedAt: now,
       refreshTokenHash: null,
+      $inc: { tokenVersion: 1 },
     });
 
     await AuditLogRepository.record({

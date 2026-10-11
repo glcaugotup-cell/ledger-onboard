@@ -6,9 +6,16 @@ import AuthApi from '../services/AuthApi.js';
 import { setAccessToken } from '../services/apiClient.js';
 
 vi.mock('../services/AuthApi.js', () => ({
-  default: { register: vi.fn(), login: vi.fn(), verifyOtp: vi.fn(), verifyLoginMfa: vi.fn(), logout: vi.fn(), refresh: vi.fn(), getMe: vi.fn() },
+  default: { register: vi.fn(), login: vi.fn(), verifyOtp: vi.fn(), verifyLoginMfa: vi.fn(), changePassword: vi.fn(), logout: vi.fn(), refresh: vi.fn(), getMe: vi.fn() },
 }));
-vi.mock('../services/apiClient.js', () => ({ setAccessToken: vi.fn() }));
+const { revokedListeners } = vi.hoisted(() => ({ revokedListeners: new Set() }));
+vi.mock('../services/apiClient.js', () => ({
+  setAccessToken: vi.fn(),
+  onSessionRevoked: (listener) => {
+    revokedListeners.add(listener);
+    return () => revokedListeners.delete(listener);
+  },
+}));
 
 const REFRESH_KEY = 'ledgerOnboard.refreshToken';
 
@@ -219,5 +226,57 @@ describe('AuthContext register', () => {
     AuthApi.register.mockResolvedValue({ user: { email: 'juan@gmail.com' } });
 
     expect((await registerThroughContext()).verificationRequired).toBe(true);
+  });
+});
+
+describe('AuthContext password change and revoked sessions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  async function signedIn() {
+    localStorage.setItem(REFRESH_KEY, 'stored-refresh-token');
+    AuthApi.refresh.mockResolvedValue({ accessToken: 'a1', refreshToken: 'r1', user: { fullName: 'Juan Dela Cruz', role: 'tenant' } });
+    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
+    await waitFor(() => expect(result.current.status).toBe('authenticated'));
+    return result;
+  }
+
+  it('keeps this device signed in with the fresh tokens a password change returns', async () => {
+    AuthApi.changePassword.mockResolvedValue({ accessToken: 'a2', refreshToken: 'r2', user: { fullName: 'Juan Dela Cruz', role: 'tenant' } });
+    const result = await signedIn();
+
+    await act(async () => {
+      await result.current.changePassword({ currentPassword: 'Old1!Pass', newPassword: 'N3w!Password' });
+    });
+
+    expect(AuthApi.changePassword).toHaveBeenCalledWith({ currentPassword: 'Old1!Pass', newPassword: 'N3w!Password' });
+    expect(setAccessToken).toHaveBeenLastCalledWith('a2');
+    expect(localStorage.getItem(REFRESH_KEY)).toBe('r2');
+    expect(result.current.status).toBe('authenticated');
+  });
+
+  it('sends the two-factor code with a password change when one is given', async () => {
+    AuthApi.changePassword.mockResolvedValue({ accessToken: 'a2', refreshToken: 'r2', user: { fullName: 'Juan Dela Cruz' } });
+    const result = await signedIn();
+    await act(async () => {
+      await result.current.changePassword({ currentPassword: 'Old1!Pass', newPassword: 'N3w!Password', code: '123456' });
+    });
+    expect(AuthApi.changePassword).toHaveBeenCalledWith({ currentPassword: 'Old1!Pass', newPassword: 'N3w!Password', code: '123456' });
+  });
+
+  it('signs out here when a request says the session was ended elsewhere', async () => {
+    const result = await signedIn();
+    expect(revokedListeners.size).toBeGreaterThan(0);
+
+    act(() => {
+      for (const listener of revokedListeners) listener();
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('unauthenticated'));
+    expect(result.current.user).toBeNull();
+    expect(localStorage.getItem(REFRESH_KEY)).toBeNull();
+    expect(setAccessToken).toHaveBeenLastCalledWith(null);
   });
 });

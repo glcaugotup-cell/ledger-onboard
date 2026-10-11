@@ -13,6 +13,11 @@ class AdminApi extends BaseApiClient {
     return this.patch(`/admin/users/${id}/status`, payload);
   }
 
+  /** One-time password reset code (shown once): resolves to { code, expiresAt }. */
+  issueResetCode(id) {
+    return this.post(`/admin/users/${id}/reset-code`);
+  }
+
   /** Admin-confirmed deactivation of an account inactive for 60+ days. */
   deactivateInactive(id, reason) {
     return this.post(`/admin/users/${id}/deactivate-inactive`, { reason });

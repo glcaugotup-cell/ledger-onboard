@@ -5,7 +5,9 @@ function sanitizeUser(userDoc) {
   delete obj.passwordHash;
   delete obj.otp;
   delete obj.mfaTotp;
+  delete obj.passwordReset;
   delete obj.refreshTokenHash;
+  delete obj.tokenVersion;
   obj.hasPaymentQr = Boolean(obj.paymentQrUrl);
   delete obj.paymentQrUrl;
   delete obj.__v;

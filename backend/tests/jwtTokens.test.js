@@ -56,3 +56,26 @@ test('an expired challenge token is refused', () => {
 test('a normal sign-in token still works', () => {
   expect(verifyAccessToken(signAccessToken(user)).sub).toBe(user._id);
 });
+
+test('tokens issued in the same second are never identical (random ID per token)', () => {
+  const access = [signAccessToken(user), signAccessToken(user)];
+  const refresh = [signRefreshToken(user), signRefreshToken(user)];
+  const challenge = [signMfaChallengeToken(user), signMfaChallengeToken(user)];
+  for (const [a, b] of [access, refresh, challenge]) {
+    expect(a).not.toBe(b);
+    const [pa, pb] = [jwt.decode(a), jwt.decode(b)];
+    expect(pa.iat).toBe(pb.iat);
+    expect(pa.jti).toMatch(/^[0-9a-f-]{36}$/);
+    expect(pa.jti).not.toBe(pb.jti);
+  }
+});
+
+test('access and refresh tokens carry the session version; an account without one counts as 0', () => {
+  const { tokenVersionOf } = require('../utils/jwt');
+  expect(jwt.decode(signAccessToken({ ...user, tokenVersion: 3 })).tv).toBe(3);
+  expect(jwt.decode(signRefreshToken({ ...user, tokenVersion: 3 })).tv).toBe(3);
+  expect(jwt.decode(signAccessToken(user)).tv).toBe(0);
+  expect(tokenVersionOf(undefined)).toBe(0);
+  expect(tokenVersionOf(null)).toBe(0);
+  expect(tokenVersionOf(2)).toBe(2);
+});

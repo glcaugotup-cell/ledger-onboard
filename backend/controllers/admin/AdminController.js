@@ -16,6 +16,12 @@ class AdminController {
     sendSuccess(res, { data: { logs } });
   });
 
+  // Returns the code once; it is never stored or logged in readable form.
+  issuePasswordResetCode = asyncHandler(async (req, res) => {
+    const result = await AdminService.issuePasswordResetCode(req.user.id, req.params.id);
+    sendSuccess(res, { statusCode: 201, data: result });
+  });
+
   setUserStatus = asyncHandler(async (req, res) => {
     const { status, reason } = req.body;
     const user = await AdminService.setUserStatus(req.user.id, req.params.id, status, reason);

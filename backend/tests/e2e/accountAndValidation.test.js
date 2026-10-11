@@ -557,3 +557,40 @@ describe('Objective 14 — server-side validation gaps closed', () => {
     expect(res.body.error.code).toBe('PROPERTY_HAS_PENDING_REQUESTS');
   });
 });
+
+// Phase 4 rule: no reset code is ever emailed; an administrator can issue a one-time code instead.
+describe('Phase 4 — password reset with an administrator\'s code, no email', () => {
+  test('forgot-password explains the options; the admin code resets the password and signs every device out', async () => {
+    const { user, token: oldSession } = await makeUser('tenant', 'reset.journey@gmail.com', { emergencyContact: { name: 'Ana Cruz', phone: '09181234567' } });
+    const { token: adminToken } = await makeUser('admin', 'reset.journey.admin@gmail.com');
+    const sendSpy = jest.spyOn(EmailService, 'send');
+
+    const forgot = await request(app).post('/api/auth/forgot-password').send({ email: 'reset.journey@gmail.com' });
+    expect(forgot.status).toBe(200);
+    expect(forgot.body.data.message).toMatch(/authenticator app.*backup codes.*administrator for a reset code/);
+
+    const issued = await request(app).post(`/api/admin/users/${user._id}/reset-code`).set(auth(adminToken));
+    expect(issued.status).toBe(201);
+    const reset = await request(app).post('/api/auth/reset-password').send({ email: 'reset.journey@gmail.com', code: issued.body.data.code, newPassword: 'N3w!Password' });
+    expect(reset.status).toBe(200);
+    expect(sendSpy).not.toHaveBeenCalled();
+    sendSpy.mockRestore();
+
+    expect((await request(app).get('/api/users/me').set(auth(oldSession))).status).toBe(401);
+    expect((await request(app).post('/api/auth/login').send({ email: 'reset.journey@gmail.com', password: PASSWORD })).status).toBe(401);
+    expect((await request(app).post('/api/auth/login').send({ email: 'reset.journey@gmail.com', password: 'N3w!Password' })).status).toBe(200);
+    // Used once, so it's gone.
+    const again = await request(app).post('/api/auth/reset-password').send({ email: 'reset.journey@gmail.com', code: issued.body.data.code, newPassword: 'An0ther!Pass' });
+    expect(again.body.error.code).toBe('INVALID_OTP');
+  });
+
+  test('a signed-in password change needs no email and keeps this device signed in', async () => {
+    const { token } = await makeUser('landlord', 'change.journey@gmail.com');
+    const sendSpy = jest.spyOn(EmailService, 'send');
+    const res = await request(app).patch('/api/auth/change-password').set(auth(token)).send({ currentPassword: PASSWORD, newPassword: 'N3w!Password' });
+    expect(res.status).toBe(200);
+    expect(sendSpy).not.toHaveBeenCalled();
+    sendSpy.mockRestore();
+    expect((await request(app).get('/api/users/me').set(auth(res.body.data.accessToken))).status).toBe(200);
+  });
+});

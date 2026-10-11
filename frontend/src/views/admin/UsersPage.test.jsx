@@ -9,7 +9,7 @@ import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.j
 const { useAuthMock, useNotificationsMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), useNotificationsMock: vi.fn() }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
-vi.mock('../../services/AdminApi.js', () => ({ default: { listUsers: vi.fn(), setUserStatus: vi.fn(), deactivateInactive: vi.fn() } }));
+vi.mock('../../services/AdminApi.js', () => ({ default: { listUsers: vi.fn(), setUserStatus: vi.fn(), deactivateInactive: vi.fn(), issueResetCode: vi.fn() } }));
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ago = (ms) => new Date(Date.now() - ms).toISOString();
@@ -169,5 +169,45 @@ describe('UsersPage', () => {
     await screen.findByText('Other Admin');
     expect(screen.queryByRole('button', { name: /suspend/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /deactivate/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('UsersPage reset codes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 'a1', fullName: 'Admin Cruz', role: 'admin' } }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    AdminApi.listUsers.mockResolvedValue(users);
+  });
+
+  it('offers a reset code for activated non-admin accounts only', async () => {
+    renderPage();
+    await screen.findByText('Juan Tenant');
+    expect(within(cardOf('Juan Tenant')).getByRole('button', { name: /reset code/i })).toBeInTheDocument();
+    expect(within(cardOf('Ana Landlord')).getByRole('button', { name: /reset code/i })).toBeInTheDocument();
+    expect(within(cardOf('New Invitee')).queryByRole('button', { name: /reset code/i })).not.toBeInTheDocument();
+  });
+
+  it('never offers one for an admin account', async () => {
+    AdminApi.listUsers.mockResolvedValue({ users: [{ _id: 'a2', fullName: 'Other Admin', role: 'admin', email: 'a2@gmail.com', accountStatus: 'active' }] });
+    renderPage();
+    await screen.findByText('Other Admin');
+    expect(screen.queryByRole('button', { name: /reset code/i })).not.toBeInTheDocument();
+  });
+
+  it('opens the reset-code dialog for that person and shows the code', async () => {
+    AdminApi.issueResetCode.mockResolvedValue({ code: 'ABCD-EFGH', expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Juan Tenant');
+
+    await user.click(within(cardOf('Juan Tenant')).getByRole('button', { name: /reset code/i }));
+    expect(screen.getByText(/create a password reset code for juan tenant/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /create code/i }));
+
+    expect(AdminApi.issueResetCode).toHaveBeenCalledWith('u1');
+    expect(await screen.findByText('ABCD-EFGH')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^done$/i }));
+    expect(screen.queryByText('ABCD-EFGH')).not.toBeInTheDocument();
   });
 });
