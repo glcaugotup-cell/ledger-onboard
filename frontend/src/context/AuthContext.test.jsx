@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, useAuth } from './AuthContext.jsx';
@@ -147,5 +147,41 @@ describe('AuthContext', () => {
     await user.click(screen.getByRole('button', { name: 'refresh' }));
 
     await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('Juan Updated'));
+  });
+});
+
+describe('AuthContext register', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  async function registerThroughContext() {
+    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
+    await waitFor(() => expect(result.current.status).toBe('unauthenticated'));
+    let returned;
+    await act(async () => {
+      returned = await result.current.register({ email: 'juan@gmail.com' });
+    });
+    return returned;
+  }
+
+  it('reports that no code is needed when the backend says so, without signing in', async () => {
+    AuthApi.register.mockResolvedValue({ user: { email: 'juan@gmail.com' }, verificationRequired: false });
+
+    expect(await registerThroughContext()).toEqual({ user: { email: 'juan@gmail.com' }, verificationRequired: false });
+    expect(setAccessToken).not.toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it('reports that a code is needed when the backend requires one', async () => {
+    AuthApi.register.mockResolvedValue({ user: { email: 'juan@gmail.com' }, verificationRequired: true });
+
+    expect(await registerThroughContext()).toEqual({ user: { email: 'juan@gmail.com' }, verificationRequired: true });
+  });
+
+  it('treats a backend that does not send the field as requiring a code', async () => {
+    AuthApi.register.mockResolvedValue({ user: { email: 'juan@gmail.com' } });
+
+    expect((await registerThroughContext()).verificationRequired).toBe(true);
   });
 });

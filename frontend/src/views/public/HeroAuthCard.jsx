@@ -60,7 +60,7 @@ function FieldError({ message }) {
 
 const LOGIN_FIELD_VALIDATORS = { email: validateLoginEmail, password: validateLoginPassword };
 
-function HeroLoginForm({ onSwitch }) {
+function HeroLoginForm({ onSwitch, notice = '', onNoticeDismiss }) {
   const { login, verifyLoginOtp, mfaChallenge } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
@@ -100,6 +100,7 @@ function HeroLoginForm({ onSwitch }) {
     setNeedsVerification(false);
     setEmailNotRegistered(false);
     setVerified(false);
+    onNoticeDismiss?.();
 
     const nextErrors = { email: LOGIN_FIELD_VALIDATORS.email(form.email), password: LOGIN_FIELD_VALIDATORS.password(form.password) };
     setErrors(nextErrors);
@@ -275,6 +276,7 @@ function HeroLoginForm({ onSwitch }) {
             </p>
           )}
           {verified && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-xs font-medium text-emerald-700">Email verified! You can now log in.</p>}
+          {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-xs font-medium text-emerald-700">{notice}</p>}
 
           <Button type="submit" variant="accent" className="w-full justify-center gap-2 rounded-xl py-2.5 text-xs" disabled={loading}>
             {loading ? 'Logging in…' : (
@@ -374,6 +376,7 @@ const NORMALIZERS = {
 };
 
 const REGISTER_RESEND_COOLDOWN_SECONDS = 45;
+const ACCOUNT_CREATED_MESSAGE = 'Your account has been created. You can now log in.';
 
 function HeroRegisterForm({ onSwitch, onRegistered }) {
   const { register } = useAuth();
@@ -383,9 +386,11 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [submitError, setSubmitError] = useState('');
+  // Set on ACCOUNT_EXISTS to offer a direct way to the Login panel.
+  const [accountExists, setAccountExists] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // 'form' -> 'verify' (OTP emailed) -> 'done'
+  // 'form' -> 'verify' (OTP emailed) -> 'done', used only when the backend requires email verification.
   const [step, setStep] = useState('form');
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -461,6 +466,7 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
   async function onSubmit(e) {
     e.preventDefault();
     setSubmitError('');
+    setAccountExists(false);
     setCancelMessage('');
 
     // Normalize before validating so we validate exactly what will be submitted.
@@ -490,7 +496,15 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
       const { firstName, lastName, email, phone, password, role, privacyConsent, emergencyContactName, emergencyContactPhone } = normalizedForm;
       const payload = { firstName, lastName, email, phone, password, role, privacyConsent };
       if (role === 'tenant') payload.emergencyContact = { name: emergencyContactName, phone: emergencyContactPhone };
-      await register(payload);
+      const result = await register(payload);
+      if (result?.verificationRequired === false) {
+        // No code to enter: clear the form and slide to Login, which shows the success message.
+        setForm(initialRegisterForm);
+        setTouched({});
+        setErrors({});
+        onRegistered?.(ACCOUNT_CREATED_MESSAGE);
+        return;
+      }
       // register() already sent the first OTP, so start the resend cooldown now.
       setRegisteredEmail(email);
       setCooldown(REGISTER_RESEND_COOLDOWN_SECONDS);
@@ -507,6 +521,7 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
         return;
       }
       setSubmitError(message);
+      setAccountExists(code === 'ACCOUNT_EXISTS');
       setErrors((prev) => ({ ...prev, ...fieldErrors }));
     } finally {
       setLoading(false);
@@ -834,6 +849,13 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
           </div>
 
           {submitError && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs font-medium text-red-600">{submitError}</p>}
+          {accountExists && (
+            <p className="text-xs">
+              <button type="button" onClick={onSwitch} className="font-bold text-brand-700 hover:underline">
+                Go to Login
+              </button>
+            </p>
+          )}
 
           <Button type="submit" variant="accent" className="mt-1 w-full justify-center gap-2 rounded-xl py-2.5 text-xs" disabled={loading}>
             {loading ? 'Creating account…' : (
@@ -864,6 +886,8 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
 export default function HeroAuthCard({ mode, onModeChange }) {
   const isLogin = mode !== 'register';
   const switchTo = (nextMode) => onModeChange?.(nextMode);
+  // Success message the Login panel shows after a sign-up that needs no email code.
+  const [loginNotice, setLoginNotice] = useState('');
   const scrollToAbout = () => document.getElementById('about')?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
 
   const houseSize = 'max-w-[380px] lg:max-w-[460px]';
@@ -878,7 +902,13 @@ export default function HeroAuthCard({ mode, onModeChange }) {
           inert={isLogin}
           className={`auth-form-panel ${!isLogin ? 'block animate-panel-enter lg:animate-none' : 'hidden'} w-full lg:block`}
         >
-          <HeroRegisterForm onSwitch={() => switchTo('login')} onRegistered={() => switchTo('login')} />
+          <HeroRegisterForm
+            onSwitch={() => switchTo('login')}
+            onRegistered={(notice) => {
+              setLoginNotice(notice || '');
+              switchTo('login');
+            }}
+          />
         </div>
 
         {/* LOGIN FORM PANEL */}
@@ -887,7 +917,7 @@ export default function HeroAuthCard({ mode, onModeChange }) {
           inert={!isLogin}
           className={`auth-form-panel ${isLogin ? 'block animate-panel-enter lg:animate-none' : 'hidden'} w-full lg:block`}
         >
-          <HeroLoginForm onSwitch={() => switchTo('register')} />
+          <HeroLoginForm onSwitch={() => switchTo('register')} notice={loginNotice} onNoticeDismiss={() => setLoginNotice('')} />
         </div>
 
         {/* GREEN OVERLAY PANEL — slides across on top, desktop only; its curved edge faces the form side. */}

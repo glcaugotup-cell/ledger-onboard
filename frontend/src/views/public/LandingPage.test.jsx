@@ -264,3 +264,83 @@ describe('LandingPage', () => {
     expect(screen.getByRole('link', { name: /Dagupan Demo Boarding House/i })).toHaveAttribute('href', '/properties/p1');
   });
 });
+
+describe('LandingPage Hero sign-up when the backend does or does not require email verification', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    PropertyApi.search.mockResolvedValue({ properties: [] });
+  });
+  afterEach(() => {
+    useAuthMock.mockReset();
+  });
+
+  const authMode = (container) => container.querySelector('[data-auth-mode]').getAttribute('data-auth-mode');
+
+  /** Slides to the Hero register panel, fills it with a valid tenant and submits. */
+  async function registerThroughHero(user) {
+    await user.click(screen.getAllByRole('button', { name: /register now/i })[0]);
+    const registerPanel = within(screen.getByRole('heading', { name: /create account/i }).parentElement);
+    await user.type(registerPanel.getByPlaceholderText('First name'), 'Juan');
+    await user.type(registerPanel.getByPlaceholderText('Last name'), 'Dela Cruz');
+    await user.type(registerPanel.getByPlaceholderText('yourname@gmail.com'), 'juan.delacruz@gmail.com');
+    await user.type(registerPanel.getAllByPlaceholderText('917 123 4567')[0], '09171234567');
+    await user.type(registerPanel.getByPlaceholderText('Password'), 'Str0ng!Pass');
+    await user.type(registerPanel.getByPlaceholderText('Confirm password'), 'Str0ng!Pass');
+    await user.type(registerPanel.getByPlaceholderText('Contact person'), 'Maria Dela Cruz');
+    await user.type(registerPanel.getAllByPlaceholderText('917 123 4567')[1], '09181234567');
+    await user.click(registerPanel.getByRole('checkbox'));
+    await user.click(registerPanel.getByRole('button', { name: /^register$/i }));
+    return registerPanel;
+  }
+
+  it('slides to Login with a success message and a cleared form when no code is needed', async () => {
+    const register = vi.fn().mockResolvedValue({ user: { email: 'juan.delacruz@gmail.com' }, verificationRequired: false });
+    const login = vi.fn().mockRejectedValue(new ApiClientError('Incorrect password.', 'INCORRECT_PASSWORD', 401));
+    useAuthMock.mockReturnValue({ login, register, verifyLoginOtp: vi.fn(), mfaChallenge: null, user: null });
+    const user = userEvent.setup();
+    const { container } = renderLandingPage();
+
+    const registerPanel = await registerThroughHero(user);
+
+    expect(await screen.findByText('Your account has been created. You can now log in.')).toBeInTheDocument();
+    expect(authMode(container)).toBe('login');
+    expect(screen.queryByRole('heading', { name: /verify your email/i })).not.toBeInTheDocument();
+    expect(registerPanel.getByPlaceholderText('yourname@gmail.com')).toHaveValue('');
+    expect(registerPanel.getByPlaceholderText('Password')).toHaveValue('');
+
+    // The message goes away once the person tries to sign in.
+    const loginPanel = within(screen.getByRole('heading', { name: /^login$/i }).parentElement);
+    await user.type(loginPanel.getByPlaceholderText('Email address'), 'juan.delacruz@gmail.com');
+    await user.type(loginPanel.getByPlaceholderText('Password'), 'Wrong1!Pass');
+    await user.click(loginPanel.getByRole('button', { name: /^login$/i }));
+    expect(await loginPanel.findByText('Incorrect password.')).toBeInTheDocument();
+    expect(screen.queryByText('Your account has been created. You can now log in.')).not.toBeInTheDocument();
+  });
+
+  it('keeps the verify-email step when the backend requires a code', async () => {
+    const register = vi.fn().mockResolvedValue({ user: { email: 'juan.delacruz@gmail.com' }, verificationRequired: true });
+    useAuthMock.mockReturnValue({ login: vi.fn(), register, verifyLoginOtp: vi.fn(), mfaChallenge: null, user: null });
+    const user = userEvent.setup();
+    const { container } = renderLandingPage();
+
+    await registerThroughHero(user);
+
+    expect(await screen.findByRole('heading', { name: /verify your email/i })).toBeInTheDocument();
+    expect(authMode(container)).toBe('register');
+    expect(screen.queryByText('Your account has been created. You can now log in.')).not.toBeInTheDocument();
+  });
+
+  it('points an already-registered email to Login', async () => {
+    const register = vi.fn().mockRejectedValue(new ApiClientError('This email is already registered. Please log in instead.', 'ACCOUNT_EXISTS', 409));
+    useAuthMock.mockReturnValue({ login: vi.fn(), register, verifyLoginOtp: vi.fn(), mfaChallenge: null, user: null });
+    const user = userEvent.setup();
+    const { container } = renderLandingPage();
+
+    const registerPanel = await registerThroughHero(user);
+
+    expect(await registerPanel.findByText('This email is already registered. Please log in instead.')).toBeInTheDocument();
+    expect(authMode(container)).toBe('register');
+    await user.click(registerPanel.getByRole('button', { name: /go to login/i }));
+    expect(authMode(container)).toBe('login');
+  });
+});

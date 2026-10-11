@@ -64,8 +64,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   const register = useCallback(async (payload) => {
-    const { user: registered } = await AuthApi.register(payload);
-    return registered;
+    const { user: registered, verificationRequired } = await AuthApi.register(payload);
+    // An older backend omits the field; it always required email verification.
+    return { user: registered, verificationRequired: verificationRequired !== false };
   }, []);
 
   const login = useCallback(

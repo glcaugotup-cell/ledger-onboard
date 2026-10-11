@@ -1,3 +1,5 @@
+// These tests cover the sign-up email-verification flow, which is off by default; turn it on before anything loads config.
+process.env.EMAIL_VERIFICATION_REQUIRED = 'true';
 // Keep CORS local while requiring invitations to use the public deployment.
 const previousEmailAppUrl = process.env.EMAIL_APP_URL;
 process.env.EMAIL_APP_URL = 'https://ledger-onboard.vercel.app/';

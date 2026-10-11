@@ -37,9 +37,12 @@ class AuthService {
       throw ApiError.forbidden('This role cannot self-register', 'ROLE_NOT_SELF_REGISTERABLE');
     }
 
+    const verificationRequired = env.emailVerificationRequired;
     const existing = await UserRepository.findByEmail(email);
     if (existing) {
-      if (existing.emailVerified) {
+      // With verification off, a pending (unverified) account can already sign in, so it gets the
+      // same answer as any registered email and nothing is sent.
+      if (existing.emailVerified || !verificationRequired) {
         throw ApiError.conflict('This email is already registered. Please log in instead.', 'ACCOUNT_EXISTS');
       }
       // An unverified registration already exists: resend a code and let the
@@ -67,20 +70,26 @@ class AuthService {
       passwordHash,
       role,
       accountStatus: ACCOUNT_STATUS.ACTIVE,
-      emailVerified: false, // gated behind OTP verification below — see login()'s emailVerified check
+      // With verification on, gated behind the OTP below — see login()'s emailVerified check.
+      emailVerified: !verificationRequired,
       lastActivityAt: new Date(),
       privacyConsent: { given: true, at: new Date() },
       emergencyContact: role === ROLES.TENANT ? emergencyContact : undefined,
     });
 
-    // Reload with secrets selected so _issueOtp can write otp.* on it directly.
-    const withSecrets = await UserRepository.findByEmail(email, { withSecrets: true });
-    await this._issueOtp(withSecrets, 'email_verification');
+    if (verificationRequired) {
+      // Reload with secrets selected so _issueOtp can write otp.* on it directly.
+      const withSecrets = await UserRepository.findByEmail(email, { withSecrets: true });
+      await this._issueOtp(withSecrets, 'email_verification');
+    }
 
-    return sanitizeUser(user);
+    return { user: sanitizeUser(user), verificationRequired };
   }
 
   async verifyRegistrationOtp({ email, code }) {
+    // With verification off there is nothing to verify; answer every email the same way.
+    if (!env.emailVerificationRequired) throw ApiError.badRequest('Invalid or expired code', 'INVALID_OTP');
+
     const user = await UserRepository.findByEmail(email, { withSecrets: true });
     if (!user) throw ApiError.badRequest('Invalid or expired code', 'INVALID_OTP');
     if (user.emailVerified) throw ApiError.conflict('This account is already verified', 'ALREADY_VERIFIED');
@@ -93,8 +102,8 @@ class AuthService {
 
   async resendRegistrationOtp({ email }) {
     const user = await UserRepository.findByEmail(email, { withSecrets: true });
-    // Generic response: don't reveal whether the account exists.
-    if (!user || user.emailVerified) {
+    // Generic response: don't reveal whether the account exists. With verification off, nothing is ever sent.
+    if (!user || user.emailVerified || !env.emailVerificationRequired) {
       return { message: 'If a matching pending registration exists, a new code has been sent.' };
     }
 
@@ -108,11 +117,15 @@ class AuthService {
    * deleting the unverified User, which frees the email and invalidates the
    * pending OTP. Verified accounts are never deleted here, and the response
    * is the same either way so it doesn't reveal whether the account exists.
+   * With verification off, nothing is ever deleted: a pending account can sign in
+   * and may already have history (reservations, payments).
    */
   async cancelRegistration({ email }) {
-    const user = await UserRepository.findByEmail(email);
-    if (user && !user.emailVerified) {
-      await UserRepository.deleteById(user._id);
+    if (env.emailVerificationRequired) {
+      const user = await UserRepository.findByEmail(email);
+      if (user && !user.emailVerified) {
+        await UserRepository.deleteById(user._id);
+      }
     }
     return { message: 'Registration cancelled. You can register again with the correct information.' };
   }
@@ -148,7 +161,8 @@ class AuthService {
     this._clearLoginAttempts(email);
     this._assertLoginableStatus(user);
 
-    if (!user.emailVerified) {
+    // With verification off, accounts still pending from before can sign in (phase 6 cleans up their data).
+    if (!user.emailVerified && env.emailVerificationRequired) {
       throw ApiError.forbidden('Please verify your email address before logging in.', 'EMAIL_NOT_VERIFIED');
     }
 

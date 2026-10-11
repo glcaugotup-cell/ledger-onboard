@@ -8,8 +8,8 @@ const { authRateLimiter } = require('../../middleware/rateLimit');
 /** Maps HTTP requests to AuthService calls; no business logic lives here. */
 class AuthController {
   register = asyncHandler(async (req, res) => {
-    const user = await AuthService.register(req.body);
-    sendSuccess(res, { statusCode: 201, data: { user } });
+    const { user, verificationRequired } = await AuthService.register(req.body);
+    sendSuccess(res, { statusCode: 201, data: { user, verificationRequired } });
   });
 
   login = asyncHandler(async (req, res) => {

@@ -69,9 +69,11 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [submitError, setSubmitError] = useState('');
+  // Set on ACCOUNT_EXISTS to offer a direct link to sign in.
+  const [accountExists, setAccountExists] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // 'form' -> 'verify' (OTP emailed) -> 'done'
+  // 'form' -> 'verify' (OTP emailed) -> 'done', used only when the backend requires email verification.
   const [step, setStep] = useState('form');
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -157,6 +159,7 @@ export default function RegisterPage() {
   async function onSubmit(e) {
     e.preventDefault();
     setSubmitError('');
+    setAccountExists(false);
     setCancelMessage('');
 
     // Normalize before validating so we validate exactly what will be submitted.
@@ -189,7 +192,12 @@ export default function RegisterPage() {
       if (role === 'tenant') {
         payload.emergencyContact = { name: emergencyContactName, phone: emergencyContactPhone };
       }
-      await register(payload);
+      const result = await register(payload);
+      if (result?.verificationRequired === false) {
+        // No code to enter: the account can sign in right away.
+        navigate('/login', { replace: true, state: { registered: true } });
+        return;
+      }
       // register() already sent the first OTP, so start the resend cooldown now.
       setRegisteredEmail(email);
       setCooldown(RESEND_COOLDOWN_SECONDS);
@@ -206,6 +214,7 @@ export default function RegisterPage() {
         return;
       }
       setSubmitError(message);
+      setAccountExists(code === 'ACCOUNT_EXISTS');
       setErrors((prev) => ({ ...prev, ...fieldErrors }));
     } finally {
       setLoading(false);
@@ -317,6 +326,13 @@ export default function RegisterPage() {
 
       <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
         <ErrorBanner message={submitError} />
+        {accountExists && (
+          <p className="-mt-2 text-sm">
+            <Link to="/login" className="font-semibold text-brand-700 hover:underline">
+              Go to sign in
+            </Link>
+          </p>
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field required label="First name" error={touched.firstName ? errors.firstName : undefined} hint="Starts with an uppercase letter — letters, spaces, hyphens, and periods only">

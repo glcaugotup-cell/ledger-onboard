@@ -1,8 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RegisterPage from './RegisterPage.jsx';
+import LoginPage from './LoginPage.jsx';
 import { ApiClientError } from '../../services/apiClient.js';
 import AuthApi from '../../services/AuthApi.js';
 
@@ -328,5 +329,78 @@ describe('RegisterPage', () => {
 
     await waitFor(() => expect(register).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole('heading', { name: /verify your email/i })).toBeInTheDocument();
+  });
+});
+
+describe('RegisterPage when the backend does or does not require email verification', () => {
+  // Renders the real sign-in page at /login so the hand-off and its message can be checked.
+  function renderWithLogin() {
+    return render(
+      <MemoryRouter initialEntries={['/register']}>
+        <Routes>
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/login" element={<LoginPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
+  afterEach(() => {
+    useAuthMock.mockReset();
+  });
+
+  it('goes straight to sign in with a success message when no code is needed', async () => {
+    const register = vi.fn().mockResolvedValue({ user: { email: 'juan.delacruz@gmail.com' }, verificationRequired: false });
+    useAuthMock.mockReturnValue({ register });
+    const user = userEvent.setup();
+    renderWithLogin();
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /^register$/i }));
+
+    expect(await screen.findByText('Your account has been created. You can now log in.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^login$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /verify your email/i })).not.toBeInTheDocument();
+    expect(AuthApi.verifyRegistrationOtp).not.toHaveBeenCalled();
+  });
+
+  it('still shows the verify-email step when the backend requires a code', async () => {
+    const register = vi.fn().mockResolvedValue({ user: { email: 'juan.delacruz@gmail.com' }, verificationRequired: true });
+    useAuthMock.mockReturnValue({ register });
+    const user = userEvent.setup();
+    renderWithLogin();
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /^register$/i }));
+
+    expect(await screen.findByRole('heading', { name: /verify your email/i })).toBeInTheDocument();
+    expect(screen.queryByText('Your account has been created. You can now log in.')).not.toBeInTheDocument();
+  });
+
+  it('points an already-registered email to sign in', async () => {
+    const register = vi.fn().mockRejectedValue(new ApiClientError('This email is already registered. Please log in instead.', 'ACCOUNT_EXISTS', 409));
+    useAuthMock.mockReturnValue({ register });
+    const user = userEvent.setup();
+    renderWithLogin();
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /^register$/i }));
+
+    expect(await screen.findByText('This email is already registered. Please log in instead.')).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: /go to sign in/i }));
+    expect(await screen.findByRole('button', { name: /^login$/i })).toBeInTheDocument();
+  });
+
+  it('offers no sign-in shortcut for other errors', async () => {
+    const register = vi.fn().mockRejectedValue(new ApiClientError('Something went wrong', 'SERVER_ERROR', 500));
+    useAuthMock.mockReturnValue({ register });
+    const user = userEvent.setup();
+    renderWithLogin();
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /^register$/i }));
+
+    expect(await screen.findByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /go to sign in/i })).not.toBeInTheDocument();
   });
 });

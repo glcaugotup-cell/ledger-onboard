@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import AuthApi from '../../services/AuthApi.js';
 import { Field, TextInput } from '../../components/ui/Field.jsx';
@@ -16,6 +16,9 @@ const FIELD_VALIDATORS = { email: validateLoginEmail, password: validateLoginPas
 export default function LoginPage() {
   const { login, verifyLoginOtp, mfaChallenge } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Set when RegisterPage sends a new account here (sign-up email verification is off).
+  const [justRegistered, setJustRegistered] = useState(Boolean(location.state?.registered));
   const [form, setForm] = useState({ email: '', password: '' });
   const [otp, setOtp] = useState('');
   const [errors, setErrors] = useState({});
@@ -52,6 +55,7 @@ export default function LoginPage() {
     setNeedsVerification(false);
     setEmailNotRegistered(false);
     setVerified(false);
+    setJustRegistered(false);
 
     const nextErrors = { email: FIELD_VALIDATORS.email(form.email), password: FIELD_VALIDATORS.password(form.password) };
     setErrors(nextErrors);
@@ -157,6 +161,7 @@ export default function LoginPage() {
           </p>
         )}
         {verified && <SuccessBanner message="Email verified! You can now log in." />}
+        {justRegistered && <SuccessBanner message="Your account has been created. You can now log in." />}
         <Field required label="Email" error={touched.email ? errors.email : undefined}>
           <TextInput
             type="email"

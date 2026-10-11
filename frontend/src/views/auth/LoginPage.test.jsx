@@ -182,3 +182,45 @@ describe('LoginPage', () => {
     expect(otpInput).toHaveValue('123456');
   });
 });
+
+describe('LoginPage after a sign-up that needed no email code', () => {
+  afterEach(() => {
+    useAuthMock.mockReset();
+  });
+
+  function renderAfterRegister() {
+    return render(
+      <MemoryRouter initialEntries={[{ pathname: '/login', state: { registered: true } }]}>
+        <LoginPage />
+      </MemoryRouter>
+    );
+  }
+
+  it('shows the account-created message', () => {
+    useAuthMock.mockReturnValue({ login: vi.fn(), verifyLoginOtp: vi.fn(), mfaChallenge: null, user: null });
+    renderAfterRegister();
+
+    expect(screen.getByText('Your account has been created. You can now log in.')).toBeInTheDocument();
+  });
+
+  it('clears the message once the person tries to sign in', async () => {
+    const login = vi.fn().mockRejectedValue(new ApiClientError('Incorrect password.', 'INCORRECT_PASSWORD', 401));
+    useAuthMock.mockReturnValue({ login, verifyLoginOtp: vi.fn(), mfaChallenge: null, user: null });
+    const user = userEvent.setup();
+    renderAfterRegister();
+
+    await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
+    await user.type(screen.getByLabelText('Password'), 'wrong-password');
+    await user.click(screen.getByRole('button', { name: /^login$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect password.');
+    expect(screen.queryByText('Your account has been created. You can now log in.')).not.toBeInTheDocument();
+  });
+
+  it('shows no such message on a normal visit', () => {
+    useAuthMock.mockReturnValue({ login: vi.fn(), verifyLoginOtp: vi.fn(), mfaChallenge: null, user: null });
+    renderLoginPage();
+
+    expect(screen.queryByText('Your account has been created. You can now log in.')).not.toBeInTheDocument();
+  });
+});

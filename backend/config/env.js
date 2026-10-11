@@ -34,6 +34,13 @@ if (process.env.NODE_ENV === 'production' && bcryptSaltRounds < 10) {
   throw new Error(`BCRYPT_SALT_ROUNDS must be at least 10 in production (got ${bcryptSaltRounds})`);
 }
 
+// Sign-up email verification (a code sent by email) is off unless explicitly turned on.
+// Like EMAIL_TRANSPORT, a typo stops the server at boot instead of silently picking a mode.
+const emailVerificationSetting = (process.env.EMAIL_VERIFICATION_REQUIRED || '').trim().toLowerCase() || 'false';
+if (!['true', 'false'].includes(emailVerificationSetting)) {
+  throw new Error(`EMAIL_VERIFICATION_REQUIRED must be true or false (got "${emailVerificationSetting}")`);
+}
+
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
@@ -78,6 +85,8 @@ const env = {
   },
 
   otpTtlMinutes: Number(process.env.OTP_TTL_MINUTES) || 10,
+  // When false, new accounts can sign in at once and no sign-up code is sent.
+  emailVerificationRequired: emailVerificationSetting === 'true',
 
   authRateLimitWindowMinutes: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MINUTES) || 15,
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,

@@ -97,7 +97,7 @@ const userSchema = new Schema(
       default: MFA_METHOD.NONE,
     },
     // Registration email verification (separate from caretaker PENDING_ACTIVATION).
-    // Only AuthService.register() sets this to false.
+    // Only AuthService.register() sets this to false, and only when EMAIL_VERIFICATION_REQUIRED=true.
     emailVerified: { type: Boolean, default: true },
     // Landlords only: mirrors the latest LandlordVerification submission (null if none yet).
     businessVerificationStatus: {

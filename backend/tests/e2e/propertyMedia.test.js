@@ -1,3 +1,5 @@
+// These tests cover the sign-up email-verification flow, which is off by default; turn it on before anything loads config.
+process.env.EMAIL_VERIFICATION_REQUIRED = 'true';
 const request = require('supertest');
 const { startTestDb, stopTestDb } = require('../helpers/testDb');
 const env = require('../../config/env');
