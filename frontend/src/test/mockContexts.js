@@ -9,6 +9,7 @@ export function mockAuthValue(overrides = {}) {
     register: vi.fn(),
     login: vi.fn(),
     verifyLoginOtp: vi.fn(),
+    cancelMfaChallenge: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     refreshProfile: vi.fn(),
     ...overrides,

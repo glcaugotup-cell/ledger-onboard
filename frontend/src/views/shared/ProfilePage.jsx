@@ -15,6 +15,7 @@ import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
 import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import { ReviewForm } from '../../components/ReviewForm.jsx';
+import TwoFactorCard from '../../components/TwoFactorCard.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
 import { formatDate, formatStatus } from '../../utils/format.js';
@@ -134,9 +135,6 @@ export default function ProfilePage() {
   const [pwMsg, setPwMsg] = useState('');
   const [pwError, setPwError] = useState('');
   const [pwLoading, setPwLoading] = useState(false);
-
-  const [mfaLoading, setMfaLoading] = useState(false);
-  const [mfaError, setMfaError] = useState('');
 
   // Account closure. Tenants go through the existing unregister flow (review prompt first).
   const [closeStep, setCloseStep] = useState('idle'); // idle | checking | review | confirm
@@ -271,19 +269,6 @@ export default function ProfilePage() {
     setPwErrors({});
     setPwMsg('');
     setPwError('');
-  };
-
-  const toggleMfa = async () => {
-    setMfaLoading(true);
-    setMfaError('');
-    try {
-      await AuthApi.setMfaPreference(!user?.mfaEnabled);
-      await refreshProfile();
-    } catch (err) {
-      setMfaError(describeApiError(err).message);
-    } finally {
-      setMfaLoading(false);
-    }
   };
 
   const startClose = async () => {
@@ -456,16 +441,7 @@ export default function ProfilePage() {
           )}
         </Card>
 
-        <Card title="Two-factor authentication">
-          <ErrorBanner message={mfaError} />
-          <p className="mb-3 text-sm text-gray-500">When enabled, we&apos;ll email a 6-digit code you must enter after your password on every sign-in.</p>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-medium text-gray-700">Email verification code {user?.mfaEnabled ? 'is on' : 'is off'}</span>
-            <Button variant={user?.mfaEnabled ? 'secondary' : 'primary'} loading={mfaLoading} onClick={toggleMfa}>
-              {user?.mfaEnabled ? 'Turn off' : 'Turn on'}
-            </Button>
-          </div>
-        </Card>
+        <TwoFactorCard user={user} onChanged={refreshProfile} />
       </div>
 
       {role === 'landlord' && <PaymentQrSettings hasQr={Boolean(user?.hasPaymentQr)} />}

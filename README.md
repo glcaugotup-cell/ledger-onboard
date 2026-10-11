@@ -55,6 +55,7 @@ npm install
 | `EMAIL_TRANSPORT` | `console` prints emails (OTP codes, invitations) in the backend terminal; `brevo` sends through Brevo's HTTPS API (needed on Render's free plan, which blocks outgoing SMTP); `smtp` sends real email using the `SMTP_*` settings; `none` sends nothing. Any other value stops the server at startup |
 | `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing email settings (for Gmail, use an App Password). With Brevo, the `EMAIL_FROM` address must be a verified sender in Brevo |
 | `BREVO_API_KEY` | Brevo API key, used only when `EMAIL_TRANSPORT=brevo` |
+| `MFA_ENCRYPTION_KEY` | 32 random bytes, base64 (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`). Encrypts two-factor secrets and keys the backup-code hashes; required in production, where the server refuses to start without it. Losing or changing it breaks every authenticator setup and makes every backup code useless, so everyone must set up two-factor again |
 | `EMAIL_VERIFICATION_REQUIRED` | `false` (default): new accounts can sign in right away and no sign-up code is sent; `true`: a code is emailed and sign-in waits until it is entered. Any other value stops the server at startup |
 | `EMAIL_TIMEOUT_MS` | How long a single email send may take before it fails with an error (default 10000), so a blocked mail server can't hang registration |
 | `ACCOUNT_ARCHIVE_WARNING_DAYS`, `ACCOUNT_ARCHIVE_DAYS`, `ACCOUNT_LIFECYCLE_CRON` | Inactivity warning/archive thresholds and the daily job schedule |

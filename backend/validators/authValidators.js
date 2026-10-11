@@ -19,7 +19,9 @@ const lastNameChain = body('lastName')
   .matches(FULL_NAME)
   .withMessage('Last name must start with an uppercase letter and contain only letters, spaces, hyphens, periods, or apostrophes (min 2 characters)');
 
-const emailChain = body('email').trim().isLength({ max: 254 }).withMessage('Email must be at most 254 characters').bail().toLowerCase().matches(GMAIL).withMessage('Email must be a valid @gmail.com address');
+// Applied to a fresh body('email') each time (optionally after an .if()), so one use can't change another.
+const withEmailRules = (chain) => chain.trim().isLength({ max: 254 }).withMessage('Email must be at most 254 characters').bail().toLowerCase().matches(GMAIL).withMessage('Email must be a valid @gmail.com address');
+const emailChain = withEmailRules(body('email'));
 
 const buildPhoneChain = () =>
   body('phone')
@@ -81,10 +83,19 @@ const loginValidators = [emailChain, body('password').isString().notEmpty().with
 
 const forgotPasswordValidators = [emailChain];
 
+// A two-factor code: 6 digits from the authenticator app, or a backup code (XXXXX-XXXXX; any case, dash or space optional).
+const MFA_CODE = /^(\d{6}|[A-Za-z0-9]{5}[-\s]?[A-Za-z0-9]{5})$/;
+const MFA_CODE_MESSAGE = 'Enter the 6-digit code from your authenticator app, or a backup code';
+const isLoginMfa = () => body('purpose').equals('login_mfa');
+const isNotLoginMfa = () => body('purpose').not().equals('login_mfa');
+
+// Sign-up verification names the account by email; the two-factor sign-in step uses the challenge token from /login.
 const verifyOtpValidators = [
-  emailChain,
-  body('code').matches(OTP).withMessage('Code must be exactly 6 digits'),
   body('purpose').isIn(['login_mfa', 'password_reset', 'email_verification']),
+  withEmailRules(body('email').if(isNotLoginMfa())),
+  body('code').if(isNotLoginMfa()).matches(OTP).withMessage('Code must be exactly 6 digits'),
+  body('challengeToken').if(isLoginMfa()).isString().withMessage('Sign in again to get a new code request').bail().notEmpty().withMessage('Sign in again to get a new code request').isLength({ max: 2000 }),
+  body('code').if(isLoginMfa()).isString().bail().trim().matches(MFA_CODE).withMessage(MFA_CODE_MESSAGE),
 ];
 
 const resendOtpValidators = [emailChain];
@@ -128,7 +139,16 @@ const activateCaretakerValidators = [body('token').notEmpty(), strongPasswordCha
 
 const accountRecoveryValidators = [emailChain, strongPasswordChain('newPassword')];
 
-const mfaPreferenceValidators = [body('enabled').isBoolean().withMessage('enabled must be a boolean').toBoolean()];
+const currentPasswordChain = () => body('password').isString().withMessage('Enter your current password').bail().notEmpty().withMessage('Enter your current password').isLength({ max: 256 });
+const mfaCodeChain = () => body('code').isString().withMessage(MFA_CODE_MESSAGE).bail().trim().matches(MFA_CODE).withMessage(MFA_CODE_MESSAGE);
+
+const mfaSetupValidators = [currentPasswordChain()];
+// Turning two-factor on needs a code from the app itself (never a backup code).
+const mfaEnableValidators = [body('code').isString().bail().trim().matches(OTP).withMessage('Enter the 6-digit code from your authenticator app')];
+// The code is optional here only for accounts still on the retired email method; MfaService requires
+// a valid code from anyone enrolled with an authenticator app.
+const mfaDisableValidators = [currentPasswordChain(), mfaCodeChain().optional()];
+const mfaRecoveryCodesValidators = [currentPasswordChain(), mfaCodeChain()];
 
 module.exports = {
   firstNameChain,
@@ -145,5 +165,8 @@ module.exports = {
   updateCaretakerValidators,
   activateCaretakerValidators,
   accountRecoveryValidators,
-  mfaPreferenceValidators,
+  mfaSetupValidators,
+  mfaEnableValidators,
+  mfaDisableValidators,
+  mfaRecoveryCodesValidators,
 };

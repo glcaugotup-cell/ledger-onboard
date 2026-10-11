@@ -4,6 +4,7 @@ function sanitizeUser(userDoc) {
   const obj = typeof userDoc.toObject === 'function' ? userDoc.toObject() : { ...userDoc };
   delete obj.passwordHash;
   delete obj.otp;
+  delete obj.mfaTotp;
   delete obj.refreshTokenHash;
   obj.hasPaymentQr = Boolean(obj.paymentQrUrl);
   delete obj.paymentQrUrl;

@@ -113,6 +113,17 @@ const userSchema = new Schema(
       expiresAt: { type: Date, select: false, default: null },
       attempts: { type: Number, default: 0, select: false },
     },
+    // Authenticator-app two-factor (TOTP). All hidden from normal queries; loaded only with
+    // UserRepository's withSecrets / findByIdWithSecrets. Secrets are AES-256-GCM encrypted
+    // (utils/secretCrypto.js) and backup codes are stored only as keyed hashes.
+    mfaTotp: {
+      secretEnc: { type: String, select: false, default: null },
+      pendingSecretEnc: { type: String, select: false, default: null }, // set by setup, until confirmed by enable
+      lastUsedStep: { type: Number, select: false, default: null }, // the newest 30-second step accepted (replay guard)
+      backupCodeHashes: { type: [String], select: false, default: undefined },
+      failedAttempts: { type: Number, select: false, default: 0 },
+      lockedUntil: { type: Date, select: false, default: null },
+    },
     // Hash of the current valid refresh token, so logout/rotation can
     // revoke it server-side instead of relying purely on JWT expiry.
     refreshTokenHash: { type: String, select: false, default: null },

@@ -147,19 +147,23 @@ describe('LoginPage', () => {
     });
   });
 
-  it('switches to the OTP form when MFA is required', async () => {
+  // Phase 3 rule: the code comes from an authenticator app (or a backup code), never from email.
+  it('switches to the authenticator-code form when two-factor is required', async () => {
     const verifyLoginOtp = vi.fn().mockResolvedValue(undefined);
     useAuthMock.mockReturnValue({
       login: vi.fn(),
       verifyLoginOtp,
-      mfaChallenge: { email: 'demo.tenant@gmail.com' },
+      cancelMfaChallenge: vi.fn(),
+      mfaChallenge: { email: 'demo.tenant@gmail.com', challengeToken: 'challenge-token' },
       user: null,
     });
     const user = userEvent.setup();
     renderLoginPage();
 
-    expect(screen.getByText(/enter verification code/i)).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Verification code'), '123456');
+    expect(screen.getByRole('heading', { name: /two-factor sign-in/i })).toBeInTheDocument();
+    expect(screen.getByText('Enter the 6-digit code from your authenticator app, or a backup code.')).toBeInTheDocument();
+    expect(screen.queryByText(/email/i)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Authenticator or backup code'), '123456');
     await user.click(screen.getByRole('button', { name: /verify/i }));
 
     await waitFor(() => {
@@ -167,19 +171,42 @@ describe('LoginPage', () => {
     });
   });
 
-  it('strips non-digit characters from the OTP input and caps it at 6 digits', async () => {
+  // Phase 3 rule: backup codes contain letters and a dash, so the field keeps them (upper-cased) up to XXXXX-XXXXX.
+  it('keeps digits, letters and the dash in the code input, upper-cased and capped at 11 characters', async () => {
     useAuthMock.mockReturnValue({
       login: vi.fn(),
       verifyLoginOtp: vi.fn(),
-      mfaChallenge: { email: 'demo.tenant@gmail.com' },
+      cancelMfaChallenge: vi.fn(),
+      mfaChallenge: { email: 'demo.tenant@gmail.com', challengeToken: 'challenge-token' },
       user: null,
     });
     const user = userEvent.setup();
     renderLoginPage();
 
-    const otpInput = screen.getByLabelText('Verification code');
-    await user.type(otpInput, 'a1b2c3d4e5f6g7');
-    expect(otpInput).toHaveValue('123456');
+    const otpInput = screen.getByLabelText('Authenticator or backup code');
+    await user.type(otpInput, 'ab#cd e-fg!hjkLMN');
+    expect(otpInput).toHaveValue('ABCDE-FGHJK');
+  });
+
+  it('sends a backup code as typed and lets the person go back to the password step', async () => {
+    const verifyLoginOtp = vi.fn().mockResolvedValue(undefined);
+    const cancelMfaChallenge = vi.fn();
+    useAuthMock.mockReturnValue({
+      login: vi.fn(),
+      verifyLoginOtp,
+      cancelMfaChallenge,
+      mfaChallenge: { email: 'demo.tenant@gmail.com', challengeToken: 'challenge-token' },
+      user: null,
+    });
+    const user = userEvent.setup();
+    renderLoginPage();
+
+    await user.type(screen.getByLabelText('Authenticator or backup code'), 'abcde-fghjk');
+    await user.click(screen.getByRole('button', { name: /verify/i }));
+    await waitFor(() => expect(verifyLoginOtp).toHaveBeenCalledWith('ABCDE-FGHJK'));
+
+    await user.click(screen.getByRole('button', { name: /back to sign in/i }));
+    expect(cancelMfaChallenge).toHaveBeenCalled();
   });
 });
 

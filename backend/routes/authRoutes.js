@@ -14,7 +14,10 @@ const {
   changePasswordValidators,
   activateCaretakerValidators,
   accountRecoveryValidators,
-  mfaPreferenceValidators,
+  mfaSetupValidators,
+  mfaEnableValidators,
+  mfaDisableValidators,
+  mfaRecoveryCodesValidators,
 } = require('../validators/authValidators');
 
 const router = express.Router();
@@ -35,6 +38,11 @@ router.patch('/change-password', authenticate, changePasswordValidators, validat
 router.post('/activate-caretaker', limit.activateCaretaker, activateCaretakerValidators, validate, AuthController.activateCaretaker);
 router.post('/account-recovery', limit.accountRecovery, accountRecoveryValidators, validate, AuthController.recoverAccount);
 router.post('/deactivate', authenticate, AuthController.deactivateAccount);
-router.patch('/mfa', authenticate, mfaPreferenceValidators, validate, AuthController.setMfaPreference);
+
+// Authenticator-app two-factor (replaces the old PATCH /mfa email toggle).
+router.post('/mfa/setup', authenticate, limit.mfa, mfaSetupValidators, validate, AuthController.mfaSetup);
+router.post('/mfa/enable', authenticate, limit.mfa, mfaEnableValidators, validate, AuthController.mfaEnable);
+router.post('/mfa/disable', authenticate, limit.mfa, mfaDisableValidators, validate, AuthController.mfaDisable);
+router.post('/mfa/recovery-codes', authenticate, limit.mfa, mfaRecoveryCodesValidators, validate, AuthController.mfaRegenerateBackupCodes);
 
 module.exports = router;

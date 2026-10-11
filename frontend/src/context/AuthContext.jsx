@@ -33,7 +33,8 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [status, setStatus] = useState('loading'); // 'loading' | 'authenticated' | 'unauthenticated'
-  const [mfaChallenge, setMfaChallenge] = useState(null); // { email } while awaiting OTP
+  // { email, challengeToken } between a correct password and the authenticator-code step.
+  const [mfaChallenge, setMfaChallenge] = useState(null);
 
   const persistSession = useCallback((session) => {
     setAccessToken(session.accessToken);
@@ -73,7 +74,8 @@ export function AuthProvider({ children }) {
     async ({ email, password }) => {
       const result = await AuthApi.login({ email, password });
       if (result.mfaRequired) {
-        setMfaChallenge({ email: result.email });
+        // Held only in memory: the 5-minute token that the code step exchanges for a session.
+        setMfaChallenge({ email, challengeToken: result.challengeToken });
         return { mfaRequired: true };
       }
       persistSession(result);
@@ -86,7 +88,14 @@ export function AuthProvider({ children }) {
   const verifyLoginOtp = useCallback(
     async (code) => {
       if (!mfaChallenge) throw new Error('No login is currently awaiting a verification code.');
-      const result = await AuthApi.verifyOtp({ email: mfaChallenge.email, code, purpose: 'login_mfa' });
+      let result;
+      try {
+        result = await AuthApi.verifyLoginMfa({ challengeToken: mfaChallenge.challengeToken, code });
+      } catch (err) {
+        // The 5-minute challenge ran out (or is no longer valid): back to the password step.
+        if (err?.code === 'MFA_CHALLENGE_INVALID') setMfaChallenge(null);
+        throw err;
+      }
       persistSession(result);
       return result.user;
     },
@@ -107,9 +116,12 @@ export function AuthProvider({ children }) {
     return fresh;
   }, []);
 
+  // "Back to sign in" from the code step.
+  const cancelMfaChallenge = useCallback(() => setMfaChallenge(null), []);
+
   const value = useMemo(
-    () => ({ user, status, mfaChallenge, register, login, verifyLoginOtp, logout, refreshProfile }),
-    [user, status, mfaChallenge, register, login, verifyLoginOtp, logout, refreshProfile]
+    () => ({ user, status, mfaChallenge, register, login, verifyLoginOtp, cancelMfaChallenge, logout, refreshProfile }),
+    [user, status, mfaChallenge, register, login, verifyLoginOtp, cancelMfaChallenge, logout, refreshProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

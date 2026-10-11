@@ -17,7 +17,8 @@ const ACCOUNT_STATUS = Object.freeze({
 
 const MFA_METHOD = Object.freeze({
   NONE: 'none',
-  EMAIL: 'email',
+  EMAIL: 'email', // retired: kept only so older records stay valid (they sign in with just a password)
+  TOTP: 'totp',
 });
 
 const LISTING_STATUS = Object.freeze({

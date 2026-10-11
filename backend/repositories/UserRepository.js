@@ -1,6 +1,15 @@
 const BaseRepository = require('./BaseRepository');
 const User = require('../models/User');
 
+// Every hidden field that auth code needs; normal queries never load these.
+const SECRET_FIELDS = [
+  '+passwordHash',
+  '+otp.codeHash', '+otp.purpose', '+otp.expiresAt', '+otp.attempts',
+  '+refreshTokenHash',
+  '+mfaTotp.secretEnc', '+mfaTotp.pendingSecretEnc', '+mfaTotp.lastUsedStep',
+  '+mfaTotp.backupCodeHashes', '+mfaTotp.failedAttempts', '+mfaTotp.lockedUntil',
+].join(' ');
+
 class UserRepository extends BaseRepository {
   constructor() {
     super(User);
@@ -8,15 +17,12 @@ class UserRepository extends BaseRepository {
 
   findByEmail(email, { withSecrets = false } = {}) {
     const q = this.model.findOne({ email: email.toLowerCase().trim() });
-    if (withSecrets) q.select('+passwordHash +otp.codeHash +otp.purpose +otp.expiresAt +otp.attempts +refreshTokenHash');
+    if (withSecrets) q.select(SECRET_FIELDS);
     return q.exec();
   }
 
   findByIdWithSecrets(id) {
-    return this.model
-      .findById(id)
-      .select('+passwordHash +otp.codeHash +otp.purpose +otp.expiresAt +otp.attempts +refreshTokenHash')
-      .exec();
+    return this.model.findById(id).select(SECRET_FIELDS).exec();
   }
 
   findCaretakersByLandlord(landlordId, filter = {}) {

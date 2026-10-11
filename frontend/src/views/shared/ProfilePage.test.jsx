@@ -15,7 +15,10 @@ const { useAuthMock, useNotificationsMock, navigateMock } = vi.hoisted(() => ({
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
 vi.mock('../../services/AuthApi.js', () => ({
-  default: { updateMe: vi.fn(), forgotPassword: vi.fn(), resetPassword: vi.fn(), setMfaPreference: vi.fn(), deactivateAccount: vi.fn() },
+  default: {
+    updateMe: vi.fn(), forgotPassword: vi.fn(), resetPassword: vi.fn(), deactivateAccount: vi.fn(),
+    mfaSetup: vi.fn(), mfaEnable: vi.fn(), mfaDisable: vi.fn(), mfaRegenerateBackupCodes: vi.fn(),
+  },
 }));
 vi.mock('../../services/ReviewApi.js', () => ({ default: { listEligible: vi.fn(), submit: vi.fn() } }));
 vi.mock('react-router-dom', async () => {
@@ -236,11 +239,27 @@ describe('ProfilePage', () => {
     await waitFor(() => expect(AuthApi.deactivateAccount).toHaveBeenCalledWith('Graduated'));
   });
 
-  it('toggles email-code sign-in', async () => {
-    AuthApi.setMfaPreference.mockResolvedValue({});
+  // Phase 3 rule: two-factor uses an authenticator app (full flow in TwoFactorCard.test.jsx), not an email toggle.
+  it('offers authenticator-app two-factor, starting with the password', async () => {
+    AuthApi.mfaSetup.mockResolvedValue({
+      otpauthUri: 'otpauth://totp/Ledger%20OnBoard:juan%40gmail.com?secret=JBSWY3DPEHPK3PXP&issuer=Ledger%20OnBoard&algorithm=SHA1&digits=6&period=30',
+      secret: 'JBSWY3DPEHPK3PXP', issuer: 'Ledger OnBoard', accountName: 'juan@gmail.com',
+    });
     const user = userEvent.setup();
     renderPage();
-    await user.click(screen.getByRole('button', { name: /turn on/i }));
-    expect(AuthApi.setMfaPreference).toHaveBeenCalledWith(true);
+
+    expect(screen.queryByText(/email verification code/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /set up two-factor/i }));
+    await user.type(screen.getByLabelText(/current password/i), 'Str0ng!Pass');
+    await user.click(screen.getByRole('button', { name: /^continue$/i }));
+
+    expect(AuthApi.mfaSetup).toHaveBeenCalledWith({ password: 'Str0ng!Pass' });
+    expect(await screen.findByAltText(/qr code/i)).toBeInTheDocument();
+  });
+
+  it('shows two-factor as on for an authenticator-app account', () => {
+    renderPage({ ...USERS.tenant, mfaEnabled: true, mfaMethod: 'totp' });
+    expect(screen.getByText('Two-factor sign-in is on.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /turn off/i })).toBeInTheDocument();
   });
 });

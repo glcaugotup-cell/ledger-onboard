@@ -62,6 +62,7 @@ const sensitiveAuthRateLimiters = {
   verifyOtp: sensitiveAuthLimiter({ failuresOnly: true }),
   resetPassword: sensitiveAuthLimiter({ failuresOnly: true }),
   activateCaretaker: sensitiveAuthLimiter({ failuresOnly: true }),
+  mfa: sensitiveAuthLimiter({ failuresOnly: true }), // two-factor setup, enable, disable, backup codes
   resendOtp: sensitiveAuthLimiter({ failuresOnly: false }),
   forgotPassword: sensitiveAuthLimiter({ failuresOnly: false }),
   accountRecovery: sensitiveAuthLimiter({ failuresOnly: false }),

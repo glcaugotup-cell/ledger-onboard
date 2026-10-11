@@ -6,7 +6,7 @@ import AuthApi from '../services/AuthApi.js';
 import { setAccessToken } from '../services/apiClient.js';
 
 vi.mock('../services/AuthApi.js', () => ({
-  default: { register: vi.fn(), login: vi.fn(), verifyOtp: vi.fn(), logout: vi.fn(), refresh: vi.fn(), getMe: vi.fn() },
+  default: { register: vi.fn(), login: vi.fn(), verifyOtp: vi.fn(), verifyLoginMfa: vi.fn(), logout: vi.fn(), refresh: vi.fn(), getMe: vi.fn() },
 }));
 vi.mock('../services/apiClient.js', () => ({ setAccessToken: vi.fn() }));
 
@@ -96,9 +96,30 @@ describe('AuthContext', () => {
     expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
   });
 
-  it('verifies the login OTP and persists the resulting session', async () => {
-    AuthApi.login.mockResolvedValue({ mfaRequired: true, email: 'juan@gmail.com' });
-    AuthApi.verifyOtp.mockResolvedValue({ accessToken: 'a1', refreshToken: 'r1', user: { fullName: 'Juan Dela Cruz', role: 'tenant' } });
+  // Phase 3 rule: the code step sends the challenge token from login (not the email) with the code.
+  it('verifies the two-factor code with the challenge token and persists the resulting session', async () => {
+    AuthApi.login.mockResolvedValue({ mfaRequired: true, challengeToken: 'challenge-1' });
+    AuthApi.verifyLoginMfa.mockResolvedValue({ accessToken: 'a1', refreshToken: 'r1', user: { fullName: 'Juan Dela Cruz', role: 'tenant' } });
+    const user = userEvent.setup();
+    renderHarness();
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated'));
+    await user.click(screen.getByRole('button', { name: 'login' }));
+    await waitFor(() => expect(screen.getByTestId('mfa')).toHaveTextContent('juan@gmail.com'));
+    // The challenge token is never written to storage.
+    expect(localStorage.getItem(REFRESH_KEY)).toBeNull();
+    expect(JSON.stringify({ ...localStorage })).not.toContain('challenge-1');
+
+    await user.click(screen.getByRole('button', { name: 'verify' }));
+
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'));
+    expect(AuthApi.verifyLoginMfa).toHaveBeenCalledWith({ challengeToken: 'challenge-1', code: '123456' });
+    expect(AuthApi.verifyOtp).not.toHaveBeenCalled();
+    expect(screen.getByTestId('mfa')).toHaveTextContent('none');
+  });
+
+  it('drops an expired challenge so the person signs in again', async () => {
+    AuthApi.login.mockResolvedValue({ mfaRequired: true, challengeToken: 'challenge-1' });
+    AuthApi.verifyLoginMfa.mockRejectedValue(Object.assign(new Error('Your sign-in has expired. Please sign in again.'), { code: 'MFA_CHALLENGE_INVALID' }));
     const user = userEvent.setup();
     renderHarness();
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated'));
@@ -107,9 +128,23 @@ describe('AuthContext', () => {
 
     await user.click(screen.getByRole('button', { name: 'verify' }));
 
-    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'));
-    expect(AuthApi.verifyOtp).toHaveBeenCalledWith({ email: 'juan@gmail.com', code: '123456', purpose: 'login_mfa' });
-    expect(screen.getByTestId('mfa')).toHaveTextContent('none');
+    await waitFor(() => expect(screen.getByTestId('mfa')).toHaveTextContent('none'));
+    expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
+  });
+
+  it('keeps the challenge after a wrong code so the person can try again', async () => {
+    AuthApi.login.mockResolvedValue({ mfaRequired: true, challengeToken: 'challenge-1' });
+    AuthApi.verifyLoginMfa.mockRejectedValue(Object.assign(new Error('Invalid or expired code'), { code: 'INVALID_OTP' }));
+    const user = userEvent.setup();
+    renderHarness();
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated'));
+    await user.click(screen.getByRole('button', { name: 'login' }));
+    await waitFor(() => expect(screen.getByTestId('mfa')).toHaveTextContent('juan@gmail.com'));
+
+    await user.click(screen.getByRole('button', { name: 'verify' }));
+
+    await waitFor(() => expect(AuthApi.verifyLoginMfa).toHaveBeenCalled());
+    expect(screen.getByTestId('mfa')).toHaveTextContent('juan@gmail.com');
   });
 
   it('rejects verifyLoginOtp when there is no active MFA challenge', async () => {
@@ -120,6 +155,7 @@ describe('AuthContext', () => {
     await user.click(screen.getByRole('button', { name: 'verify' }));
 
     expect(AuthApi.verifyOtp).not.toHaveBeenCalled();
+    expect(AuthApi.verifyLoginMfa).not.toHaveBeenCalled();
   });
 
   it('clears the session on logout even if the API call fails', async () => {

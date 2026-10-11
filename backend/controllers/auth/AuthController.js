@@ -1,4 +1,5 @@
 const AuthService = require('../../services/AuthService');
+const MfaService = require('../../services/MfaService');
 const AccountLifecycleService = require('../../services/AccountLifecycleService');
 const asyncHandler = require('../../utils/asyncHandler');
 const { sendSuccess } = require('../../utils/ApiResponse');
@@ -89,9 +90,25 @@ class AuthController {
     sendSuccess(res, { data: result });
   });
 
-  setMfaPreference = asyncHandler(async (req, res) => {
-    const user = await AuthService.setMfaPreference(req.user.id, req.body);
-    sendSuccess(res, { data: { user } });
+  // ── Authenticator-app two-factor ────────────────────────────────────
+  mfaSetup = asyncHandler(async (req, res) => {
+    const result = await MfaService.setup(req.user.id, req.body);
+    sendSuccess(res, { data: result });
+  });
+
+  mfaEnable = asyncHandler(async (req, res) => {
+    const result = await MfaService.enable(req.user.id, req.body);
+    sendSuccess(res, { data: result });
+  });
+
+  mfaDisable = asyncHandler(async (req, res) => {
+    const result = await MfaService.disable(req.user.id, req.body);
+    sendSuccess(res, { data: result });
+  });
+
+  mfaRegenerateBackupCodes = asyncHandler(async (req, res) => {
+    const result = await MfaService.regenerateBackupCodes(req.user.id, req.body);
+    sendSuccess(res, { data: result });
   });
 }
 

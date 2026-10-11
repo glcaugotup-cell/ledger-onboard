@@ -10,11 +10,12 @@ import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { useAuthedRedirect } from '../../routes/useAuthedRedirect.js';
 import { validateLoginEmail, validateLoginPassword } from '../../utils/validators.js';
+import { MFA_CODE_PROMPT, cleanMfaCode } from '../../utils/mfa.js';
 
 const FIELD_VALIDATORS = { email: validateLoginEmail, password: validateLoginPassword };
 
 export default function LoginPage() {
-  const { login, verifyLoginOtp, mfaChallenge } = useAuth();
+  const { login, verifyLoginOtp, cancelMfaChallenge, mfaChallenge } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   // Set when RegisterPage sends a new account here (sign-up email verification is off).
@@ -123,23 +124,28 @@ export default function LoginPage() {
   if (mfaChallenge) {
     return (
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Enter verification code</h1>
-        <p className="mt-1 text-sm text-gray-500">We sent a 6-digit code to {mfaChallenge.email}</p>
+        <h1 className="text-2xl font-bold text-gray-900">Two-factor sign-in</h1>
+        <p className="mt-1 text-sm text-gray-500">{MFA_CODE_PROMPT}</p>
 
         <form onSubmit={onVerifyOtp} className="mt-6 space-y-4">
           <ErrorBanner message={error} />
-          <Field required label="Verification code">
+          <Field required label="Authenticator or backup code">
             <TextInput
               value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onChange={(e) => setOtp(cleanMfaCode(e.target.value))}
               placeholder="123456"
-              inputMode="numeric"
-              maxLength={6}
+              autoComplete="one-time-code"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={11}
               required
             />
           </Field>
           <Button type="submit" variant="accent" className="w-full" loading={loading}>
             Verify &amp; sign in
+          </Button>
+          <Button type="button" variant="ghost" className="w-full" onClick={() => { setOtp(''); setError(''); cancelMfaChallenge?.(); }}>
+            Back to sign in
           </Button>
         </form>
       </div>

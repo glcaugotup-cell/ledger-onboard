@@ -1,5 +1,6 @@
 /** Centralized environment configuration; other modules read config from here, not process.env. */
 require('dotenv').config();
+const { parseKey } = require('../utils/secretCrypto');
 
 function required(name, fallback) {
   const value = process.env[name] ?? fallback;
@@ -32,6 +33,21 @@ if (!EMAIL_TRANSPORTS.includes(configuredEmailTransport)) {
 const bcryptSaltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12;
 if (process.env.NODE_ENV === 'production' && bcryptSaltRounds < 10) {
   throw new Error(`BCRYPT_SALT_ROUNDS must be at least 10 in production (got ${bcryptSaltRounds})`);
+}
+
+// Two-factor secrets are encrypted with this key (32 bytes, base64). Production cannot run without
+// it; elsewhere two-factor setup is simply unavailable until it is set. A malformed key always stops the boot.
+const mfaEncryptionKeyText = (process.env.MFA_ENCRYPTION_KEY || '').trim();
+if (process.env.NODE_ENV === 'production' && !mfaEncryptionKeyText) {
+  throw new Error('MFA_ENCRYPTION_KEY is required in production (32 random bytes, base64)');
+}
+let mfaEncryptionKey = null;
+if (mfaEncryptionKeyText) {
+  try {
+    mfaEncryptionKey = parseKey(mfaEncryptionKeyText);
+  } catch {
+    throw new Error('MFA_ENCRYPTION_KEY must be 32 random bytes, base64-encoded');
+  }
 }
 
 // Sign-up email verification (a code sent by email) is off unless explicitly turned on.
@@ -87,6 +103,8 @@ const env = {
   otpTtlMinutes: Number(process.env.OTP_TTL_MINUTES) || 10,
   // When false, new accounts can sign in at once and no sign-up code is sent.
   emailVerificationRequired: emailVerificationSetting === 'true',
+  // Buffer (32 bytes) or null when unset outside production. Never logged.
+  mfaEncryptionKey,
 
   authRateLimitWindowMinutes: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MINUTES) || 15,
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,

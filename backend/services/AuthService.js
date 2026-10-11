@@ -7,7 +7,8 @@ const EmailService = require('./EmailService');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { generateOtp, hashOtp, compareOtp } = require('../utils/otp');
-const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt');
+const { signAccessToken, signRefreshToken, verifyRefreshToken, signMfaChallengeToken, verifyMfaChallengeToken } = require('../utils/jwt');
+const MfaService = require('./MfaService');
 const { sanitizeUser } = require('../utils/sanitize');
 const { deriveFullName } = require('../utils/name');
 const { ROLES, ACCOUNT_STATUS, RESERVATION_STATUS } = require('../utils/constants');
@@ -26,7 +27,7 @@ const LOGIN_LOCKOUT_SECONDS = 30;
 const loginAttemptsByEmail = new Map();
 
 /**
- * Registration, login (with optional email-OTP MFA), logout, password reset,
+ * Registration, login (with optional authenticator-app two-factor), logout, password reset,
  * token refresh, and landlord-initiated caretaker creation/activation.
  * Public self-registration is limited to the tenant and landlord roles.
  */
@@ -166,21 +167,33 @@ class AuthService {
       throw ApiError.forbidden('Please verify your email address before logging in.', 'EMAIL_NOT_VERIFIED');
     }
 
-    if (user.mfaEnabled && user.mfaMethod === 'email') {
-      await this._issueOtp(user, 'login_mfa');
-      return { mfaRequired: true, email: user.email };
+    // Authenticator-app two-factor: the password alone earns only a 5-minute challenge token.
+    // Two-factor switched on without an authenticator secret (the retired email method) counts
+    // as not enrolled, so those accounts sign in with just their password.
+    if (MfaService.isEnrolled(user)) {
+      return { mfaRequired: true, challengeToken: signMfaChallengeToken(user) };
     }
 
     return this._finalizeLogin(user);
   }
 
-  async verifyLoginOtp({ email, code }) {
-    const user = await UserRepository.findByEmail(email, { withSecrets: true });
-    if (!user) throw ApiError.unauthorized('Invalid or expired code', 'INVALID_OTP');
+  /** Second sign-in step: the challenge token from login() plus an authenticator or backup code. */
+  async verifyLoginOtp({ challengeToken, code }) {
+    const sessionExpired = () => ApiError.unauthorized('Your sign-in has expired. Please sign in again.', 'MFA_CHALLENGE_INVALID');
+    let payload;
+    try {
+      payload = verifyMfaChallengeToken(challengeToken);
+    } catch {
+      throw sessionExpired();
+    }
 
+    const user = await UserRepository.findByIdWithSecrets(payload.sub);
+    if (!user) throw sessionExpired();
     this._assertLoginableStatus(user);
-    await this._consumeOtp(user, code, 'login_mfa');
+    // Two-factor turned off in the meantime: start over rather than accept a code for nothing.
+    if (!MfaService.isEnrolled(user)) throw sessionExpired();
 
+    await MfaService.verifyCode(user, code);
     return this._finalizeLogin(user);
   }
 
@@ -359,14 +372,6 @@ class AuthService {
     const user = await UserRepository.findById(userId);
     if (!user) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
     return sanitizeUser(user);
-  }
-
-  /** Turns email-OTP MFA on or off for the user's own account. */
-  async setMfaPreference(userId, { enabled }) {
-    const updates = enabled ? { mfaEnabled: true, mfaMethod: 'email' } : { mfaEnabled: false, mfaMethod: 'none' };
-    const updated = await UserRepository.updateById(userId, updates);
-    if (!updated) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
-    return sanitizeUser(updated);
   }
 
   /**

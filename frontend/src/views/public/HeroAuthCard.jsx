@@ -34,6 +34,7 @@ import {
   validatePhone,
 } from '../../utils/validators.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
+import { MFA_CODE_PROMPT, cleanMfaCode } from '../../utils/mfa.js';
 import logo from '../../assets/Logo.png';
 import houseWelcome from '../../assets/housedesign1.webp';
 import houseExplore from '../../assets/housedesign2.webp';
@@ -61,7 +62,7 @@ function FieldError({ message }) {
 const LOGIN_FIELD_VALIDATORS = { email: validateLoginEmail, password: validateLoginPassword };
 
 function HeroLoginForm({ onSwitch, notice = '', onNoticeDismiss }) {
-  const { login, verifyLoginOtp, mfaChallenge } = useAuth();
+  const { login, verifyLoginOtp, cancelMfaChallenge, mfaChallenge } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [otp, setOtp] = useState('');
@@ -180,22 +181,31 @@ function HeroLoginForm({ onSwitch, notice = '', onNoticeDismiss }) {
           <div className="mb-3 flex justify-center">
             <BrandLockup size={48} />
           </div>
-          <h2 className="mb-0.5 text-center text-2xl font-extrabold text-gray-900">Enter verification code</h2>
-          <p className="mb-6 text-center text-xs text-gray-500">We sent a 6-digit code to {mfaChallenge.email}</p>
+          <h2 className="mb-0.5 text-center text-2xl font-extrabold text-gray-900">Two-factor sign-in</h2>
+          <p className="mb-6 text-center text-xs text-gray-500">{MFA_CODE_PROMPT}</p>
           <form onSubmit={onVerifyOtp} className="space-y-3.5">
-            <Field required label="Verification code" labelClassName="mb-1 block text-xs font-medium text-gray-700"><input
+            <Field required label="Authenticator or backup code" labelClassName="mb-1 block text-xs font-medium text-gray-700"><input
               type="text"
-              inputMode="numeric"
-              maxLength={6}
+              maxLength={11}
+              autoComplete="one-time-code"
+              autoCapitalize="characters"
+              spellCheck={false}
               value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onChange={(e) => setOtp(cleanMfaCode(e.target.value))}
               placeholder="123456"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50/60 px-4 py-2.5 text-center font-mono text-lg tracking-[0.5em] text-gray-900 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50/60 px-4 py-2.5 text-center font-mono text-lg tracking-[0.3em] text-gray-900 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
             /></Field>
             {error && <p className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs font-medium text-red-600">{error}</p>}
             <Button type="submit" variant="accent" className="w-full justify-center rounded-xl py-2.5 text-xs" disabled={loading}>
               {loading ? 'Verifying…' : 'Verify & sign in'}
             </Button>
+            <button
+              type="button"
+              onClick={() => { setOtp(''); setError(''); cancelMfaChallenge?.(); }}
+              className="w-full text-center text-xs font-semibold text-brand-700 hover:underline"
+            >
+              Back to sign in
+            </button>
           </form>
         </div>
         <div className="text-center text-[10px] text-gray-400">&copy; {new Date().getFullYear()} Ledger OnBoard</div>

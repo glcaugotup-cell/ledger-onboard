@@ -44,15 +44,31 @@ describe('resource API clients', () => {
       expect(instance.post).toHaveBeenCalledWith('/auth/logout', undefined, undefined);
     });
 
-    it('patches profile and MFA updates', async () => {
+    // Phase 3 rule: the PATCH /auth/mfa email toggle is replaced by the authenticator-app endpoints below.
+    it('patches profile updates', async () => {
       await AuthApi.changePassword({ oldPassword: 'a', newPassword: 'b' });
       expect(instance.patch).toHaveBeenCalledWith('/auth/change-password', { oldPassword: 'a', newPassword: 'b' }, undefined);
 
-      await AuthApi.setMfaPreference(true);
-      expect(instance.patch).toHaveBeenCalledWith('/auth/mfa', { enabled: true }, undefined);
-
       await AuthApi.updateMe({ firstName: 'Juan' });
       expect(instance.patch).toHaveBeenCalledWith('/users/me', { firstName: 'Juan' }, undefined);
+      expect(AuthApi.setMfaPreference).toBeUndefined();
+    });
+
+    it('calls the authenticator-app two-factor endpoints', async () => {
+      await AuthApi.verifyLoginMfa({ challengeToken: 't', code: '123456' });
+      expect(instance.post).toHaveBeenCalledWith('/auth/verify-otp', { challengeToken: 't', code: '123456', purpose: 'login_mfa' }, undefined);
+
+      await AuthApi.mfaSetup({ password: 'p' });
+      expect(instance.post).toHaveBeenCalledWith('/auth/mfa/setup', { password: 'p' }, undefined);
+
+      await AuthApi.mfaEnable({ code: '123456' });
+      expect(instance.post).toHaveBeenCalledWith('/auth/mfa/enable', { code: '123456' }, undefined);
+
+      await AuthApi.mfaDisable({ password: 'p', code: 'ABCDE-FGHJK' });
+      expect(instance.post).toHaveBeenCalledWith('/auth/mfa/disable', { password: 'p', code: 'ABCDE-FGHJK' }, undefined);
+
+      await AuthApi.mfaRegenerateBackupCodes({ password: 'p', code: '123456' });
+      expect(instance.post).toHaveBeenCalledWith('/auth/mfa/recovery-codes', { password: 'p', code: '123456' }, undefined);
     });
 
     it('gets the current user', async () => {

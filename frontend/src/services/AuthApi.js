@@ -74,8 +74,26 @@ class AuthApi extends BaseApiClient {
     return URL.createObjectURL(res.data);
   }
 
-  setMfaPreference(enabled) {
-    return this.patch('/auth/mfa', { enabled });
+  // ── Authenticator-app two-factor ──
+  // Second sign-in step: the challenge token from login() plus an app or backup code.
+  verifyLoginMfa({ challengeToken, code }) {
+    return this.post('/auth/verify-otp', { challengeToken, code, purpose: 'login_mfa' });
+  }
+
+  mfaSetup({ password }) {
+    return this.post('/auth/mfa/setup', { password });
+  }
+
+  mfaEnable({ code }) {
+    return this.post('/auth/mfa/enable', { code });
+  }
+
+  mfaDisable({ password, code }) {
+    return this.post('/auth/mfa/disable', { password, code });
+  }
+
+  mfaRegenerateBackupCodes({ password, code }) {
+    return this.post('/auth/mfa/recovery-codes', { password, code });
   }
 }
 

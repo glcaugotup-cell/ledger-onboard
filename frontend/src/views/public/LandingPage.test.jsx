@@ -265,6 +265,39 @@ describe('LandingPage', () => {
   });
 });
 
+describe('LandingPage Hero two-factor code step', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    PropertyApi.search.mockResolvedValue({ properties: [] });
+  });
+  afterEach(() => {
+    useAuthMock.mockReset();
+  });
+
+  it('asks for an authenticator or backup code, never mentions email, and can go back', async () => {
+    const verifyLoginOtp = vi.fn().mockResolvedValue({ role: 'tenant' });
+    const cancelMfaChallenge = vi.fn();
+    useAuthMock.mockReturnValue({
+      login: vi.fn(), register: vi.fn(), verifyLoginOtp, cancelMfaChallenge,
+      mfaChallenge: { email: 'juan.delacruz@gmail.com', challengeToken: 'challenge-token' }, user: null,
+    });
+    const user = userEvent.setup();
+    renderLandingPage();
+
+    const step = within(screen.getByRole('heading', { name: /two-factor sign-in/i }).parentElement);
+    expect(step.getByText('Enter the 6-digit code from your authenticator app, or a backup code.')).toBeInTheDocument();
+    expect(step.queryByText(/email/i)).not.toBeInTheDocument();
+    expect(step.queryByText(/juan\.delacruz@gmail\.com/)).not.toBeInTheDocument();
+
+    await user.type(step.getByLabelText('Authenticator or backup code'), 'abcde-fghjk');
+    await user.click(step.getByRole('button', { name: /verify & sign in/i }));
+    await waitFor(() => expect(verifyLoginOtp).toHaveBeenCalledWith('ABCDE-FGHJK'));
+
+    await user.click(step.getByRole('button', { name: /back to sign in/i }));
+    expect(cancelMfaChallenge).toHaveBeenCalled();
+  });
+});
+
 describe('LandingPage Hero sign-up when the backend does or does not require email verification', () => {
   beforeEach(() => {
     vi.clearAllMocks();

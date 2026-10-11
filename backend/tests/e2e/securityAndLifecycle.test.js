@@ -44,8 +44,11 @@ async function registerAndVerify(payload) {
   return reg;
 }
 
-describe('Security — email-OTP MFA login', () => {
+// Phase 3 rule: two-factor codes come from an authenticator app (generated here the way the app does)
+// and the code step needs the challenge token from /login; nothing is emailed.
+describe('Security — authenticator-app two-factor login', () => {
   test('enabling MFA requires a verification code to complete login', async () => {
+    const { generateTotp, verifyTotp } = require('../../utils/totp');
     const reg = await registerAndVerify({
       firstName: 'Mfa', lastName: 'User',
       email: 'mfa.user@gmail.com',
@@ -59,7 +62,10 @@ describe('Security — email-OTP MFA login', () => {
     const firstLogin = await request(app).post('/api/auth/login').send({ email: 'mfa.user@gmail.com', password: 'Str0ng!Pass' });
     const token = firstLogin.body.data.accessToken;
 
-    await request(app).patch('/api/auth/mfa').set('Authorization', `Bearer ${token}`).send({ enabled: true });
+    const setup = await request(app).post('/api/auth/mfa/setup').set('Authorization', `Bearer ${token}`).send({ password: 'Str0ng!Pass' });
+    const { secret } = setup.body.data;
+    const enable = await request(app).post('/api/auth/mfa/enable').set('Authorization', `Bearer ${token}`).send({ code: generateTotp(secret) });
+    expect(enable.status).toBe(200);
 
     const EmailService = require('../../services/EmailService');
     const sendSpy = jest.spyOn(EmailService, 'send');
@@ -68,14 +74,21 @@ describe('Security — email-OTP MFA login', () => {
     expect(login.status).toBe(200);
     expect(login.body.data.mfaRequired).toBe(true);
     expect(login.body.data.accessToken).toBeUndefined();
+    expect(sendSpy).not.toHaveBeenCalled(); // no code is emailed
+    const { challengeToken } = login.body.data;
 
-    const otpText = sendSpy.mock.calls.find((c) => c[0].to === 'mfa.user@gmail.com')[0].text;
-    const code = otpText.match(/\d{6}/)[0];
-
-    const wrongCode = await request(app).post('/api/auth/verify-otp').send({ email: 'mfa.user@gmail.com', code: '000000', purpose: 'login_mfa' });
+    let wrong = 0;
+    while (verifyTotp(secret, String(wrong).padStart(6, '0')) !== null) wrong += 1;
+    const wrongCode = await request(app).post('/api/auth/verify-otp').send({ challengeToken, code: String(wrong).padStart(6, '0'), purpose: 'login_mfa' });
     expect(wrongCode.status).toBe(400);
 
-    const verify = await request(app).post('/api/auth/verify-otp').send({ email: 'mfa.user@gmail.com', code, purpose: 'login_mfa' });
+    // The next app code (the one used to enable is spent).
+    const code = generateTotp(secret, { nowMs: Date.now() + 30000 });
+    const withoutChallenge = await request(app).post('/api/auth/verify-otp').send({ email: 'mfa.user@gmail.com', code, purpose: 'login_mfa' });
+    expect(withoutChallenge.status).toBe(400);
+    expect(withoutChallenge.body.data?.accessToken).toBeUndefined();
+
+    const verify = await request(app).post('/api/auth/verify-otp').send({ challengeToken, code, purpose: 'login_mfa' });
     expect(verify.status).toBe(200);
     expect(verify.body.data.accessToken).toBeTruthy();
 
