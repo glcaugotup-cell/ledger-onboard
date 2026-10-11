@@ -9,21 +9,18 @@ const { hashPassword, comparePassword } = require('../utils/password');
 const { generateOtp, hashOtp, compareOtp } = require('../utils/otp');
 const { signAccessToken, signRefreshToken, verifyRefreshToken, signMfaChallengeToken, verifyMfaChallengeToken, newTokenId, tokenVersionOf } = require('../utils/jwt');
 const MfaService = require('./MfaService');
+const ResetCodeService = require('./ResetCodeService');
+const AccountLifecycleService = require('./AccountLifecycleService');
 const { sanitizeUser } = require('../utils/sanitize');
 const { deriveFullName } = require('../utils/name');
-const { ROLES, ACCOUNT_STATUS, RESERVATION_STATUS, PASSWORD_RESET_CODE } = require('../utils/constants');
-const { normalizeCode } = require('../utils/oneTimeCodes');
+const { ROLES, ACCOUNT_STATUS, RESERVATION_STATUS } = require('../utils/constants');
 const env = require('../config/env');
 
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_RESEND_COOLDOWN_SECONDS = 45;
 
-// Password reset by code (no password needed): its own limit, separate from sign-in codes.
-const RESET_MAX_FAILED_ATTEMPTS = 5;
-const RESET_LOCK_MINUTES = 15;
 const FORGOT_PASSWORD_MESSAGE = 'To reset your password, use a code from your authenticator app or one of your backup codes. '
   + 'If you have neither, ask an administrator for a reset code.';
-const invalidResetCode = () => ApiError.badRequest('Invalid or expired code', 'INVALID_OTP');
 const PUBLIC_REGISTRATION_ROLES = new Set([ROLES.TENANT, ROLES.LANDLORD]);
 
 // Per-account (by email) failed-login lockout: 10 wrong email/password
@@ -313,70 +310,33 @@ class AuthService {
   }
 
   /**
-   * Resets a password with one of: an admin-issued reset code (8 characters), an authenticator
-   * code (6 digits) or a backup code (10 characters), told apart by length. No password is needed,
-   * so failures use their own counter (passwordReset.*) and never touch the sign-in code lock,
-   * which in turn never blocks a reset. Unknown emails get the same generic error.
+   * Resets a password with an admin reset code, an authenticator code or a backup code
+   * (ResetCodeService). No password is needed, so failures use their own counter
+   * (passwordReset.*) and never touch the sign-in code lock, which in turn never blocks a reset.
+   * Unknown emails get the same generic error. An archived account is also restored, exactly as
+   * account recovery would; suspended and deactivated accounts keep their status.
    */
   async resetPassword({ email, code, newPassword }) {
     const user = await UserRepository.findByEmail(email, { withSecrets: true });
-    if (!user) throw invalidResetCode();
-    this._assertResetNotLocked(user);
+    if (!user) throw ResetCodeService.invalidCode();
+    ResetCodeService.assertNotLocked(user, 'passwordReset');
 
-    const normalized = normalizeCode(code);
-    let method = null;
-    if (normalized.length === PASSWORD_RESET_CODE.LENGTH) {
-      if (await this._matchesAdminResetCode(user, normalized)) method = 'admin_code';
-    } else {
-      method = await MfaService.consumeCode(user, code); // 'totp' | 'backup' | null; null when two-factor is off
-    }
+    const method = await ResetCodeService.match(user, code);
     if (!method) {
-      await this._recordResetFailure(user);
-      throw invalidResetCode();
+      await ResetCodeService.recordFailure(user, 'passwordReset');
+      throw ResetCodeService.invalidCode();
     }
 
+    const archived = user.accountStatus === ACCOUNT_STATUS.ARCHIVED;
     const passwordHash = await hashPassword(newPassword);
-    // Signs every device out (session version up) and signs no one in: the person goes to the sign-in page.
+    // Signs every device out and signs no one in: the person goes to the sign-in page.
     await UserRepository.updateById(user._id, {
-      passwordHash,
-      refreshTokenHash: null,
-      $inc: { tokenVersion: 1 },
-      // An admin code is spent by its use; any other pending code in the slot goes too.
-      otp: { codeHash: null, purpose: null, expiresAt: null, attempts: 0 },
-      'passwordReset.failedAttempts': 0,
-      'passwordReset.lockedUntil': null,
+      ...ResetCodeService.newPasswordUpdate(passwordHash, 'passwordReset'),
+      ...(archived ? AccountLifecycleService.restoredFields() : {}),
     });
     await AuditLogRepository.record({ action: 'PASSWORD_RESET', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id, metadata: { method } });
+    if (archived) await AccountLifecycleService.recordRecovery(user, method);
     return { message: 'Password has been reset. You can now log in.' };
-  }
-
-  async _matchesAdminResetCode(user, normalized) {
-    const otp = user.otp;
-    if (!otp?.codeHash || otp.purpose !== 'password_reset') return false;
-    if (!otp.expiresAt || otp.expiresAt.getTime() < Date.now()) return false;
-    return compareOtp(normalized, otp.codeHash);
-  }
-
-  _assertResetNotLocked(user) {
-    const lockedUntil = user.passwordReset?.lockedUntil;
-    if (lockedUntil && lockedUntil.getTime() > Date.now()) {
-      const retryAfterSeconds = Math.ceil((lockedUntil.getTime() - Date.now()) / 1000);
-      throw ApiError.tooManyRequests('Too many incorrect attempts. Try again later.', 'OTP_ATTEMPTS_EXCEEDED', { retryAfterSeconds });
-    }
-  }
-
-  async _recordResetFailure(user) {
-    const updated = await UserRepository.model
-      .findByIdAndUpdate(user._id, { $inc: { 'passwordReset.failedAttempts': 1 } }, { new: true })
-      .select('+passwordReset.failedAttempts')
-      .exec();
-    if ((updated?.passwordReset?.failedAttempts || 0) >= RESET_MAX_FAILED_ATTEMPTS) {
-      await UserRepository.updateById(user._id, {
-        'passwordReset.failedAttempts': 0,
-        'passwordReset.lockedUntil': new Date(Date.now() + RESET_LOCK_MINUTES * 60 * 1000),
-      });
-      await AuditLogRepository.record({ action: 'PASSWORD_RESET_LOCKED', targetType: 'User', targetId: user._id, metadata: { minutes: RESET_LOCK_MINUTES } });
-    }
   }
 
   /**

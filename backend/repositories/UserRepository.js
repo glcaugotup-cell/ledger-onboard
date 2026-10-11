@@ -9,6 +9,7 @@ const SECRET_FIELDS = [
   '+mfaTotp.secretEnc', '+mfaTotp.pendingSecretEnc', '+mfaTotp.lastUsedStep',
   '+mfaTotp.backupCodeHashes', '+mfaTotp.failedAttempts', '+mfaTotp.lockedUntil',
   '+passwordReset.failedAttempts', '+passwordReset.lockedUntil',
+  '+accountRecovery.failedAttempts', '+accountRecovery.lockedUntil',
 ].join(' ');
 
 class UserRepository extends BaseRepository {
@@ -37,10 +38,13 @@ class UserRepository extends BaseRepository {
     return q.exec();
   }
 
-  /** Accounts eligible for the inactivity sweep: active, past their qualifying threshold. */
+  /**
+   * Accounts eligible for the inactivity sweep: active, past their qualifying threshold.
+   * Admins are never warned or archived for inactivity: an archived only admin would have no way back in.
+   */
   findActiveOlderThan(cutoffDate) {
     return this.model
-      .find({ accountStatus: 'active', lastActivityAt: { $lte: cutoffDate } })
+      .find({ accountStatus: 'active', role: { $ne: 'admin' }, lastActivityAt: { $lte: cutoffDate } })
       .exec();
   }
 

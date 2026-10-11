@@ -105,11 +105,9 @@ const cancelRegistrationValidators = [emailChain];
 // An authenticator code (6 digits), an admin reset code (XXXX-XXXX) or a backup code (XXXXX-XXXXX);
 // any case, the dash or a space optional.
 const RESET_CODE = /^(\d{6}|[A-Za-z0-9]{4}[-\s]?[A-Za-z0-9]{4}|[A-Za-z0-9]{5}[-\s]?[A-Za-z0-9]{5})$/;
-const resetPasswordValidators = [
-  emailChain,
-  body('code').isString().withMessage('Enter your authenticator, backup or reset code').bail().trim().matches(RESET_CODE).withMessage('Enter your authenticator, backup or reset code'),
-  strongPasswordChain('newPassword'),
-];
+const RESET_CODE_MESSAGE = 'Enter your authenticator, backup or reset code';
+const resetCodeChain = () => body('code').isString().withMessage(RESET_CODE_MESSAGE).bail().trim().matches(RESET_CODE).withMessage(RESET_CODE_MESSAGE);
+const resetPasswordValidators = [emailChain, resetCodeChain(), strongPasswordChain('newPassword')];
 
 // The code (authenticator or backup) is required by AuthService only when two-factor is on.
 const changePasswordValidators = [
@@ -149,7 +147,8 @@ const updateCaretakerValidators = [
 
 const activateCaretakerValidators = [body('token').notEmpty(), strongPasswordChain('password')];
 
-const accountRecoveryValidators = [emailChain, strongPasswordChain('newPassword')];
+// Recovery takes the same codes as a password reset.
+const accountRecoveryValidators = [emailChain, resetCodeChain(), strongPasswordChain('newPassword')];
 
 const currentPasswordChain = () => body('password').isString().withMessage('Enter your current password').bail().notEmpty().withMessage('Enter your current password').isLength({ max: 256 });
 const mfaCodeChain = () => body('code').isString().withMessage(MFA_CODE_MESSAGE).bail().trim().matches(MFA_CODE).withMessage(MFA_CODE_MESSAGE);

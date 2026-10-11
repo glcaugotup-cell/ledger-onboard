@@ -251,7 +251,9 @@ describe('Account inactivity lifecycle (Section 7)', () => {
     expect(found.isVerifiedFormerTenant).toBe(true);
 
     // Recovery path brings it back.
-    const recovered = await request(app).post('/api/auth/account-recovery').send({ email: 'archive.tenant@gmail.com', newPassword: 'NewStr0ng!Pass' });
+    // Recovery rule: recovery needs a reset, authenticator or backup code; this tenant has no two-factor, so an admin issues one.
+    const resetCode = (await request(app).post(`/api/admin/users/${tenantId}/reset-code`).set('Authorization', `Bearer ${adminToken}`)).body.data.code;
+    const recovered = await request(app).post('/api/auth/account-recovery').send({ email: 'archive.tenant@gmail.com', code: resetCode, newPassword: 'NewStr0ng!Pass' });
     expect(recovered.status).toBe(200);
     const recoveredLogin = await request(app).post('/api/auth/login').send({ email: 'archive.tenant@gmail.com', password: 'NewStr0ng!Pass' });
     expect(recoveredLogin.status).toBe(200);

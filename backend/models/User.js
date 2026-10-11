@@ -130,6 +130,11 @@ const userSchema = new Schema(
       failedAttempts: { type: Number, select: false, default: 0 },
       lockedUntil: { type: Date, select: false, default: null },
     },
+    // Wrong codes on POST /auth/account-recovery: its own counter, for the same reason.
+    accountRecovery: {
+      failedAttempts: { type: Number, select: false, default: 0 },
+      lockedUntil: { type: Date, select: false, default: null },
+    },
     // Session version, carried as `tv` in every access and refresh token. Raising it ends every
     // session issued before (password reset or change, suspension, deactivation, archiving).
     // Older records without it, and tokens without the claim, count as 0.

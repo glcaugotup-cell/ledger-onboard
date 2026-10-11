@@ -13,7 +13,8 @@ describe('AccountRecoveryPage', () => {
     vi.clearAllMocks();
   });
 
-  it('submits the registered email and new password', async () => {
+  // Recovery rule: recovery needs an authenticator, backup or admin reset code.
+  it('submits the registered email, the code and the new password', async () => {
     AuthApi.recoverAccount.mockResolvedValue({ message: 'Account recovered.' });
     const user = userEvent.setup();
     render(
@@ -23,18 +24,20 @@ describe('AccountRecoveryPage', () => {
     );
 
     await user.type(screen.getByLabelText('Registered email'), 'demo.tenant@gmail.com');
+    await user.type(screen.getByLabelText(/authenticator, backup or reset code/i), 'abcd-efgh');
     await user.type(screen.getByLabelText(/^new password/i), 'Str0ng!Pass');
     await user.type(screen.getByLabelText(/^confirm password/i), 'Str0ng!Pass');
     await user.click(screen.getByRole('button', { name: /recover account/i }));
 
     await waitFor(() => {
-      expect(AuthApi.recoverAccount).toHaveBeenCalledWith({ email: 'demo.tenant@gmail.com', newPassword: 'Str0ng!Pass' });
+      expect(AuthApi.recoverAccount).toHaveBeenCalledWith({ email: 'demo.tenant@gmail.com', code: 'ABCD-EFGH', newPassword: 'Str0ng!Pass' });
     });
     expect(await screen.findByText('Account recovered.')).toBeInTheDocument();
   });
 
   it('shows an error banner when the account cannot be recovered', async () => {
-    AuthApi.recoverAccount.mockRejectedValue(new ApiClientError('No archived account found for that email', 'NOT_FOUND', 404));
+    // Recovery rule: every failure now gets the generic code error.
+    AuthApi.recoverAccount.mockRejectedValue(new ApiClientError('Invalid or expired code', 'INVALID_OTP', 400));
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -43,11 +46,29 @@ describe('AccountRecoveryPage', () => {
     );
 
     await user.type(screen.getByLabelText('Registered email'), 'nobody@gmail.com');
+    await user.type(screen.getByLabelText(/authenticator, backup or reset code/i), '123456');
     await user.type(screen.getByLabelText(/^new password/i), 'Str0ng!Pass');
     await user.type(screen.getByLabelText(/^confirm password/i), 'Str0ng!Pass');
     await user.click(screen.getByRole('button', { name: /recover account/i }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('No archived account found for that email');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid or expired code');
+  });
+
+  it('does not submit without a code, and says where to get one', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <AccountRecoveryPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/ask an administrator for a reset code/i)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Registered email'), 'demo.tenant@gmail.com');
+    await user.type(screen.getByLabelText(/^new password/i), 'Str0ng!Pass');
+    await user.type(screen.getByLabelText(/^confirm password/i), 'Str0ng!Pass');
+    await user.click(screen.getByRole('button', { name: /recover account/i }));
+
+    expect(AuthApi.recoverAccount).not.toHaveBeenCalled();
   });
 
   it('blocks submission when confirm password is empty or does not match', async () => {

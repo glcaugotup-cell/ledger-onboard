@@ -1,6 +1,7 @@
 const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const EmailService = require('./EmailService');
+const ResetCodeService = require('./ResetCodeService');
 const ApiError = require('../utils/ApiError');
 const { hashPassword } = require('../utils/password');
 const { ACCOUNT_STATUS } = require('../utils/constants');
@@ -115,32 +116,57 @@ class AccountLifecycleService {
     });
   }
 
-  /** Recovery for archived accounts, tied to the registered email. */
-  async recoverArchivedAccount({ email, newPassword }) {
-    const user = await UserRepository.findByEmail(email);
-    if (!user || user.accountStatus !== ACCOUNT_STATUS.ARCHIVED) {
-      // Do not confirm/deny account existence/state to an unauthenticated caller.
-      throw ApiError.badRequest('Unable to process recovery request', 'RECOVERY_NOT_AVAILABLE');
+  /**
+   * Self-service recovery of an archived account. It needs the same proof as a password reset
+   * (an admin reset code, an authenticator code or a backup code) and has its own failure counter
+   * (accountRecovery.*). Unknown emails, accounts that aren't archived and wrong codes all get the
+   * same generic error; an account that isn't archived never has its code checked, so no code
+   * is used up.
+   */
+  async recoverArchivedAccount({ email, code, newPassword }) {
+    const user = await UserRepository.findByEmail(email, { withSecrets: true });
+    if (!user) throw ResetCodeService.invalidCode();
+    // Checked for every existing account, so a lock never reveals which ones are archived.
+    ResetCodeService.assertNotLocked(user, 'accountRecovery');
+
+    const method = user.accountStatus === ACCOUNT_STATUS.ARCHIVED ? await ResetCodeService.match(user, code) : null;
+    if (!method) {
+      await ResetCodeService.recordFailure(user, 'accountRecovery');
+      throw ResetCodeService.invalidCode();
     }
 
     const passwordHash = await hashPassword(newPassword);
     await UserRepository.updateById(user._id, {
+      ...ResetCodeService.newPasswordUpdate(passwordHash, 'accountRecovery'),
+      ...this.restoredFields(),
+    });
+    await this.recordRecovery(user, method);
+
+    return { message: 'Account recovered. You can now log in with your new password.' };
+  }
+
+  /** The fields that bring an archived (or otherwise inactive) account back to active. */
+  restoredFields() {
+    return {
       accountStatus: ACCOUNT_STATUS.ACTIVE,
       archivedAt: null,
       archiveReason: null,
       archiveWarningSentAt: null,
       scheduledArchiveAt: null,
       lastActivityAt: new Date(),
-      passwordHash,
-    });
+    };
+  }
 
+  /** Written by account recovery and by a password reset that restored an archived account. */
+  async recordRecovery(user, method) {
     await AuditLogRepository.record({
       action: 'ACCOUNT_RECOVERED',
+      actorId: user._id,
+      actorRole: user.role,
       targetType: 'User',
       targetId: user._id,
+      metadata: { method },
     });
-
-    return { message: 'Account recovered. You can now log in with your new password.' };
   }
 
   /** Admin override: reactivate any suspended/deactivated/archived account. */
@@ -148,14 +174,7 @@ class AccountLifecycleService {
     const user = await UserRepository.findById(userId);
     if (!user) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
 
-    await UserRepository.updateById(userId, {
-      accountStatus: ACCOUNT_STATUS.ACTIVE,
-      archivedAt: null,
-      archiveReason: null,
-      archiveWarningSentAt: null,
-      scheduledArchiveAt: null,
-      lastActivityAt: new Date(),
-    });
+    await UserRepository.updateById(userId, this.restoredFields());
 
     await AuditLogRepository.record({
       action: 'ACCOUNT_REACTIVATED_BY_ADMIN',

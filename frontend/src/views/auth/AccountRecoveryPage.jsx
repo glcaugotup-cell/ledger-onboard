@@ -10,10 +10,11 @@ import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { validatePassword } from '../../utils/validators.js';
+import { cleanMfaCode } from '../../utils/mfa.js';
 
 export default function AccountRecoveryPage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: '', newPassword: '' });
+  const [form, setForm] = useState({ email: '', code: '', newPassword: '' });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [confirmError, setConfirmError] = useState('');
   const [error, setError] = useState('');
@@ -51,12 +52,26 @@ export default function AccountRecoveryPage() {
   };
 
   return (
-    <AuthLayout title="Recover an archived account" subtitle="Accounts archived after 30 days of inactivity can be reactivated here.">
+    <AuthLayout
+      title="Recover an archived account"
+      subtitle="Accounts archived after 30 days of inactivity can be reactivated here. Enter a code from your authenticator app or one of your backup codes. If you have neither, ask an administrator for a reset code."
+    >
       <form onSubmit={onSubmit} className="space-y-4">
         <ErrorBanner message={error} />
         <SuccessBanner message={success} />
         <Field required label="Registered email">
           <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+        </Field>
+        <Field required label="Authenticator, backup or reset code" hint="123456, XXXXX-XXXXX or XXXX-XXXX">
+          <TextInput
+            value={form.code}
+            onChange={(e) => setForm({ ...form, code: cleanMfaCode(e.target.value) })}
+            autoComplete="one-time-code"
+            autoCapitalize="characters"
+            spellCheck={false}
+            maxLength={11}
+            required
+          />
         </Field>
         <div>
           <Field required label="New password">
