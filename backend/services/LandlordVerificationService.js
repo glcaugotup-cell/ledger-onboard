@@ -78,6 +78,15 @@ class LandlordVerificationService {
 
     await UserRepository.updateById(submission.landlordId, { businessVerificationStatus: status });
 
+    await AuditLogRepository.record({
+      action: 'BUSINESS_VERIFICATION_REVIEWED',
+      actorId: requester.id,
+      actorRole: requester.role,
+      targetType: 'LandlordVerification',
+      targetId: submission._id,
+      metadata: { approved: approve },
+    });
+
     const landlord = await UserRepository.findById(submission.landlordId);
     if (landlord) {
       await NotificationService.notify({
@@ -91,18 +100,15 @@ class LandlordVerificationService {
         relatedId: submission._id,
         link: '/landlord/verification',
       });
-      if (approve) await EmailService.sendBusinessVerificationApprovedEmail(landlord.email, landlord.fullName);
-      else await EmailService.sendBusinessVerificationRejectedEmail(landlord.email, landlord.fullName, updated.rejectionReason);
+      // The decision is already saved, logged and notified in-app; email trouble must not turn it into an error.
+      try {
+        if (approve) await EmailService.sendBusinessVerificationApprovedEmail(landlord.email, landlord.fullName);
+        else await EmailService.sendBusinessVerificationRejectedEmail(landlord.email, landlord.fullName, updated.rejectionReason);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[LandlordVerificationService] verification result email failed:', err.message);
+      }
     }
-
-    await AuditLogRepository.record({
-      action: 'BUSINESS_VERIFICATION_REVIEWED',
-      actorId: requester.id,
-      actorRole: requester.role,
-      targetType: 'LandlordVerification',
-      targetId: submission._id,
-      metadata: { approved: approve },
-    });
 
     return updated;
   }

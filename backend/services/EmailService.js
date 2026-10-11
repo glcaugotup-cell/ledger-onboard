@@ -15,10 +15,11 @@ function parseSender(from) {
 
 /**
  * Sends transactional email (OTP, caretaker activation, archive warnings,
- * verification notices) through one of three transports (EMAIL_TRANSPORT):
+ * verification notices) through one of four transports (EMAIL_TRANSPORT, checked at boot):
  *  - console: logs the message instead of sending (development and tests);
  *  - brevo:   Brevo's HTTPS API, for hosts that block outgoing SMTP ports (Render's free plan);
- *  - smtp (or any other value): an SMTP server such as Gmail with an App Password.
+ *  - smtp:    an SMTP server such as Gmail with an App Password;
+ *  - none:    sends and logs nothing; callers get { skipped: true }.
  * Every real send gives up after EMAIL_TIMEOUT_MS (10 s by default), so an unreachable
  * mail server makes the request fail with a clear error instead of hanging it.
  */
@@ -47,6 +48,9 @@ class EmailService {
   }
 
   async send({ to, subject, text, html }) {
+    // Nothing about the message is logged: it may hold a one-time code.
+    if (env.emailTransport === 'none') return { skipped: true };
+
     if (env.emailTransport === 'console') {
       // eslint-disable-next-line no-console
       console.log(`\n[EmailService] ---- (console transport, not actually sent) ----`);

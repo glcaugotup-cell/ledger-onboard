@@ -8,6 +8,9 @@ const env = require('../config/env');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** 'skipped' when EMAIL_TRANSPORT is none (nothing was sent), otherwise 'sent'. */
+const emailStatusOf = (delivery) => (delivery?.skipped ? 'skipped' : 'sent');
+
 /**
  * Account inactivity lifecycle:
  *  - Day 25 of inactivity -> warning email, archiveWarningSentAt set.
@@ -86,12 +89,12 @@ class AccountLifecycleService {
       archiveWarningSentAt: now,
       scheduledArchiveAt,
     });
-    await EmailService.sendArchiveWarningEmail(user.email, user.fullName, env.archiveDays - env.archiveWarningDays);
+    const delivery = await EmailService.sendArchiveWarningEmail(user.email, user.fullName, env.archiveDays - env.archiveWarningDays);
     await AuditLogRepository.record({
       action: 'ACCOUNT_ARCHIVE_WARNING_SENT',
       targetType: 'User',
       targetId: user._id,
-      metadata: { email: user.email },
+      metadata: { email: user.email, emailStatus: emailStatusOf(delivery) },
     });
   }
 
@@ -102,12 +105,12 @@ class AccountLifecycleService {
       archiveReason: 'INACTIVITY',
       refreshTokenHash: null,
     });
-    await EmailService.sendArchivedNoticeEmail(user.email, user.fullName);
+    const delivery = await EmailService.sendArchivedNoticeEmail(user.email, user.fullName);
     await AuditLogRepository.record({
       action: 'ACCOUNT_ARCHIVED',
       targetType: 'User',
       targetId: user._id,
-      metadata: { reason: 'INACTIVITY' },
+      metadata: { reason: 'INACTIVITY', emailStatus: emailStatusOf(delivery) },
     });
   }
 

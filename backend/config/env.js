@@ -21,6 +21,13 @@ if (!['http:', 'https:'].includes(emailAppUrl.protocol) || emailAppUrl.username 
   throw new Error('EMAIL_APP_URL must be an http(s) frontend URL without credentials');
 }
 
+// A typo (e.g. "smpt") must stop the server at boot, not silently fall back to SMTP and time out on every send.
+const EMAIL_TRANSPORTS = ['console', 'brevo', 'smtp', 'none'];
+const configuredEmailTransport = (process.env.EMAIL_TRANSPORT || 'console').trim().toLowerCase();
+if (!EMAIL_TRANSPORTS.includes(configuredEmailTransport)) {
+  throw new Error(`EMAIL_TRANSPORT must be one of: ${EMAIL_TRANSPORTS.join(', ')} (got "${configuredEmailTransport}")`);
+}
+
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
@@ -48,10 +55,10 @@ const env = {
   // Days after the move-in date before a landlord may mark a reserved tenant as a no-show.
   noShowGraceDays: /^\d+$/.test((process.env.NO_SHOW_GRACE_DAYS || '').trim()) ? Number(process.env.NO_SHOW_GRACE_DAYS) : 5,
 
-  // 'console' prints emails to the log, 'smtp' sends through the SMTP_* server, and 'brevo'
-  // sends through Brevo's HTTPS API (for hosts that block outgoing SMTP, like Render's free plan).
-  // Tests always use the console transport so they never send real email.
-  emailTransport: process.env.NODE_ENV === 'test' ? 'console' : (process.env.EMAIL_TRANSPORT || 'console').trim().toLowerCase(),
+  // 'console' prints emails to the log, 'smtp' sends through the SMTP_* server, 'brevo'
+  // sends through Brevo's HTTPS API (for hosts that block outgoing SMTP, like Render's free plan),
+  // and 'none' sends nothing at all. Tests always use the console transport so they never send real email.
+  emailTransport: process.env.NODE_ENV === 'test' ? 'console' : configuredEmailTransport,
   emailFrom: process.env.EMAIL_FROM || 'Ledger OnBoard <no-reply@ledgeronboard.local>',
   brevoApiKey: (process.env.BREVO_API_KEY || '').trim(),
   // Longest any single email send may take, so a blocked mail server can't hang a request (e.g. registration).

@@ -87,6 +87,52 @@ test('the SMTP transport has connection, greeting and socket time limits', () =>
   expect(transporter.options).toMatchObject({ connectionTimeout: 7000, greetingTimeout: 7000, socketTimeout: 7000 });
 });
 
+test('the none transport returns at once without sending, connecting or logging anything', async () => {
+  env.emailTransport = 'none';
+  global.fetch = jest.fn();
+  const logSpy = jest.spyOn(console, 'log');
+  const errorSpy = jest.spyOn(console, 'error');
+
+  const started = Date.now();
+  const result = await EmailService.send({ to: 'a@gmail.com', subject: 'S', text: 'Your code is 482913' });
+  const otpResult = await EmailService.sendOtpEmail('new.user@gmail.com', '482913', 'email_verification', 'Andrae');
+
+  expect(result).toEqual({ skipped: true });
+  expect(otpResult).toEqual({ skipped: true });
+  expect(Date.now() - started).toBeLessThan(1000);
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect(EmailService._transporter).toBeNull(); // no SMTP connection was set up
+  expect(logSpy).not.toHaveBeenCalled();
+  expect(errorSpy).not.toHaveBeenCalled();
+  logSpy.mockRestore();
+  errorSpy.mockRestore();
+});
+
+/** Loads config/env fresh, as a real (non-test) server boot would, with the given EMAIL_TRANSPORT. */
+function bootEnvWith(transport) {
+  jest.resetModules();
+  process.env.NODE_ENV = 'development';
+  process.env.MONGODB_URI = 'mongodb://127.0.0.1:27017/unused';
+  process.env.JWT_SECRET = 'x';
+  process.env.JWT_REFRESH_SECRET = 'y';
+  process.env.EMAIL_TRANSPORT = transport;
+  return require('../config/env');
+}
+
+test('an unknown EMAIL_TRANSPORT (a typo like "smpt") stops the server from starting', () => {
+  expect(() => bootEnvWith('smpt')).toThrow('EMAIL_TRANSPORT must be one of: console, brevo, smtp, none (got "smpt")');
+  // The app loads config/env before anything else, so the same typo keeps the whole app from loading.
+  jest.resetModules();
+  expect(() => require('../app')).toThrow(/EMAIL_TRANSPORT must be one of/);
+});
+
+test('the four supported transports are accepted, case-insensitively', () => {
+  expect(bootEnvWith('none').emailTransport).toBe('none');
+  expect(bootEnvWith(' SMTP ').emailTransport).toBe('smtp');
+  expect(bootEnvWith('console').emailTransport).toBe('console');
+  expect(bootEnvWith('brevo').emailTransport).toBe('brevo');
+});
+
 test('the default time limit is 10 seconds, and EMAIL_TRANSPORT is read case-insensitively', () => {
   jest.resetModules();
   process.env.NODE_ENV = 'development';

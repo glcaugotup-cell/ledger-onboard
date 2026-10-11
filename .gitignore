@@ -31,3 +31,6 @@ backend/.email-previews/
 
 # Local AI-assistant tool state
 .claude/
+
+# Local working plans (kept on this machine, never committed)
+OTP_REPLACEMENT_PLAN.md

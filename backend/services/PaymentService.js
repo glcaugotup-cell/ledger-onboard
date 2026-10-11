@@ -191,7 +191,15 @@ class PaymentService {
       await BillingService.applyVerifiedPayment(payment.soaId, verifiedAmount);
     }
 
-    const tenant = await UserRepository.findById(payment.tenantId);
+    await AuditLogRepository.record({
+      action: 'PAYMENT_VERIFIED',
+      actorId: requester.id,
+      actorRole: requester.role,
+      targetType: 'PaymentTransaction',
+      targetId: payment._id,
+      metadata: { approved: isApproved, amountVerified: verifiedAmount, balanceAfter: adjustedBalance },
+    });
+
     await NotificationService.notify({
       userId: payment.tenantId,
       type: isApproved ? 'PAYMENT_VERIFIED' : 'PAYMENT_REJECTED',
@@ -203,19 +211,18 @@ class PaymentService {
       relatedId: payment._id,
       link: `/tenant/apartment?tab=billing&bill=${payment.soaId}`,
     });
-    if (tenant) {
-      if (isApproved) await EmailService.sendPaymentVerifiedEmail(tenant.email, tenant.fullName, verifiedAmount);
-      else await EmailService.sendPaymentRejectedEmail(tenant.email, tenant.fullName, updated.rejectionReason);
-    }
 
-    await AuditLogRepository.record({
-      action: 'PAYMENT_VERIFIED',
-      actorId: requester.id,
-      actorRole: requester.role,
-      targetType: 'PaymentTransaction',
-      targetId: payment._id,
-      metadata: { approved: isApproved, amountVerified: verifiedAmount, balanceAfter: adjustedBalance },
-    });
+    // The review is already saved, logged and notified in-app; email trouble must not turn it into an error.
+    try {
+      const tenant = await UserRepository.findById(payment.tenantId);
+      if (tenant) {
+        if (isApproved) await EmailService.sendPaymentVerifiedEmail(tenant.email, tenant.fullName, verifiedAmount);
+        else await EmailService.sendPaymentRejectedEmail(tenant.email, tenant.fullName, updated.rejectionReason);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[PaymentService] payment result email failed:', err.message);
+    }
 
     return updated;
   }
