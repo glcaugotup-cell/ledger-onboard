@@ -14,7 +14,7 @@
 const path = require('path');
 const readline = require('readline');
 
-// Your own environment wins; backend/.env only fills in what is missing. Loaded before config/env.
+// Your own environment wins; backend/.env only fills in what is missing.
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const { STRONG_PASSWORD, WHITESPACE } = require('../validators/patterns');
@@ -115,17 +115,18 @@ async function main(argv) {
     console.error('Run this in an interactive terminal, so the password can be typed at a hidden prompt.');
     return 1;
   }
-  if (!process.env.MONGODB_URI) {
+  // Only MONGODB_URI is needed: the app's config/env (which also requires the JWT secrets) is never loaded.
+  const mongoUri = process.env.MONGODB_URI;
+  if (!mongoUri) {
     console.error('MONGODB_URI is not set. Set it in your own environment, or in backend/.env (git-ignored).');
     return 1;
   }
 
-  const env = require('../config/env');
   const mongoose = require('mongoose');
-  if (env.mongoUri.startsWith('mongodb+srv://')) require('dns').setServers(['8.8.8.8', '1.1.1.1']); // same as config/db.js
+  if (mongoUri.startsWith('mongodb+srv://')) require('dns').setServers(['8.8.8.8', '1.1.1.1']); // same as config/db.js
 
   console.log('Connecting to the database...');
-  await mongoose.connect(env.mongoUri, { serverSelectionTimeoutMS: 45000 });
+  await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 45000 });
   try {
     const UserRepository = require('../repositories/UserRepository');
     const user = await UserRepository.findByEmail(args.email);
@@ -169,4 +170,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { resetUserPassword, parseArgs, passwordProblem, redactConnectionStrings };
+module.exports = { resetUserPassword, parseArgs, passwordProblem, redactConnectionStrings, main };

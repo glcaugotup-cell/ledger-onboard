@@ -29,11 +29,8 @@ if (!EMAIL_TRANSPORTS.includes(configuredEmailTransport)) {
   throw new Error(`EMAIL_TRANSPORT must be one of: ${EMAIL_TRANSPORTS.join(', ')} (got "${configuredEmailTransport}")`);
 }
 
-// Tests use a low hashing cost for speed (tests/helpers/jestEnv.js); production must never run with one.
-const bcryptSaltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12;
-if (process.env.NODE_ENV === 'production' && bcryptSaltRounds < 10) {
-  throw new Error(`BCRYPT_SALT_ROUNDS must be at least 10 in production (got ${bcryptSaltRounds})`);
-}
+// The hashing cost and its production check live in config/bcrypt.js (usable without the rest of this file).
+const { bcryptSaltRounds } = require('./bcrypt');
 
 // Two-factor secrets are encrypted with this key (32 bytes, base64). Production cannot run without
 // it; elsewhere two-factor setup is simply unavailable until it is set. A malformed key always stops the boot.

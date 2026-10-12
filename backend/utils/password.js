@@ -1,9 +1,10 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const env = require('../config/env');
+// Only the hashing cost, not config/env: local scripts can hash with just MONGODB_URI set.
+const { bcryptSaltRounds } = require('../config/bcrypt');
 
 async function hashPassword(plain) {
-  return bcrypt.hash(plain, env.bcryptSaltRounds);
+  return bcrypt.hash(plain, bcryptSaltRounds);
 }
 
 async function comparePassword(plain, hash) {

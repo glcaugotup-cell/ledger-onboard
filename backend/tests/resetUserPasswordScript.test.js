@@ -90,6 +90,30 @@ test('the script never reads or prints a connection string from the repo itself'
   const source = fs.readFileSync(require.resolve('../scripts/resetUserPassword'), 'utf8');
   expect(source).not.toMatch(/mongodb(\+srv)?:\/\/[^'"\s]*@/); // no hard-coded credentials
   // The value is never logged (mentioning the variable's name in a help message is fine).
-  expect(source).not.toMatch(/console\.\w+\([^)]*env\.mongoUri/);
+  expect(source).not.toMatch(/console\.\w+\([^)]*mongoUri/);
   expect(source).not.toMatch(/console\.\w+\([^)]*process\.env\.MONGODB_URI/);
+});
+
+test('runs with only MONGODB_URI set: it gets as far as connecting without the JWT secrets', async () => {
+  await jest.isolateModulesAsync(async () => {
+    const saved = { ...process.env };
+    const originalTty = process.stdin.isTTY;
+    try {
+      process.env.NODE_ENV = 'development';
+      process.env.MONGODB_URI = 'mongodb://127.0.0.1:1/only-this-is-set';
+      delete process.env.JWT_SECRET;
+      delete process.env.JWT_REFRESH_SECRET;
+      jest.doMock('dotenv', () => ({ config: jest.fn() })); // keep any real backend/.env out of it
+      process.stdin.isTTY = true;
+      const mongoose = require('mongoose');
+      const connect = jest.spyOn(mongoose, 'connect').mockRejectedValue(new Error('stopped before connecting'));
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      await expect(require('../scripts/resetUserPassword').main(['--email', 'someone@gmail.com'])).rejects.toThrow('stopped before connecting');
+      expect(connect).toHaveBeenCalledWith('mongodb://127.0.0.1:1/only-this-is-set', expect.any(Object));
+    } finally {
+      process.env = saved;
+      process.stdin.isTTY = originalTty;
+    }
+  });
 });

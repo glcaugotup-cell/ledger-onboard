@@ -13,7 +13,8 @@
     "migrate:uploads": "node utils/migrateUploadsToGridFS.js",
     "index:payment-references": "node utils/createPaymentReferenceIndex.js",
     "reservations:confirm-move-ins": "node utils/confirmExistingMoveIns.js",
-    "password:reset": "node scripts/resetUserPassword.js"
+    "password:reset": "node scripts/resetUserPassword.js",
+    "migrate:retire-email-otp": "node scripts/retireEmailOtp.js"
   },
   "jest": {
     "testEnvironment": "node",
