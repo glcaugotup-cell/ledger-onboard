@@ -62,7 +62,9 @@ describe('MyApartmentPage', () => {
     ReservationApi.list.mockResolvedValue({ reservations: [stay] });
     renderPage('/tenant/apartment?tab=issues');
     expect(await screen.findByRole('tab', { name: 'Maintenance issues' })).toHaveAttribute('aria-selected', 'true');
-    expect(await screen.findByRole('button', { name: 'Report an issue' })).toBeEnabled();
+    // The button is drawn disabled until the tab's data loads; the empty state appears in the same update.
+    expect(await screen.findByText('No maintenance issues')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Report an issue' })).toBeEnabled();
   });
 
   it('R12: sends a request to leave after confirmation', async () => {
@@ -93,7 +95,8 @@ describe('MyApartmentPage', () => {
     renderPage('/tenant/apartment?tab=issues');
     expect(await screen.findByText('No current stay')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Past stays' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Report an issue' })).toBeDisabled();
+    expect(await screen.findByText('No maintenance issues')).toBeInTheDocument(); // the tab has loaded
+    expect(screen.getByRole('button', { name: 'Report an issue' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /request to leave/i })).not.toBeInTheDocument();
   });
 
