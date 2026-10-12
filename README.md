@@ -13,7 +13,7 @@ The project has two parts:
 - **Landlords** — submit business verification documents (Mayor's/Business Permit, BIR Form 2303), publish properties with photos and an optional video once verified, manage rooms and reservations, invite caretakers, verify payments, and view analytics (occupancy, collection rate, outstanding balances).
 - **Caretakers** — activate their account with a one-time code from their landlord (no email or shared password), view assigned rooms, log utility readings, and record cash payments.
 - **Admins** — review landlord business verification, manage user accounts, moderate reviews, and view audit logs.
-- **Accounts & security** — email OTP verification at registration, optional email OTP login (MFA), password reset by email code, password strength indicator, role-based access control, rate limiting, and automatic archiving of accounts inactive for 30 days (with a warning at day 25 and a recovery flow).
+- **Accounts & security** — no email needed for any account flow: optional authenticator-app two-factor sign-in with backup codes, password reset with an authenticator, backup or admin-issued code, caretaker activation codes, password strength indicator, role-based access control, rate limiting, and automatic archiving of accounts inactive for 30 days with self-service recovery (see [How accounts work](#how-accounts-work-no-email)).
 
 ## Tech stack
 
@@ -52,11 +52,11 @@ npm install
 | `JWT_SECRET`, `JWT_REFRESH_SECRET` | Long random strings used to sign access and refresh tokens |
 | `CLIENT_ORIGIN` | Frontend URL(s) allowed by CORS, comma-separated (default `http://localhost:5173`) |
 | `EMAIL_APP_URL` | Public frontend URL for email links, e.g. `https://ledger-onboard.vercel.app`; defaults to the first `CLIENT_ORIGIN` when unset |
-| `EMAIL_TRANSPORT` | `console` prints emails (OTP codes, invitations) in the backend terminal; `brevo` sends through Brevo's HTTPS API (needed on Render's free plan, which blocks outgoing SMTP); `smtp` sends real email using the `SMTP_*` settings; `none` sends nothing. Any other value stops the server at startup |
-| `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing email settings (for Gmail, use an App Password). With Brevo, the `EMAIL_FROM` address must be a verified sender in Brevo |
+| `EMAIL_TRANSPORT` | `none` sends nothing (what the deployed app uses; no account flow needs email); `console` prints emails in the backend terminal; `smtp` sends real email using the `SMTP_*` settings; `brevo` sends through Brevo's HTTPS API. Any other value stops the server at startup |
+| `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing email settings, only for `smtp` (for Gmail, use an App Password) |
 | `BREVO_API_KEY` | Brevo API key, used only when `EMAIL_TRANSPORT=brevo` |
 | `MFA_ENCRYPTION_KEY` | 32 random bytes, base64 (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`). Encrypts two-factor secrets and keys the backup-code hashes; required in production, where the server refuses to start without it. Losing or changing it breaks every authenticator setup and makes every backup code useless, so everyone must set up two-factor again |
-| `EMAIL_VERIFICATION_REQUIRED` | `false` (default): new accounts can sign in right away and no sign-up code is sent; `true`: a code is emailed and sign-in waits until it is entered. Any other value stops the server at startup |
+| `EMAIL_VERIFICATION_REQUIRED` | `false` (default): no sign-up code is sent, and new accounts can sign in as soon as they are created; `true`: a code is emailed and sign-in waits until it is entered, so never use `true` together with `EMAIL_TRANSPORT=none`. Any other value stops the server at startup |
 | `EMAIL_TIMEOUT_MS` | How long a single email send may take before it fails with an error (default 10000), so a blocked mail server can't hang registration |
 | `ACCOUNT_ARCHIVE_WARNING_DAYS`, `ACCOUNT_ARCHIVE_DAYS`, `ACCOUNT_LIFECYCLE_CRON` | Inactivity warning/archive thresholds and the daily job schedule |
 | `MAX_UPLOAD_MB`, `MAX_VIDEO_UPLOAD_MB` | Upload size limits (photos/documents, video) |
@@ -65,11 +65,9 @@ npm install
 
 Never commit `backend/.env`; it is excluded by `.gitignore`.
 
-### Email links and styling
+### Email (optional)
 
-Set `EMAIL_APP_URL=https://ledger-onboard.vercel.app` in the backend environment to point email buttons at the deployed app. Set it on your backend hosting service (Render) as well as in `backend/.env` when needed locally. In production, allow the frontend with `CLIENT_ORIGIN=https://ledger-onboard.vercel.app`. Restart the backend after changing environment variables and deploy backend code changes for the new email templates to take effect.
-
-Caretaker invitations send no email. The landlord gets a one-time activation code (valid 72 hours) when inviting a caretaker, and a new one from "New activation code"; the caretaker enters their email, the code and a new password on the Activate account page linked from sign-in. Activation links from older invitation emails no longer work.
+The deployed app runs with `EMAIL_TRANSPORT=none`. The remaining emails (payment, reservation, verification and bill-reminder updates, and the inactivity warning) are optional extras: every flow works without them, and all but the inactivity warning and archive notice also send an in-app notification. If you turn email on, set `EMAIL_APP_URL` to the public frontend URL so email buttons point at the deployed app.
 
 Edit wording in `backend/services/EmailService.js` and the shared colors, spacing, and layout in `backend/utils/emailTemplate.js`. Emails include inline HTML styles and a plain-text alternative. Names, reasons, codes, and URLs are escaped before being inserted into HTML.
 
@@ -83,6 +81,32 @@ npm run preview:emails
 Open any of the generated HTML files in `backend/.email-previews/` in a browser. Browser previews show the layout; Gmail may adjust colors in dark mode.
 
 The frontend needs no environment file for local development: the Vite dev server proxies `/api` and `/uploads` to `http://localhost:5000`. For a deployed build, set `VITE_API_URL` to the backend origin (see `frontend/.env.example`), e.g. `https://ledger-onboard-backend.onrender.com`.
+
+## How accounts work (no email)
+
+- **Sign-up:** tenants and landlords register, then go to the sign-in form, which says the account was created; they sign in with their email and password. No code is sent.
+- **Two-factor sign-in (optional):** in Profile, scan the QR code with an authenticator app (Google or Microsoft Authenticator) and confirm with a 6-digit code. You get 10 one-time backup codes (`XXXXX-XXXXX`), shown once. Sign-in then asks for an app code or a backup code; 5 wrong codes lock code entry for 15 minutes.
+- **Forgot password:** on the reset page, enter your email, a code and a new password. The code can be an authenticator code, a backup code, or a reset code from an administrator (`XXXX-XXXX`, valid 30 minutes, once). Admins create reset codes in Users after confirming the person's identity in person; there are none for admin accounts or caretakers who haven't activated. A reset signs out every device.
+- **Change password:** in Profile, with the current password (plus an app or backup code when two-factor is on). Every other device is signed out.
+- **Archived accounts:** accounts inactive for 30 days are archived (admins never are). "Recover an archived account" takes the email, the same kinds of code as a reset, and a new password. A password reset also restores an archived account.
+- **Caretakers:** a landlord invites a caretaker and gets a one-time activation code (`XXXXX-XXXXX`, valid 72 hours) to hand over; "New activation code" replaces it. The caretaker opens "Activate a caretaker account" on the sign-in page and enters their email, the code and a new password. Until then they can't sign in, and an admin can't activate them.
+
+## Local admin scripts
+
+Both scripts run on your own computer against the database, need only `MONGODB_URI`, never print it, and refuse to run outside an interactive terminal (use PowerShell or Windows Terminal, not Git Bash). Against MongoDB Atlas, your IP address must be allowed under Network Access.
+
+Set the connection string for the current PowerShell window without it showing on screen or in history:
+
+```powershell
+cd backend
+$s = Read-Host "Paste MONGODB_URI" -AsSecureString
+$env:MONGODB_URI = [System.Net.NetworkCredential]::new('', $s).Password
+```
+
+- **Give one account a new password** (for example, a locked-out admin): `npm run password:reset -- --email someone@gmail.com`. It asks you to type YES, then for the new password twice at a hidden prompt, signs the account out everywhere and writes an audit entry.
+- **One-time migration after the email codes were retired:** `npm run migrate:retire-email-otp -- --dry-run` shows counts only and changes nothing; without `--dry-run` it shows the same counts and asks for YES. It turns off old email two-factor, marks unverified accounts verified, and makes any saved copy of the old shared caretaker password unusable. It deletes nothing, sends no email, writes an audit entry per changed account, and a second run changes nothing. Back up the `users` collection first (for example with MongoDB Compass: Export Data, full collection, JSON).
+
+When you are done, run `Remove-Item Env:MONGODB_URI`, close the window, and remove your IP from Atlas Network Access if you added it.
 
 ## Running the app
 
@@ -155,7 +179,8 @@ The backend follows a layered architecture: **Route → Controller → Service �
 
 ## Security notes
 
-- Passwords are hashed with bcrypt; refresh tokens are stored only as hashes and revoked on logout and password change.
+- Passwords are hashed with bcrypt; refresh tokens are stored only as hashes. Each account has a session version that every token carries: a password reset or change, suspension, deactivation or archiving raises it and signs the account out everywhere.
+- One-time codes (admin reset codes, activation codes) are stored only as hashes and work once; authenticator secrets are encrypted with `MFA_ENCRYPTION_KEY`, and backup codes are stored as keyed hashes. Code-only requests (reset, recovery, activation) give one generic error and have their own failure limits.
 - Every protected API route checks the user's role on the server, and the user's account status is re-checked on each request.
 - All request input is validated, and `helmet` and `express-mongo-sanitize` are applied globally.
 - Landlord verification documents and payment proof images are never publicly served; they are only available through authenticated, ownership-checked routes.
@@ -164,6 +189,6 @@ The backend follows a layered architecture: **Route → Controller → Service �
 ## Deployment notes
 
 - Serve the API behind HTTPS (a reverse proxy or your hosting platform's TLS) and set `CLIENT_ORIGIN` to the frontend's HTTPS URL.
-- Current setup: frontend on Vercel (`frontend/` with `VITE_API_URL=https://ledger-onboard-backend.onrender.com`; `frontend/vercel.json` rewrites all routes to `index.html`), backend on Render (`npm start`, `NODE_ENV=production`, `CLIENT_ORIGIN` = the Vercel URL).
+- Current setup: frontend on Vercel (`frontend/` with `VITE_API_URL=https://ledger-onboard-backend.onrender.com`; `frontend/vercel.json` rewrites all routes to `index.html`), backend on Render (`npm start`, `NODE_ENV=production`, `CLIENT_ORIGIN` = the Vercel URL, `EMAIL_TRANSPORT=none`, and `MFA_ENCRYPTION_KEY`, without which production refuses to start; keep a private copy of that key).
 - Use a MongoDB user limited to this application's database.
 - Uploaded files (property photos/videos, payment proofs, business documents) are stored in MongoDB GridFS (bucket `uploads`), so they survive redeploys and restarts. Property media is served publicly at `/uploads/properties/<file>`; payment proofs and business documents are only available through their authenticated routes. They count toward the database's storage quota (512 MB on the Atlas free tier).

@@ -78,7 +78,7 @@ test('reads --email in either form, lower-cased', () => {
 });
 
 test('connection strings are masked in any message it prints', () => {
-  const message = 'getaddrinfo ENOTFOUND for mongodb+srv://user:p%40ss@cluster0.abcd.mongodb.net/ledger?retryWrites=true and mongodb://u:p@127.0.0.1:27017/x';
+  const message = 'getaddrinfo ENOTFOUND for mongodb+srv://user:p%40ss@db.example.invalid/ledger?retryWrites=true and mongodb://u:p@127.0.0.1:27017/x';
   const masked = script.redactConnectionStrings(message);
   expect(masked).not.toMatch(/mongodb/);
   expect(masked).not.toContain('p%40ss');

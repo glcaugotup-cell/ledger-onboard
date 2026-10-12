@@ -200,7 +200,7 @@ describe('what the script prints and refuses', () => {
   test('reads --dry-run, and masks connection strings in anything it prints', () => {
     expect(script.parseArgs(['--dry-run'])).toEqual({ dryRun: true, help: false });
     expect(script.parseArgs([])).toEqual({ dryRun: false, help: false });
-    expect(script.redactConnectionStrings('failed for mongodb+srv://user:secret@cluster.example/db?x=1 here')).toBe('failed for [connection string hidden] here');
+    expect(script.redactConnectionStrings('failed for mongodb+srv://user:secret@db.example.invalid/db?x=1 here')).toBe('failed for [connection string hidden] here');
   });
 
   test('needs only MONGODB_URI: the script and password hashing load without the JWT secrets', () => {
