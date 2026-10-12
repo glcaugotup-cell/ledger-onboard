@@ -162,7 +162,8 @@ describe('Objective 7 — passwords must not contain spaces', () => {
     const cases = [
       request(app).post('/api/auth/reset-password').send({ email: 'space.flows@gmail.com', code: '123456', newPassword: spaced }),
       request(app).patch('/api/auth/change-password').set(auth(token)).send({ currentPassword: PASSWORD, newPassword: spaced }),
-      request(app).post('/api/auth/activate-caretaker').send({ token: 'x', password: spaced }),
+      // Phase 5 rule: activation takes an email and a code instead of a link token.
+      request(app).post('/api/auth/activate-caretaker').send({ email: 'space.flows@gmail.com', code: 'ABCDE-FGHJK', password: spaced }),
       request(app).post('/api/auth/account-recovery').send({ email: 'space.flows@gmail.com', newPassword: spaced }),
     ];
     for (const res of await Promise.all(cases)) {

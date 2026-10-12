@@ -39,143 +39,83 @@ afterAll(async () => {
   else process.env.EMAIL_APP_URL = previousEmailAppUrl;
 });
 
-describe('Caretaker invitation email', () => {
-  test('creates the caretaker and sends a real activation email through EmailService.send', async () => {
+// Phase 5 rule: invitations send no email and carry no shared password. The landlord gets a
+// one-time activation code to hand over, and the caretaker activates with email, code and a new password.
+describe('Caretaker activation codes', () => {
+  const CODE = /^[A-HJKMNP-Z2-9]{5}-[A-HJKMNP-Z2-9]{5}$/;
+  const invite = (email, phone) => request(app)
+    .post('/api/landlord/caretakers')
+    .set('Authorization', `Bearer ${landlordToken}`)
+    .send({ firstName: 'Code', lastName: 'Caretaker', email, phone, serviceBarangay: 'Poblacion Oeste' });
+  const resend = (id) => request(app).post(`/api/landlord/caretakers/${id}/resend-invitation`).set('Authorization', `Bearer ${landlordToken}`);
+  const activate = (email, code, password = 'NewStr0ng!Pass') => request(app).post('/api/auth/activate-caretaker').send({ email, code, password });
+
+  test('creates the caretaker, sends nothing, and returns a one-time activation code to the landlord', async () => {
     const sendSpy = jest.spyOn(EmailService, 'send');
 
-    const res = await request(app)
-      .post('/api/landlord/caretakers')
-      .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Glad', lastName: 'Estioco', email: 'caretaker.success@gmail.com', phone: '09302845654', serviceBarangay: 'Poblacion Oeste' });
+    const res = await invite('caretaker.success@gmail.com', '09302845654');
 
     expect(res.status).toBe(201);
     expect(res.body.data.caretaker.accountStatus).toBe('pending_activation');
-    // The activation token/URL must never be echoed back in the API response.
-    expect(JSON.stringify(res.body)).not.toMatch(/activate-caretaker\?token=/);
-
-    const call = sendSpy.mock.calls.find((c) => c[0].to === 'caretaker.success@gmail.com');
-    expect(call).toBeDefined();
-    expect(call[0].subject).toBe('Ledger OnBoard Caretaker Invitation');
-    expect(call[0].text).toMatch(/activate-caretaker\?token=/);
-    expect(call[0].text).toMatch(/Owner Landlord/); // "invited by <landlord name>"
-    const invitationUrl = call[0].text.match(/https:\/\/ledger-onboard\.vercel\.app\/activate-caretaker\?token=\S+/)[0];
-    expect(call[0].html).toContain(`href="${invitationUrl}"`);
-    expect(call[0].html).not.toContain('localhost');
+    expect(res.body.data.activationCode).toMatch(CODE);
+    expect(res.body.data).not.toHaveProperty('temporaryPassword');
+    expect(sendSpy).not.toHaveBeenCalled();
     sendSpy.mockRestore();
   });
 
-  test('rolls back the caretaker account and returns a safe error if the activation email fails to send', async () => {
-    const sendSpy = jest.spyOn(EmailService, 'send').mockRejectedValueOnce(new Error('535 Authentication failed for SMTP account'));
+  test('an email failure can no longer undo an invitation: there is nothing to send or roll back', async () => {
+    const sendSpy = jest.spyOn(EmailService, 'send').mockRejectedValue(new Error('535 Authentication failed for SMTP account'));
 
-    const res = await request(app)
-      .post('/api/landlord/caretakers')
-      .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Fails', lastName: 'ToSend', email: 'caretaker.failure@gmail.com', phone: '09302845655', serviceBarangay: 'Poblacion Oeste' });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('CARETAKER_EMAIL_DELIVERY_FAILED');
-    // Never expose the raw SMTP error to the client.
-    expect(res.body.error.message).not.toMatch(/535|Authentication failed/);
+    const res = await invite('caretaker.failure@gmail.com', '09302845655');
     sendSpy.mockRestore();
 
-    // Rolled back — no stranded pending-activation account left behind.
-    const stranded = await UserRepository.findByEmail('caretaker.failure@gmail.com');
-    expect(stranded).toBeNull();
-
-    // Trying again with the same email must work cleanly (not 409), now that email delivery succeeds again.
-    const retry = await request(app)
-      .post('/api/landlord/caretakers')
-      .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Fails', lastName: 'ToSend', email: 'caretaker.failure@gmail.com', phone: '09302845655', serviceBarangay: 'Poblacion Oeste' });
-    expect(retry.status).toBe(201);
+    expect(res.status).toBe(201);
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect((await UserRepository.findByEmail('caretaker.failure@gmail.com')).accountStatus).toBe('pending_activation');
   });
 
-  test('landlord can resend the invitation to a pending caretaker, and the new link activates the account', async () => {
-    const created = await request(app)
-      .post('/api/landlord/caretakers')
-      .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Resend', lastName: 'Invite', email: 'caretaker.resend@gmail.com', phone: '09302845657', serviceBarangay: 'Poblacion Oeste' });
-    expect(created.status).toBe(201);
-    const caretakerId = created.body.data.caretaker._id;
-
+  test('resend gives a new code, the old one stops working, and the new one activates the account', async () => {
+    const created = await invite('caretaker.resend@gmail.com', '09302845657');
+    const oldCode = created.body.data.activationCode;
     const sendSpy = jest.spyOn(EmailService, 'send');
-    const res = await request(app)
-      .post(`/api/landlord/caretakers/${caretakerId}/resend-invitation`)
-      .set('Authorization', `Bearer ${landlordToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body.data.resent).toBe(true);
-    expect(res.body.data.caretaker.invitationResentAt).toBeTruthy();
-    expect(JSON.stringify(res.body)).not.toMatch(/activate-caretaker\?token=/);
 
-    const call = sendSpy.mock.calls.find((c) => c[0].to === 'caretaker.resend@gmail.com');
-    expect(call).toBeDefined();
-    expect(call[0].subject).toBe('Ledger OnBoard Caretaker Invitation');
-    const token = call[0].text.match(/token=(\S+)/)[1];
+    const res = await resend(created.body.data.caretaker._id);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.activationCode).toMatch(CODE);
+    expect(res.body.data.activationCode).not.toBe(oldCode);
+    expect(res.body.data.caretaker.invitationResentAt).toBeTruthy();
+    expect(sendSpy).not.toHaveBeenCalled();
     sendSpy.mockRestore();
 
-    const activate = await request(app).post('/api/auth/activate-caretaker').send({ token: decodeURIComponent(token), password: 'NewStr0ng!Pass' });
-    expect(activate.status).toBe(200);
+    const withOld = await activate('caretaker.resend@gmail.com', oldCode);
+    expect(withOld.status).toBe(400);
+    expect(withOld.body.error.code).toBe('INVALID_ACTIVATION_CODE');
+    expect((await activate('caretaker.resend@gmail.com', res.body.data.activationCode)).status).toBe(200);
     // The acceptance date is recorded so the landlord can see when they became a caretaker.
-    const activated = await UserRepository.findByEmail('caretaker.resend@gmail.com');
-    expect(activated.activatedAt).toBeInstanceOf(Date);
+    expect((await UserRepository.findByEmail('caretaker.resend@gmail.com')).activatedAt).toBeInstanceOf(Date);
 
     // Once activated, there is nothing left to resend.
-    const again = await request(app)
-      .post(`/api/landlord/caretakers/${caretakerId}/resend-invitation`)
-      .set('Authorization', `Bearer ${landlordToken}`);
+    const again = await resend(created.body.data.caretaker._id);
     expect(again.status).toBe(409);
     expect(again.body.error.code).toBe('ALREADY_ACTIVATED');
   });
 
-  test('a failed resend keeps the pending caretaker account and returns a safe error', async () => {
-    const created = await request(app)
-      .post('/api/landlord/caretakers')
-      .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Resend', lastName: 'Fails', email: 'caretaker.resendfail@gmail.com', phone: '09302845658', serviceBarangay: 'Poblacion Oeste' });
-    expect(created.status).toBe(201);
-
-    const sendSpy = jest.spyOn(EmailService, 'send').mockRejectedValueOnce(new Error('535 Authentication failed for SMTP account'));
-    const res = await request(app)
-      .post(`/api/landlord/caretakers/${created.body.data.caretaker._id}/resend-invitation`)
-      .set('Authorization', `Bearer ${landlordToken}`);
-    sendSpy.mockRestore();
-
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('CARETAKER_EMAIL_DELIVERY_FAILED');
-    expect(res.body.error.message).not.toMatch(/535|Authentication failed/);
-    const kept = await UserRepository.findByEmail('caretaker.resendfail@gmail.com');
-    expect(kept.accountStatus).toBe('pending_activation');
-  });
-
   test("a landlord cannot resend another landlord's caretaker invitation", async () => {
-    const created = await request(app)
-      .post('/api/landlord/caretakers')
-      .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Other', lastName: 'Owner', email: 'caretaker.notyours@gmail.com', phone: '09302845659', serviceBarangay: 'Poblacion Oeste' });
+    const created = await invite('caretaker.notyours@gmail.com', '09302845659');
     const caretaker = await UserRepository.findByEmail('caretaker.notyours@gmail.com');
     await UserRepository.updateById(caretaker._id, { assignedLandlordId: caretaker._id });
 
-    const res = await request(app)
-      .post(`/api/landlord/caretakers/${created.body.data.caretaker._id}/resend-invitation`)
-      .set('Authorization', `Bearer ${landlordToken}`);
+    const res = await resend(created.body.data.caretaker._id);
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('CARETAKER_NOT_FOUND');
   });
 
-  test('caretaker can activate their account via the emailed link and then log in', async () => {
-    const sendSpy = jest.spyOn(EmailService, 'send');
-    const res = await request(app)
-      .post('/api/landlord/caretakers')
-      .set('Authorization', `Bearer ${landlordToken}`)
-      .send({ firstName: 'Activate', lastName: 'Me', email: 'caretaker.activate@gmail.com', phone: '09302845656', serviceBarangay: 'Poblacion Oeste' });
-    expect(res.status).toBe(201);
+  test('caretaker can activate their account with the code and then log in', async () => {
+    const res = await invite('caretaker.activate@gmail.com', '09302845656');
 
-    const call = sendSpy.mock.calls.find((c) => c[0].to === 'caretaker.activate@gmail.com');
-    const token = call[0].text.match(/token=(\S+)/)[1];
-    sendSpy.mockRestore();
-
-    const activate = await request(app).post('/api/auth/activate-caretaker').send({ token, password: 'NewStr0ng!Pass' });
-    expect(activate.status).toBe(200);
+    const activated = await activate('caretaker.activate@gmail.com', res.body.data.activationCode);
+    expect(activated.status).toBe(200);
 
     const login = await request(app).post('/api/auth/login').send({ email: 'caretaker.activate@gmail.com', password: 'NewStr0ng!Pass' });
     expect(login.status).toBe(200);

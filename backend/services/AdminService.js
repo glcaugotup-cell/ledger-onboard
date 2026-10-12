@@ -40,6 +40,13 @@ class AdminService {
     if (user.role === 'admin') {
       throw ApiError.forbidden('Admin accounts cannot be modified through this endpoint', 'CANNOT_MODIFY_ADMIN');
     }
+    // Activation is the caretaker's own step (it sets their password); an admin can't skip it.
+    if (user.accountStatus === ACCOUNT_STATUS.PENDING_ACTIVATION && status === ACCOUNT_STATUS.ACTIVE) {
+      throw ApiError.badRequest(
+        'This caretaker has not activated their account yet. Their landlord must give them an activation code, and they activate the account themselves.',
+        'ACCOUNT_NOT_ACTIVATED',
+      );
+    }
 
     const updates = { accountStatus: status, statusChangedAt: new Date(), statusReason: status === ACCOUNT_STATUS.ACTIVE ? null : reason.trim() };
     if (status !== ACCOUNT_STATUS.ACTIVE) {
@@ -82,7 +89,7 @@ class AdminService {
       throw ApiError.forbidden('Admin accounts cannot be modified through this endpoint', 'CANNOT_MODIFY_ADMIN');
     }
     if (user.accountStatus === ACCOUNT_STATUS.PENDING_ACTIVATION) {
-      throw ApiError.badRequest('This caretaker has not activated their account yet. Resend their invitation instead.', 'ACCOUNT_NOT_ACTIVATED');
+      throw ApiError.badRequest('This caretaker has not activated their account yet. Their landlord can give them a new activation code.', 'ACCOUNT_NOT_ACTIVATED');
     }
 
     const code = randomCode(PASSWORD_RESET_CODE.LENGTH, 4);

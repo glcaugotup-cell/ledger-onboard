@@ -240,6 +240,10 @@ export default function LoginPage() {
         <Link to="/account-recovery" className="hover:underline">
           Recover an archived account
         </Link>
+        {' · '}
+        <Link to="/activate-caretaker" className="hover:underline">
+          Activate a caretaker account
+        </Link>
       </p>
     </div>
   );

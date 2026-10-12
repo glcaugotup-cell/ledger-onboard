@@ -1,19 +1,19 @@
 const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
 
 const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const EmailService = require('./EmailService');
 const ApiError = require('../utils/ApiError');
-const { hashPassword, comparePassword } = require('../utils/password');
+const { hashPassword, comparePassword, unusablePasswordHash } = require('../utils/password');
 const { generateOtp, hashOtp, compareOtp } = require('../utils/otp');
-const { signAccessToken, signRefreshToken, verifyRefreshToken, signMfaChallengeToken, verifyMfaChallengeToken, newTokenId, tokenVersionOf } = require('../utils/jwt');
+const { randomCode, normalizeCode } = require('../utils/oneTimeCodes');
+const { signAccessToken, signRefreshToken, verifyRefreshToken, signMfaChallengeToken, verifyMfaChallengeToken, tokenVersionOf } = require('../utils/jwt');
 const MfaService = require('./MfaService');
 const ResetCodeService = require('./ResetCodeService');
 const AccountLifecycleService = require('./AccountLifecycleService');
 const { sanitizeUser } = require('../utils/sanitize');
 const { deriveFullName } = require('../utils/name');
-const { ROLES, ACCOUNT_STATUS, RESERVATION_STATUS } = require('../utils/constants');
+const { ROLES, ACCOUNT_STATUS, RESERVATION_STATUS, CARETAKER_ACTIVATION_CODE } = require('../utils/constants');
 const env = require('../config/env');
 
 const OTP_MAX_ATTEMPTS = 5;
@@ -21,6 +21,7 @@ const OTP_RESEND_COOLDOWN_SECONDS = 45;
 
 const FORGOT_PASSWORD_MESSAGE = 'To reset your password, use a code from your authenticator app or one of your backup codes. '
   + 'If you have neither, ask an administrator for a reset code.';
+const invalidActivationCode = () => ApiError.badRequest('Invalid or expired activation code', 'INVALID_ACTIVATION_CODE');
 const PUBLIC_REGISTRATION_ROLES = new Set([ROLES.TENANT, ROLES.LANDLORD]);
 
 // Per-account (by email) failed-login lockout: 10 wrong email/password
@@ -159,7 +160,9 @@ class AuthService {
     }
 
     const valid = await comparePassword(password, user.passwordHash);
-    if (!valid) {
+    // A caretaker who hasn't activated gets exactly the wrong-password answer, whatever they type:
+    // accounts invited before phase 5 still have the old shared password saved.
+    if (!valid || user.accountStatus === ACCOUNT_STATUS.PENDING_ACTIVATION) {
       this._recordFailedLogin(email);
       throw ApiError.unauthorized('Incorrect password.', 'INCORRECT_PASSWORD');
     }
@@ -271,7 +274,7 @@ class AuthService {
       throw ApiError.forbidden('This account has been deactivated.', 'ACCOUNT_DEACTIVATED');
     }
     if (user.accountStatus === ACCOUNT_STATUS.PENDING_ACTIVATION) {
-      throw ApiError.forbidden('This account has not been activated yet. Check your email for the activation link.', 'ACCOUNT_PENDING_ACTIVATION');
+      throw ApiError.forbidden('This account has not been activated yet. Ask your landlord for an activation code.', 'ACCOUNT_PENDING_ACTIVATION');
     }
   }
 
@@ -495,43 +498,22 @@ class AuthService {
     const existing = await UserRepository.findByEmail(email);
     if (existing) throw ApiError.conflict('An account with this email already exists', 'ACCOUNT_EXISTS');
 
-    const landlord = await UserRepository.findById(landlordId);
-
-    const temporaryPassword = 'caretaker1234';
-    const placeholderHash = await hashPassword(temporaryPassword);
+    // No password is set: the account gets a hash nothing matches and stays pending until the
+    // caretaker activates it with the code the landlord hands them. Nothing is emailed.
     const caretaker = await UserRepository.create({
       firstName,
       lastName,
       fullName: deriveFullName(firstName, lastName),
       email,
       phone,
-      passwordHash: placeholderHash,
+      passwordHash: await unusablePasswordHash(),
       role: ROLES.CARETAKER,
       serviceBarangay,
       assignedLandlordId: landlordId,
       createdByLandlordId: landlordId,
       accountStatus: ACCOUNT_STATUS.PENDING_ACTIVATION,
     });
-
-    const activationToken = jwt.sign({ sub: String(caretaker._id), purpose: 'caretaker_activation' }, env.jwtSecret, {
-      expiresIn: '3d',
-      jwtid: newTokenId(),
-    });
-    const activationUrl = `${env.emailAppUrl}/activate-caretaker?token=${encodeURIComponent(activationToken)}`;
-
-    try {
-      // eslint-disable-next-line no-console
-      console.log(`[EmailService] Sending caretaker activation email\nTo: ${caretaker.email}\nSubject: Ledger OnBoard Caretaker Invitation`);
-      await EmailService.sendCaretakerCreatedEmail(caretaker.email, caretaker.fullName, activationUrl, landlord?.fullName, temporaryPassword);
-      // eslint-disable-next-line no-console
-      console.log('[EmailService] Caretaker activation email sent successfully');
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[EmailService] Caretaker activation email failed:', err.message);
-      // Roll back the new account so the landlord can safely retry the invitation.
-      await UserRepository.deleteById(caretaker._id);
-      throw ApiError.badRequest('Could not send the caretaker activation email. Please try again.', 'CARETAKER_EMAIL_DELIVERY_FAILED');
-    }
+    const { code, expiresAt } = await this._issueActivationCode(caretaker._id);
 
     await AuditLogRepository.record({
       action: 'CARETAKER_CREATED',
@@ -539,13 +521,13 @@ class AuthService {
       actorRole: ROLES.LANDLORD,
       targetType: 'User',
       targetId: caretaker._id,
-      metadata: { email: caretaker.email },
+      metadata: { email: caretaker.email, expiresAt },
     });
 
-    return { caretaker: sanitizeUser(caretaker), temporaryPassword };
+    return { caretaker: sanitizeUser(caretaker), activationCode: code, expiresAt };
   }
 
-  /** Emails a fresh 3-day activation link to a caretaker who has not activated yet. */
+  /** A new activation code for a caretaker who hasn't activated yet; the previous code stops working. */
   async resendCaretakerInvitation(landlordId, caretakerId) {
     const caretaker = await UserRepository.findById(caretakerId);
     if (!caretaker || caretaker.role !== ROLES.CARETAKER || String(caretaker.assignedLandlordId) !== String(landlordId)) {
@@ -555,34 +537,33 @@ class AuthService {
       throw ApiError.conflict('This caretaker has already activated their account', 'ALREADY_ACTIVATED');
     }
 
-    const landlord = await UserRepository.findById(landlordId);
-    const temporaryPassword = 'caretaker1234';
-    const activationToken = jwt.sign({ sub: String(caretaker._id), purpose: 'caretaker_activation' }, env.jwtSecret, {
-      expiresIn: '3d',
-      jwtid: newTokenId(),
-    });
-    const activationUrl = `${env.emailAppUrl}/activate-caretaker?token=${encodeURIComponent(activationToken)}`;
-
-    try {
-      await EmailService.sendCaretakerCreatedEmail(caretaker.email, caretaker.fullName, activationUrl, landlord?.fullName, temporaryPassword);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[EmailService] Caretaker invitation resend failed:', err.message);
-      // Unlike createCaretaker, the account already existed, so it is kept as is.
-      throw ApiError.badRequest('Could not send the caretaker activation email. Please try again.', 'CARETAKER_EMAIL_DELIVERY_FAILED');
-    }
-
-    const updated = await UserRepository.updateById(caretaker._id, { invitationResentAt: new Date() });
+    const { code, expiresAt } = await this._issueActivationCode(caretaker._id, { invitationResentAt: new Date() });
     await AuditLogRepository.record({
       action: 'CARETAKER_INVITATION_RESENT',
       actorId: landlordId,
       actorRole: ROLES.LANDLORD,
       targetType: 'User',
       targetId: caretaker._id,
-      metadata: { email: caretaker.email },
+      metadata: { email: caretaker.email, expiresAt },
     });
 
-    return { resent: true, email: caretaker.email, caretaker: sanitizeUser(updated) };
+    const updated = await UserRepository.findById(caretaker._id);
+    return { caretaker: sanitizeUser(updated), activationCode: code, expiresAt };
+  }
+
+  /**
+   * A 10-character code without look-alikes (XXXXX-XXXXX), valid 72 hours. Only its bcrypt hash is
+   * stored, in the one-time-code slot, replacing anything there; the code itself is returned once,
+   * to the landlord, and never logged or audited.
+   */
+  async _issueActivationCode(caretakerId, extraUpdates = {}) {
+    const code = randomCode(CARETAKER_ACTIVATION_CODE.LENGTH, 5);
+    const expiresAt = new Date(Date.now() + CARETAKER_ACTIVATION_CODE.TTL_HOURS * 60 * 60 * 1000);
+    await UserRepository.updateById(caretakerId, {
+      otp: { codeHash: await hashOtp(normalizeCode(code)), purpose: 'caretaker_activation', expiresAt, attempts: 0 },
+      ...extraUpdates,
+    });
+    return { code, expiresAt };
   }
 
   async listCaretakersForLandlord(landlordId) {
@@ -631,33 +612,37 @@ class AuthService {
     return { removed: true };
   }
 
-  async activateCaretakerAccount({ token, password }) {
-    let payload;
-    try {
-      payload = jwt.verify(token, env.jwtSecret);
-    } catch {
-      throw ApiError.badRequest('Invalid or expired activation link', 'INVALID_ACTIVATION_TOKEN');
-    }
-    if (payload.purpose !== 'caretaker_activation') {
-      throw ApiError.badRequest('Invalid activation link', 'INVALID_ACTIVATION_TOKEN');
-    }
+  /**
+   * The caretaker's email, the code from their landlord and a new password. Unknown emails, other
+   * roles, accounts that aren't pending and wrong or expired codes all get the same generic error.
+   * The code works once: the update only applies while the same code hash is still in the slot.
+   */
+  async activateCaretakerAccount({ email, code, password }) {
+    const user = await UserRepository.findByEmail(email, { withSecrets: true });
+    const otp = user?.otp;
+    const usable = user
+      && user.role === ROLES.CARETAKER
+      && user.accountStatus === ACCOUNT_STATUS.PENDING_ACTIVATION
+      && otp?.codeHash && otp.purpose === 'caretaker_activation'
+      && otp.expiresAt && otp.expiresAt.getTime() >= Date.now();
+    if (!usable || !(await compareOtp(normalizeCode(code), otp.codeHash))) throw invalidActivationCode();
 
-    const user = await UserRepository.findById(payload.sub);
-    if (!user || user.role !== ROLES.CARETAKER) {
-      throw ApiError.badRequest('Invalid activation link', 'INVALID_ACTIVATION_TOKEN');
-    }
-    if (user.accountStatus !== ACCOUNT_STATUS.PENDING_ACTIVATION) {
-      throw ApiError.conflict('This account has already been activated', 'ALREADY_ACTIVATED');
-    }
+    const now = new Date();
+    const activated = await UserRepository.model.findOneAndUpdate(
+      { _id: user._id, accountStatus: ACCOUNT_STATUS.PENDING_ACTIVATION, 'otp.codeHash': otp.codeHash },
+      {
+        $set: {
+          passwordHash: await hashPassword(password),
+          accountStatus: ACCOUNT_STATUS.ACTIVE,
+          activatedAt: now,
+          lastActivityAt: now,
+          otp: { codeHash: null, purpose: null, expiresAt: null, attempts: 0 },
+        },
+      },
+    ).exec();
+    if (!activated) throw invalidActivationCode(); // the same code was used a moment ago
 
-    const passwordHash = await hashPassword(password);
-    await UserRepository.updateById(user._id, {
-      passwordHash,
-      accountStatus: ACCOUNT_STATUS.ACTIVE,
-      activatedAt: new Date(),
-      lastActivityAt: new Date(),
-    });
-
+    await AuditLogRepository.record({ action: 'CARETAKER_ACTIVATED', actorId: user._id, actorRole: ROLES.CARETAKER, targetType: 'User', targetId: user._id });
     return { message: 'Account activated. You can now log in.' };
   }
 }

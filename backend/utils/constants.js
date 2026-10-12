@@ -17,6 +17,8 @@ const ACCOUNT_STATUS = Object.freeze({
 
 // Admin-issued password reset codes (POST /api/admin/users/:id/reset-code): shown once as XXXX-XXXX.
 const PASSWORD_RESET_CODE = Object.freeze({ LENGTH: 8, TTL_MINUTES: 30 });
+// The one-time code a landlord hands a new caretaker (XXXXX-XXXXX), instead of a shared password.
+const CARETAKER_ACTIVATION_CODE = Object.freeze({ LENGTH: 10, TTL_HOURS: 72 });
 
 const MFA_METHOD = Object.freeze({
   NONE: 'none',
@@ -115,6 +117,7 @@ module.exports = {
   ACCOUNT_STATUS,
   MFA_METHOD,
   PASSWORD_RESET_CODE,
+  CARETAKER_ACTIVATION_CODE,
   LISTING_STATUS,
   PROPERTY_TYPE,
   GENDER_POLICY,

@@ -105,11 +105,11 @@ const userSchema = new Schema(
       enum: Object.values(VERIFICATION_STATUS),
       default: null,
     },
-    // One-time-password state for login-MFA, forgot-password, and
-    // registration email-verification flows.
+    // One-time-code slot: registration email verification, admin password-reset codes and
+    // caretaker activation codes (login_mfa is the retired email two-factor).
     otp: {
       codeHash: { type: String, select: false, default: null },
-      purpose: { type: String, enum: ['login_mfa', 'password_reset', 'email_verification', null], default: null, select: false },
+      purpose: { type: String, enum: ['login_mfa', 'password_reset', 'email_verification', 'caretaker_activation', null], default: null, select: false },
       expiresAt: { type: Date, select: false, default: null },
       attempts: { type: Number, default: 0, select: false },
     },

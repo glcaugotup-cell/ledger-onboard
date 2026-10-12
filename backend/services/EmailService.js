@@ -119,39 +119,6 @@ class EmailService {
     });
   }
 
-  sendCaretakerActivationEmail(to, fullName, activationUrl, landlordName) {
-    const invitedBy = landlordName ? ` by ${landlordName}` : '';
-    return this._sendMessage(to, 'Ledger OnBoard Caretaker Invitation', {
-      category: 'Caretaker invitation',
-      title: "You're invited to join",
-      greeting: `Hi ${fullName},`,
-      paragraphs: [
-        `You have been invited${invitedBy} to become a caretaker on Ledger OnBoard.`,
-        'Activate your account and choose a strong personal password to get started.',
-      ],
-      details: [['Invitation expires', 'In 3 days']],
-      action: { label: 'Activate my account', url: activationUrl },
-      note: 'This invitation link expires in 3 days. If you did not expect this invitation, you can safely ignore this email.',
-    });
-  }
-
-  sendCaretakerCreatedEmail(to, fullName, activationUrl, landlordName, temporaryPassword) {
-    const invitedBy = landlordName ? ` by ${landlordName}` : '';
-    return this._sendMessage(to, 'Ledger OnBoard Caretaker Invitation', {
-      category: 'Caretaker invitation',
-      title: "You're invited to join",
-      greeting: `Hi ${fullName},`,
-      paragraphs: [
-        `You have been invited${invitedBy} to become a caretaker on Ledger OnBoard.`,
-        'Use the button below to choose a strong personal password and activate your account before accessing your dashboard.',
-      ],
-      highlight: { label: 'Temporary password', value: temporaryPassword },
-      details: [['Your role', 'Caretaker'], ['Invitation expires', 'In 3 days']],
-      action: { label: 'Activate my account', url: activationUrl },
-      note: 'This link expires in 3 days. Keep this invitation private. If you did not expect it, you can safely ignore this email.',
-    });
-  }
-
   /** Sent when a landlord approves a reservation: where, when, and who to contact to arrange the move-in. */
   sendReservationApprovedEmail(to, { tenantName, propertyName, location, roomNumber, moveInDate, holdUntil, landlord, caretaker }) {
     const details = [

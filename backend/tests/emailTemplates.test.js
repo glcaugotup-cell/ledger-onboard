@@ -13,35 +13,35 @@ const { buildEmail } = require('../utils/emailTemplate');
 
 afterEach(() => jest.restoreAllMocks());
 
-test('SMTP receives both styled HTML and a usable plain-text invitation with the same token', async () => {
-  const sendMail = jest.fn().mockResolvedValue({ accepted: ['caretaker@example.com'] });
+// Phase 5 rule: caretaker invitations send no email, so their template is gone. These two checks of
+// the shared layout now use the payment-rejected email and the layout itself.
+test('SMTP receives both styled HTML and a usable plain-text email with the same link and details', async () => {
+  const sendMail = jest.fn().mockResolvedValue({ accepted: ['tenant@example.com'] });
   nodemailer.createTransport.mockReturnValue({ sendMail });
-  const url = 'https://ledger-onboard.vercel.app/activate-caretaker?token=example.jwt.token';
-  await EmailService.sendCaretakerCreatedEmail('caretaker@example.com', 'Alex Santos', url, 'Jamie Reyes', 'SampleOnly123!');
+  const url = 'https://ledger-onboard.vercel.app/tenant/billing';
+  await EmailService.sendPaymentRejectedEmail('tenant@example.com', 'Alex Santos', 'Reference SampleOnly123 not found');
   const message = sendMail.mock.calls[0][0];
-  expect(message.text).toContain(`Activate my account:\n${url}`);
+  expect(message.text).toContain(`Review my payment:\n${url}`);
   expect(message.html).toContain(`href="${url}"`);
-  expect(message.html).toContain('Activate my account');
-  expect(message.text).toContain('Temporary password: SampleOnly123!');
-  expect(message.html).toContain('SampleOnly123!');
-  expect(message.text).toContain('expires in 3 days');
+  expect(message.html).toContain('Review my payment');
+  expect(message.text).toContain('Reason: Reference SampleOnly123 not found');
+  expect(message.html).toContain('Reference SampleOnly123 not found');
   expect(message.html).not.toContain('localhost');
 });
 
 test('escapes user-controlled text and URL attributes in HTML while preserving readable plain text', () => {
   const send = jest.spyOn(EmailService, 'send').mockImplementation((message) => message);
-  const url = 'https://ledger-onboard.vercel.app/activate-caretaker?token=example&source=email';
-  const message = EmailService.sendCaretakerCreatedEmail(
-    'caretaker@example.com', '<img src=x onerror=alert(1)>', url, 'Owner & "Family"', '<password>',
-  );
+  const message = EmailService.sendPaymentRejectedEmail('tenant@example.com', '<img src=x onerror=alert(1)>', 'Owner & "Family" <password>');
   expect(send).toHaveBeenCalledTimes(1);
   expect(message.html).not.toContain('<img src=x');
   expect(message.html).toContain('&lt;img src=x onerror=alert(1)&gt;');
-  expect(message.html).toContain('Owner &amp; &quot;Family&quot;');
-  expect(message.html).toContain('&lt;password&gt;');
-  expect(message.html).toContain('token=example&amp;source=email');
-  expect(message.text).toContain('Owner & "Family"');
-  expect(message.text).toContain(url);
+  expect(message.html).toContain('Owner &amp; &quot;Family&quot; &lt;password&gt;');
+  expect(message.text).toContain('Owner & "Family" <password>');
+
+  const url = 'https://ledger-onboard.vercel.app/tenant/billing?tab=open&source=email';
+  const layout = buildEmail({ appUrl: 'https://ledger-onboard.vercel.app', action: { label: 'Open', url } });
+  expect(layout.html).toContain('tab=open&amp;source=email');
+  expect(layout.text).toContain(url);
 });
 
 test('OTP keeps its six-digit code and expiry in both alternatives without exposing it in the inbox preview', () => {

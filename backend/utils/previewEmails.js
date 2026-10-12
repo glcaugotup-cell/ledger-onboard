@@ -12,10 +12,7 @@ fs.mkdirSync(outputDir, { recursive: true });
 
 const recipient = 'sample@example.com';
 const name = 'Alex Santos';
-const activationUrl = `${env.emailAppUrl}/activate-caretaker?token=preview-only-not-a-valid-token`;
 const samples = [
-  ['caretaker-invitation', 'sendCaretakerCreatedEmail', name, activationUrl, 'Jamie Reyes', 'SampleOnly123!'],
-  ['caretaker-activation', 'sendCaretakerActivationEmail', name, activationUrl, 'Jamie Reyes'],
   ['email-verification', 'sendOtpEmail', '123456', 'email_verification', 'Alex'],
   ['login-verification', 'sendOtpEmail', '123456', 'login_mfa', 'Alex'],
   ['password-reset', 'sendOtpEmail', '123456', 'password_reset', 'Alex'],

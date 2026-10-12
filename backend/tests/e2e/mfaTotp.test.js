@@ -243,21 +243,20 @@ describe('3.5 the sign-in challenge', () => {
     expect(res.status).toBe(401);
   }, 30000);
 
-  test('the activation page still works with its link token, and a sign-in token cannot stand in for it', async () => {
+  // Phase 5 rule: activation takes an email, a one-time code and a new password; activation-link
+  // tokens (and sign-in tokens) no longer activate anything.
+  test('neither an old activation-link token nor a sign-in token activates an account', async () => {
     const caretaker = await makeUser('activation.page@gmail.com', { role: 'caretaker', accountStatus: 'pending_activation', emergencyContact: undefined });
-    // The same token the invitation email carries (AuthService.createCaretaker).
+    // The same token the invitation email used to carry.
     const activationToken = jwt.sign({ sub: String(caretaker._id), purpose: 'caretaker_activation' }, env.jwtSecret, { expiresIn: '3d' });
     const { signAccessToken } = require('../../utils/jwt');
 
-    const withSignInToken = await request(app).post('/api/auth/activate-caretaker').send({ token: signAccessToken(caretaker), password: 'NewStr0ng!Pass' });
-    expect(withSignInToken.status).toBe(400);
-    expect(withSignInToken.body.error.code).toBe('INVALID_ACTIVATION_TOKEN');
-
-    const activated = await request(app).post('/api/auth/activate-caretaker').send({ token: activationToken, password: 'NewStr0ng!Pass' });
-    expect(activated.status).toBe(200);
-    const signIn = await request(app).post('/api/auth/login').send({ email: 'activation.page@gmail.com', password: 'NewStr0ng!Pass' });
-    expect(signIn.status).toBe(200);
-    expect(signIn.body.data.accessToken).toBeTruthy();
+    for (const token of [activationToken, signAccessToken(caretaker)]) {
+      const res = await request(app).post('/api/auth/activate-caretaker').send({ token, password: 'NewStr0ng!Pass' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    }
+    expect((await UserRepository.findById(caretaker._id)).accountStatus).toBe('pending_activation');
   }, 30000);
 });
 

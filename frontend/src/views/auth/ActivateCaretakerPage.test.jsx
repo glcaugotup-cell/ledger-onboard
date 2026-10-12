@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ActivateCaretakerPage from './ActivateCaretakerPage.jsx';
 import AuthApi from '../../services/AuthApi.js';
 import { ApiClientError } from '../../services/apiClient.js';
@@ -10,9 +10,15 @@ vi.mock('../../services/AuthApi.js', () => ({ default: { activateCaretaker: vi.f
 
 const VALID_PASSWORD = 'Str0ng!Pass1';
 
+// Phase 5 rule: activation takes the caretaker's email and the code from their landlord (no link token).
+async function fillEmailAndCode(user) {
+  await user.type(screen.getByLabelText('Email'), 'pedro.reyes@gmail.com');
+  await user.type(screen.getByLabelText('Activation code'), 'abcde-fghjk');
+}
+
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={['/activate-caretaker?token=abc123']}>
+    <MemoryRouter initialEntries={['/activate-caretaker']}>
       <Routes>
         <Route path="/activate-caretaker" element={<ActivateCaretakerPage />} />
       </Routes>
@@ -61,6 +67,7 @@ describe('ActivateCaretakerPage — password visibility toggle', () => {
   it('blocks an invalid password and names what is missing', async () => {
     const user = userEvent.setup();
     renderPage();
+    await fillEmailAndCode(user);
     await user.type(screen.getByLabelText(/^new password/i), 'weakpass');
     await user.type(screen.getByLabelText(/^confirm password/i), 'weakpass');
     await user.click(screen.getByRole('button', { name: 'Activate account' }));
@@ -123,6 +130,7 @@ describe('ActivateCaretakerPage — confirm password', () => {
   it('blocks submission and never calls the API when the passwords do not match', async () => {
     const user = userEvent.setup();
     renderPage();
+    await fillEmailAndCode(user);
     await user.type(screen.getByLabelText(/^new password/i), VALID_PASSWORD);
     await user.type(screen.getByLabelText(/^confirm password/i), 'Different1!');
     await user.click(screen.getByRole('button', { name: 'Activate account' }));
@@ -133,6 +141,7 @@ describe('ActivateCaretakerPage — confirm password', () => {
   it('blocks submission when confirm password is left empty', async () => {
     const user = userEvent.setup();
     renderPage();
+    await fillEmailAndCode(user);
     await user.type(screen.getByLabelText(/^new password/i), VALID_PASSWORD);
     await user.click(screen.getByRole('button', { name: 'Activate account' }));
 
@@ -140,17 +149,18 @@ describe('ActivateCaretakerPage — confirm password', () => {
     expect(AuthApi.activateCaretaker).not.toHaveBeenCalled();
   });
 
-  it('submits only { token, password } — never the confirm-password value — once everything is valid', async () => {
+  it('submits only { email, code, password } — never the confirm-password value — once everything is valid', async () => {
     AuthApi.activateCaretaker.mockResolvedValue({ message: 'Account activated.' });
     const user = userEvent.setup();
     renderPage();
+    await fillEmailAndCode(user);
 
     await user.type(screen.getByLabelText(/^new password/i), VALID_PASSWORD);
     await user.type(screen.getByLabelText(/^confirm password/i), VALID_PASSWORD);
     await user.click(screen.getAllByRole('button', { name: 'Show password' })[0]);
     await user.click(screen.getByRole('button', { name: 'Activate account' }));
 
-    expect(AuthApi.activateCaretaker).toHaveBeenCalledWith({ token: 'abc123', password: VALID_PASSWORD });
+    expect(AuthApi.activateCaretaker).toHaveBeenCalledWith({ email: 'pedro.reyes@gmail.com', code: 'ABCDE-FGHJK', password: VALID_PASSWORD });
     expect(AuthApi.activateCaretaker).toHaveBeenCalledWith(expect.not.objectContaining({ confirmPassword: expect.anything() }));
   });
 });
@@ -177,7 +187,7 @@ describe('ActivateCaretakerPage — password strength indicator', () => {
 describe('ActivateCaretakerPage — redirect after activation', () => {
   function renderWithDestinations() {
     return render(
-      <MemoryRouter initialEntries={['/activate-caretaker?token=abc123']}>
+      <MemoryRouter initialEntries={['/activate-caretaker']}>
         <Routes>
           <Route path="/activate-caretaker" element={<ActivateCaretakerPage />} />
           <Route path="/" element={<p>Landing page</p>} />
@@ -191,6 +201,7 @@ describe('ActivateCaretakerPage — redirect after activation', () => {
     AuthApi.activateCaretaker.mockResolvedValue({ message: 'Account activated.' });
     const user = userEvent.setup();
     renderWithDestinations();
+    await fillEmailAndCode(user);
 
     await user.type(screen.getByLabelText(/^new password/i), 'Angelo@calaycay66');
     await user.type(screen.getByLabelText(/^confirm password/i), 'Angelo@calaycay66');
@@ -201,19 +212,58 @@ describe('ActivateCaretakerPage — redirect after activation', () => {
     expect(screen.queryByText('Login page')).not.toBeInTheDocument();
   });
 
-  it('stays on the activation page with the error when activation fails (e.g. expired link)', async () => {
-    AuthApi.activateCaretaker.mockRejectedValue(new ApiClientError('Invalid or expired activation link', 'INVALID_ACTIVATION_TOKEN', 400));
+  it('stays on the activation page with the error when activation fails (e.g. expired code)', async () => {
+    AuthApi.activateCaretaker.mockRejectedValue(new ApiClientError('Invalid or expired activation code', 'INVALID_ACTIVATION_CODE', 400));
     const user = userEvent.setup();
     renderWithDestinations();
+    await fillEmailAndCode(user);
 
     await user.type(screen.getByLabelText(/^new password/i), 'Angelo@calaycay66');
     await user.type(screen.getByLabelText(/^confirm password/i), 'Angelo@calaycay66');
     await user.click(screen.getByRole('button', { name: 'Activate account' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid or expired activation link');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid or expired activation code');
     await new Promise((r) => setTimeout(r, 1500)); // longer than the success redirect delay
     expect(screen.getByRole('button', { name: 'Activate account' })).toBeInTheDocument();
     expect(screen.queryByText('Landing page')).not.toBeInTheDocument();
     expect(screen.queryByText('Login page')).not.toBeInTheDocument();
+  });
+});
+
+describe('ActivateCaretakerPage — email and activation code (phase 5)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('asks for the email and the code, and sends nothing without them', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    expect(screen.getByText(/the activation code your landlord gave you/i)).toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText(/^new password/i), VALID_PASSWORD);
+    await user.type(screen.getByLabelText(/^confirm password/i), VALID_PASSWORD);
+    await user.click(screen.getByRole('button', { name: 'Activate account' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter your email and the activation code from your landlord.');
+    expect(AuthApi.activateCaretaker).not.toHaveBeenCalled();
+  });
+
+  it('upper-cases the code as it is typed', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText('Activation code'), 'abcde-fghjk');
+    expect(screen.getByLabelText('Activation code')).toHaveValue('ABCDE-FGHJK');
+  });
+
+  it('opened from an old emailed link, it says links no longer work and asks for a code', () => {
+    render(
+      <MemoryRouter initialEntries={['/activate-caretaker?token=old.link.token']}>
+        <Routes>
+          <Route path="/activate-caretaker" element={<ActivateCaretakerPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('note')).toHaveTextContent('Activation links from invitation emails no longer work. Ask your landlord for an activation code.');
+    expect(screen.getByLabelText('Activation code')).toBeInTheDocument();
   });
 });

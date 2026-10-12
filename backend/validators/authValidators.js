@@ -145,7 +145,14 @@ const updateCaretakerValidators = [
   buildServiceBarangayChain().optional(),
 ];
 
-const activateCaretakerValidators = [body('token').notEmpty(), strongPasswordChain('password')];
+// The activation code from the landlord (XXXXX-XXXXX); any case, the dash or a space optional.
+const ACTIVATION_CODE = /^[A-Za-z0-9]{5}[-\s]?[A-Za-z0-9]{5}$/;
+const ACTIVATION_CODE_MESSAGE = 'Enter the activation code from your landlord';
+const activateCaretakerValidators = [
+  emailChain,
+  body('code').isString().withMessage(ACTIVATION_CODE_MESSAGE).bail().trim().matches(ACTIVATION_CODE).withMessage(ACTIVATION_CODE_MESSAGE),
+  strongPasswordChain('password'),
+];
 
 // Recovery takes the same codes as a password reset.
 const accountRecoveryValidators = [emailChain, resetCodeChain(), strongPasswordChain('newPassword')];

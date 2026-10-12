@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircleIcon, UserPlusIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { UserPlusIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import PageHeader from '../../components/layout/PageHeader.jsx';
 import CaretakerApi from '../../services/CaretakerApi.js';
@@ -7,6 +7,7 @@ import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Field, Select, TextArea, TextInput } from '../../components/ui/Field.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
+import ActivationCodeDialog from '../../components/ActivationCodeDialog.jsx';
 import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import { EmptyState, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { DAGUPAN_BARANGAYS } from '../../data/dagupanBarangays.js';
@@ -103,7 +104,8 @@ export default function CaretakersPage() {
   const [createError, setCreateError] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
-  const [createdTemporaryPassword, setCreatedTemporaryPassword] = useState('');
+  // { caretaker, code, expiresAt } from the invite or a new code; shown once in ActivationCodeDialog.
+  const [codeFor, setCodeFor] = useState(null);
   const [removing, setRemoving] = useState(null);
   const [removeReason, setRemoveReason] = useState('');
   const [removeError, setRemoveError] = useState('');
@@ -115,8 +117,9 @@ export default function CaretakersPage() {
     setResendingId(caretaker._id);
     setResendError(null);
     try {
-      const { caretaker: updated } = await CaretakerApi.resendInvitation(caretaker._id);
+      const { caretaker: updated, activationCode, expiresAt } = await CaretakerApi.resendInvitation(caretaker._id);
       setCaretakers((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
+      setCodeFor({ caretaker: updated, code: activationCode, expiresAt });
     } catch (err) {
       setResendError({ id: caretaker._id, message: describeApiError(err).message });
     } finally {
@@ -164,7 +167,6 @@ export default function CaretakersPage() {
     e.preventDefault();
     setCreateError('');
     setSuccessMsg('');
-    setCreatedTemporaryPassword('');
 
     const payload = { ...form, firstName: toNameCase(form.firstName.trim()), lastName: toNameCase(form.lastName.trim()), email: `${form.email.trim().toLowerCase()}@gmail.com` };
     // Show the names the way they will be saved (e.g. "o'connor" -> "O'Connor"); the email box keeps just the username.
@@ -184,8 +186,8 @@ export default function CaretakersPage() {
     setCreateLoading(true);
     try {
       const created = await CaretakerApi.create(payload);
-      setSuccessMsg(`Caretaker account created for ${payload.email}. They must activate it and change the temporary password before accessing the dashboard.`);
-      setCreatedTemporaryPassword(created.temporaryPassword || 'caretaker1234');
+      setSuccessMsg(`Caretaker account created for ${payload.email}. Give them the activation code so they can activate it and choose a password.`);
+      setCodeFor({ caretaker: created.caretaker, code: created.activationCode, expiresAt: created.expiresAt });
       setForm(EMPTY_FORM);
       setFormErrors({});
       load();
@@ -205,12 +207,11 @@ export default function CaretakersPage() {
         <Card className="rounded-2xl border-gray-200/80 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100"><UserPlusIcon className="h-5 w-5" aria-hidden="true" /></span>
-            <div><h2 className="font-semibold text-gray-900">Invite a caretaker</h2><p className="mt-0.5 text-xs text-gray-500">Send an activation link to a trusted team member.</p></div>
+            <div><h2 className="font-semibold text-gray-900">Invite a caretaker</h2><p className="mt-0.5 text-xs text-gray-500">You get a one-time activation code to give them.</p></div>
           </div>
           <form onSubmit={onCreate} className="space-y-3" noValidate>
             <ErrorBanner message={createError} />
             <SuccessBanner message={successMsg} />
-            {createdTemporaryPassword && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-semibold">Temporary password</p><p className="mt-1 font-mono text-base">{createdTemporaryPassword}</p><p className="mt-1 text-xs">Share it with the caretaker. The activation page requires them to set a new password before they can use the account.</p></div>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field required label="First name" error={formErrors.firstName}>
                 <TextInput maxLength={FIRST_NAME_MAX_LENGTH} value={form.firstName} onChange={(e) => setField('firstName', capitalizeFirst(caretakerNameInput(e.target.value)))} error={formErrors.firstName} />
@@ -236,7 +237,7 @@ export default function CaretakersPage() {
             </Field>
             <p className="-mt-1 text-xs text-gray-500">Where this caretaker works. Used to suggest them for boarding houses in the same barangay.</p>
             <Button type="submit" loading={createLoading} className="w-full">
-              Send activation invite
+              Invite and get code
             </Button>
           </form>
         </Card>
@@ -262,22 +263,17 @@ export default function CaretakersPage() {
                       <p className="truncate font-semibold text-gray-900">{c.fullName}</p>
                       <p className="truncate text-sm text-gray-500">{c.email}</p>
                       {c.accountStatus === 'pending_activation' ? (
-                        <p className="mt-0.5 text-xs text-gray-500">Invited {formatDate(c.createdAt)}{c.invitationResentAt && ` · Resent ${formatDateTime(c.invitationResentAt)}`}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">Invited {formatDate(c.createdAt)}{c.invitationResentAt && ` · New code ${formatDateTime(c.invitationResentAt)}`}</p>
                       ) : (
                         <p className="mt-0.5 text-xs text-gray-500">{c.activatedAt ? `Caretaker since ${formatDate(c.activatedAt)}` : `Added ${formatDate(c.createdAt)}`}</p>
                       )}
                     </div>
                   </div>
                   <StatusBadge status={c.accountStatus} tones={STATUS_TONE} />
-                  {c.accountStatus === 'pending_activation' && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Must set password</span>}
-                  {c.accountStatus === 'pending_activation' && (c.invitationResentAt ? (
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-800"><CheckCircleIcon className="h-4 w-4" aria-hidden="true" />Invite sent</span>
-                      <button type="button" className="text-xs font-medium text-brand-700 hover:underline disabled:text-gray-400 disabled:no-underline" disabled={Boolean(resendingId)} onClick={() => resendInvitation(c)}>{resendingId === c._id ? 'Sending…' : 'Send again'}</button>
-                    </div>
-                  ) : (
-                    <Button variant="secondary" loading={resendingId === c._id} disabled={Boolean(resendingId)} onClick={() => resendInvitation(c)}>Resend invite</Button>
-                  ))}
+                  {c.accountStatus === 'pending_activation' && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Waiting for activation</span>}
+                  {c.accountStatus === 'pending_activation' && (
+                    <Button variant="secondary" loading={resendingId === c._id} disabled={Boolean(resendingId)} onClick={() => resendInvitation(c)}>New activation code</Button>
+                  )}
                   {c.accountStatus === 'active' && <Button variant="danger" onClick={() => { setRemoving(c); setRemoveReason(''); setRemoveError(''); }}>Remove</Button>}
                 </div>
                 {resendError?.id === c._id && <p className="mt-2 text-right text-xs text-red-600" role="alert">{resendError.message}</p>}
@@ -300,6 +296,7 @@ export default function CaretakersPage() {
           </div>
         </section>
       </div>
+      {codeFor && <ActivationCodeDialog key={codeFor.code} {...codeFor} onClose={() => setCodeFor(null)} />}
       <ConfirmDialog open={Boolean(removing)} tone="danger" title={removing ? `Remove ${removing.fullName}?` : ''} message="Their sign-in access will end. Existing readings, payments, and audit records will remain on file." confirmLabel="Remove caretaker" loading={removeLoading} confirmDisabled={removeReason.trim().length < 3} error={removeError} onConfirm={removeCaretaker} onCancel={() => setRemoving(null)}>
         <Field required label="Reason for removal">
           <TextArea rows={3} maxLength={500} value={removeReason} onChange={(e) => setRemoveReason(e.target.value)} placeholder="Explain why this caretaker is being removed" />

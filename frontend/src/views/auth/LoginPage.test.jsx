@@ -21,6 +21,12 @@ describe('LoginPage', () => {
     useAuthMock.mockReset();
   });
 
+  it('links to the caretaker activation page (phase 5)', () => {
+    useAuthMock.mockReturnValue({ login: vi.fn(), verifyLoginOtp: vi.fn(), mfaChallenge: null, user: null });
+    renderLoginPage();
+    expect(screen.getByRole('link', { name: 'Activate a caretaker account' })).toHaveAttribute('href', '/activate-caretaker');
+  });
+
   it('submits the entered credentials and shows no error on success', async () => {
     const login = vi.fn().mockResolvedValue({ mfaRequired: false });
     useAuthMock.mockReturnValue({ login, verifyLoginOtp: vi.fn(), mfaChallenge: null, user: { role: 'tenant' } });

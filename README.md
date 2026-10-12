@@ -11,7 +11,7 @@ The project has two parts:
 
 - **Tenants** — browse and filter approved boarding houses on a card grid and a Leaflet map, view property details, reserve a room, view statements of account, and pay (cash or GCash proof upload).
 - **Landlords** — submit business verification documents (Mayor's/Business Permit, BIR Form 2303), publish properties with photos and an optional video once verified, manage rooms and reservations, invite caretakers, verify payments, and view analytics (occupancy, collection rate, outstanding balances).
-- **Caretakers** — activate their account from an emailed invitation, view assigned rooms, log utility readings, and record cash payments.
+- **Caretakers** — activate their account with a one-time code from their landlord (no email or shared password), view assigned rooms, log utility readings, and record cash payments.
 - **Admins** — review landlord business verification, manage user accounts, moderate reviews, and view audit logs.
 - **Accounts & security** — email OTP verification at registration, optional email OTP login (MFA), password reset by email code, password strength indicator, role-based access control, rate limiting, and automatic archiving of accounts inactive for 30 days (with a warning at day 25 and a recovery flow).
 
@@ -67,9 +67,9 @@ Never commit `backend/.env`; it is excluded by `.gitignore`.
 
 ### Email links and styling
 
-Set `EMAIL_APP_URL=https://ledger-onboard.vercel.app` in the backend environment to point email buttons and caretaker invitations at the deployed app. Set it on your backend hosting service (Render) as well as in `backend/.env` when needed locally. In production, allow the frontend with `CLIENT_ORIGIN=https://ledger-onboard.vercel.app`. Restart the backend after changing environment variables and deploy backend code changes for the new email templates to take effect.
+Set `EMAIL_APP_URL=https://ledger-onboard.vercel.app` in the backend environment to point email buttons at the deployed app. Set it on your backend hosting service (Render) as well as in `backend/.env` when needed locally. In production, allow the frontend with `CLIENT_ORIGIN=https://ledger-onboard.vercel.app`. Restart the backend after changing environment variables and deploy backend code changes for the new email templates to take effect.
 
-The deployed frontend must call the backend that created the invitation: that backend must have the caretaker record and the JWT secret used to sign its activation token. A Vercel URL alone does not make an invitation from a separate local database work in production. Existing emails keep their original links; new invitations use the updated setting.
+Caretaker invitations send no email. The landlord gets a one-time activation code (valid 72 hours) when inviting a caretaker, and a new one from "New activation code"; the caretaker enters their email, the code and a new password on the Activate account page linked from sign-in. Activation links from older invitation emails no longer work.
 
 Edit wording in `backend/services/EmailService.js` and the shared colors, spacing, and layout in `backend/utils/emailTemplate.js`. Emails include inline HTML styles and a plain-text alternative. Names, reasons, codes, and URLs are escaped before being inserted into HTML.
 
@@ -80,7 +80,7 @@ cd backend
 npm run preview:emails
 ```
 
-Open `backend/.email-previews/caretaker-invitation.html` or any of the other generated HTML files in a browser. Browser previews show the layout; Gmail may adjust colors in dark mode.
+Open any of the generated HTML files in `backend/.email-previews/` in a browser. Browser previews show the layout; Gmail may adjust colors in dark mode.
 
 The frontend needs no environment file for local development: the Vite dev server proxies `/api` and `/uploads` to `http://localhost:5000`. For a deployed build, set `VITE_API_URL` to the backend origin (see `frontend/.env.example`), e.g. `https://ledger-onboard-backend.onrender.com`.
 

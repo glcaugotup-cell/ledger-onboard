@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import AuthLayout from './AuthLayout.jsx';
 import AuthApi from '../../services/AuthApi.js';
-import { Field } from '../../components/ui/Field.jsx';
+import { Field, TextInput } from '../../components/ui/Field.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import PasswordInput from '../../components/ui/PasswordInput.jsx';
@@ -10,11 +10,15 @@ import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { validatePassword } from '../../utils/validators.js';
+import { cleanMfaCode } from '../../utils/mfa.js';
 
+/** A caretaker activates their account with their email, the code from their landlord and a new password. */
 export default function ActivateCaretakerPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const token = params.get('token') || '';
+  // Older invitation emails linked here with ?token=…; those links no longer work.
+  const fromOldLink = params.has('token');
+  const [form, setForm] = useState({ email: '', code: '' });
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [confirmError, setConfirmError] = useState('');
@@ -27,6 +31,10 @@ export default function ActivateCaretakerPage() {
     setError('');
     setConfirmError('');
 
+    if (!form.email.trim() || !form.code) {
+      setError('Enter your email and the activation code from your landlord.');
+      return;
+    }
     const passwordError = validatePassword(password);
     if (passwordError) {
       setError(`${passwordError}.`);
@@ -44,12 +52,9 @@ export default function ActivateCaretakerPage() {
 
     setLoading(true);
     try {
-      // confirmPassword is a frontend-only typo guard (same pattern as
-      // registration) — never sent to the backend, which still only
-      // accepts { token, password }.
-      const res = await AuthApi.activateCaretaker({ token, password });
+      // confirmPassword is a frontend-only typo guard (same pattern as registration): never sent.
+      const res = await AuthApi.activateCaretaker({ email: form.email.trim(), code: form.code, password });
       setSuccess(res.message);
-      // Go to the landing page; `replace` keeps the single-use activation link out of history.
       setTimeout(() => navigate('/', { replace: true }), 1200);
     } catch (err) {
       setError(describeApiError(err).message);
@@ -58,19 +63,34 @@ export default function ActivateCaretakerPage() {
     }
   };
 
-  if (!token) {
-    return (
-      <AuthLayout title="Invalid activation link">
-        <ErrorBanner message="This activation link is missing its token. Ask your landlord to resend the invitation." />
-      </AuthLayout>
-    );
-  }
-
   return (
-    <AuthLayout title="Activate your caretaker account" subtitle="Your temporary password is caretaker1234. Choose a new strong password here to activate your account before you can access the dashboard.">
+    <AuthLayout
+      title="Activate your caretaker account"
+      subtitle="Enter your email, the activation code your landlord gave you, and choose a new password."
+    >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        {fromOldLink && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="note">
+            Activation links from invitation emails no longer work. Ask your landlord for an activation code.
+          </p>
+        )}
         <ErrorBanner message={error} />
         <SuccessBanner message={success} />
+
+        <Field required label="Email">
+          <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" required />
+        </Field>
+        <Field required label="Activation code" hint="XXXXX-XXXXX, from your landlord">
+          <TextInput
+            value={form.code}
+            onChange={(e) => setForm({ ...form, code: cleanMfaCode(e.target.value) })}
+            autoComplete="one-time-code"
+            autoCapitalize="characters"
+            spellCheck={false}
+            maxLength={11}
+            required
+          />
+        </Field>
 
         <div>
           <Field required label="New password">

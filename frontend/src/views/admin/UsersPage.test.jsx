@@ -188,6 +188,13 @@ describe('UsersPage reset codes', () => {
     expect(within(cardOf('New Invitee')).queryByRole('button', { name: /reset code/i })).not.toBeInTheDocument();
   });
 
+  it('offers Activate for a suspended account, but not for a caretaker who has not activated (phase 5)', async () => {
+    renderPage();
+    await screen.findByText('Juan Tenant');
+    expect(within(cardOf('Ana Landlord')).getByRole('button', { name: 'Activate' })).toBeInTheDocument();
+    expect(within(cardOf('New Invitee')).queryByRole('button', { name: 'Activate' })).not.toBeInTheDocument();
+  });
+
   it('never offers one for an admin account', async () => {
     AdminApi.listUsers.mockResolvedValue({ users: [{ _id: 'a2', fullName: 'Other Admin', role: 'admin', email: 'a2@gmail.com', accountStatus: 'active' }] });
     renderPage();

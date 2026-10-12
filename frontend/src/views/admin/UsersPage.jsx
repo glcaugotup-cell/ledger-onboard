@@ -182,7 +182,8 @@ export default function UsersPage() {
                           Reset code
                         </Button>
                       )}
-                      {u.accountStatus !== 'active' && (
+                      {/* A caretaker who hasn't activated does that with their landlord's code; an admin can't. */}
+                      {u.accountStatus !== 'active' && u.accountStatus !== 'pending_activation' && (
                         <Button variant="secondary" loading={busyId === u._id} onClick={() => reactivate(u)}>
                           Activate
                         </Button>
