@@ -22,7 +22,7 @@ const CARETAKER_ACTIVATION_CODE = Object.freeze({ LENGTH: 10, TTL_HOURS: 72 });
 
 const MFA_METHOD = Object.freeze({
   NONE: 'none',
-  EMAIL: 'email', // retired: kept only so older records stay valid (they sign in with just a password)
+  EMAIL: 'email', // active only after explicit mailbox confirmation (emailMfaEnabledAt)
   TOTP: 'totp',
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowUpTrayIcon,
   CheckCircleIcon,
@@ -22,7 +22,8 @@ import PropertyMap from '../../components/map/PropertyMap.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Field, Select, TextArea, TextInput } from '../../components/ui/Field.jsx';
-import { ErrorBanner } from '../../components/ui/Feedback.jsx';
+import { ErrorBanner, LoadingState } from '../../components/ui/Feedback.jsx';
+import { mediaUrl } from '../../services/apiClient.js';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst, toSentenceCase, toTitleCase } from '../../utils/textFormat.js';
 
@@ -58,6 +59,12 @@ function rulesWithDraft(rules, draft) {
 
 export default function PropertyFormPage() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const editing = Boolean(id);
+  const [existing, setExisting] = useState(null);
+  const [loadedId, setLoadedId] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const editError = loadError && loadError.id === id ? loadError.message : '';
   const [form, setForm] = useState(initialForm);
   const [images, setImages] = useState([]);
   const [photoError, setPhotoError] = useState('');
@@ -75,6 +82,29 @@ export default function PropertyFormPage() {
   const [barangayQuery, setBarangayQuery] = useState('');
   const [barangayOpen, setBarangayOpen] = useState(false);
   const [selectedBarangay, setSelectedBarangay] = useState(null);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    let active = true;
+    PropertyApi.getForManagement(id).then(({ property }) => {
+      if (!active) return;
+      if (!property) throw new Error('Property not found');
+      const barangay = DAGUPAN_BARANGAYS.find(b => b.name.toLowerCase() === property.address?.barangay?.toLowerCase());
+      setExisting(property);
+      setForm({ propertyName: property.propertyName || '', description: property.description || '', street: property.address?.street || '',
+        propertyType: property.propertyType || '', tenantGenderPolicy: property.tenantGenderPolicy || '' });
+      setSelectedBarangay(barangay || null);
+      setBarangayQuery(property.address?.barangay || '');
+      setUniversities(property.nearbyUniversities || []);
+      setAmenities(property.amenities || []);
+      setHouseRules(property.houseRules || []);
+      setHouseRuleDraft('');
+      setImages([]); setVideo(null); setErrors({}); setError('');
+      setLoadError(null);
+      setLoadedId(id);
+    }).catch(() => { if (active) setLoadError({ id, message: 'Could not load this property for editing. Please return to Properties and try again.' }); });
+    return () => { active = false; };
+  }, [id]);
 
   const filteredBarangays = useMemo(() => {
     const q = barangayQuery.trim().toLowerCase();
@@ -101,9 +131,8 @@ export default function PropertyFormPage() {
     return () => URL.revokeObjectURL(url);
   }, [video]);
 
-  function onPhotosSelected(e) {
-    const incoming = Array.from(e.target.files || []);
-    e.target.value = ''; // allow re-selecting the same file later
+  function addPhotos(fileList) {
+    const incoming = Array.from(fileList || []);
     if (incoming.length === 0) return;
     if (incoming.some((file) => !PHOTO_MIME_TYPES.includes(file.type))) {
       setPhotoError('Photos must be JPG, PNG, or WEBP files.');
@@ -120,6 +149,11 @@ export default function PropertyFormPage() {
     }
     setPhotoError('');
     setImages(combined);
+  }
+
+  function onPhotosSelected(e) {
+    addPhotos(e.target.files);
+    e.target.value = ''; // allow re-selecting the same file later
   }
 
   function removePhoto(index) {
@@ -206,6 +240,20 @@ export default function PropertyFormPage() {
       const propertyName = toTitleCase(form.propertyName.trim());
       const street = toTitleCase(form.street.trim());
 
+      if (editing) {
+        // Metadata-only edits preserve stored photos/video and all room/tenancy records.
+        await PropertyApi.update(id, {
+          propertyName, description: form.description,
+          address: { street, barangay: selectedBarangay.name, city: 'Dagupan City', province: 'Pangasinan' },
+          locationCoordinates: { lat: selectedBarangay.lat, lng: selectedBarangay.lng },
+          propertyType: form.propertyType, tenantGenderPolicy: form.tenantGenderPolicy,
+          amenities, nearbyUniversities: universities, houseRules: rulesWithDraft(houseRules, houseRuleDraft),
+        });
+        skipCurrentEntry();
+        navigate(`/landlord/properties/${id}`, { replace: true });
+        return;
+      }
+
       const fd = new FormData();
       fd.append('propertyName', propertyName);
       fd.append('description', form.description);
@@ -241,6 +289,12 @@ export default function PropertyFormPage() {
     }
   };
 
+  if (editing && (editError || loadedId !== id)) {
+    return <DashboardLayout back={{ fallback: '/landlord/properties' }}>
+      {editError ? <ErrorBanner message={editError} /> : <LoadingState />}
+    </DashboardLayout>;
+  }
+
   if (created) {
     return (
       <DashboardLayout back={{ fallback: '/landlord/properties' }}>
@@ -275,8 +329,8 @@ export default function PropertyFormPage() {
             <HomeIcon className="h-6 w-6" />
           </span>
           <div>
-            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">New Property Listing</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Fill in the details below to add your boarding house to the platform.</p>
+            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{editing ? 'Edit Property' : 'New Property Listing'}</h1>
+            <p className="mt-0.5 text-sm text-gray-500">{editing ? 'Update your listing details. Your rooms, photos, video, and rental history are kept.' : 'Fill in the details below to add your boarding house to the platform.'}</p>
           </div>
         </div>
 
@@ -482,11 +536,18 @@ export default function PropertyFormPage() {
                   </Field>
                 </div>
 
+                {editing ? <div className="space-y-3">
+                  <p className="text-sm font-medium text-gray-700">Current property media</p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {(existing?.images || []).map((url, index) => <img key={url} src={mediaUrl(url)} alt={`Current property photo ${index + 1}`} className="aspect-square w-full rounded-lg border object-cover" />)}
+                  </div>
+                  {existing?.videoUrl && <video src={mediaUrl(existing.videoUrl)} controls aria-label="Current property video" className="max-h-48 w-full rounded-lg" />}
+                </div> : <>
                 <Field label="Property Photos" hint="Add clear photos of the exterior, rooms, bathroom, kitchen, and common areas.">
                   <p className="mb-2 text-xs text-gray-500">Upload up to 5 photos of your property.</p>
 
                   {images.length < MAX_PHOTOS && (
-                    <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/60 px-4 py-8 text-center hover:border-brand-300">
+                    <label onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); addPhotos(e.dataTransfer.files); }} className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/60 px-4 py-8 text-center hover:border-brand-300">
                       <ArrowUpTrayIcon className="h-6 w-6 text-brand-500" />
                       <span className="text-sm text-gray-600">
                         <span className="font-semibold text-brand-700">+ Add Photos</span> or drag and drop
@@ -573,12 +634,14 @@ export default function PropertyFormPage() {
                     Optional: Upload a short walkthrough video to give tenants a better view of the property.
                   </p>
                 </Field>
+                </>}
               </div>
 
               <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-gray-500">Your business is verified, so this listing will be published immediately — no admin review needed.</p>
+                <p className="text-xs text-gray-500">{editing ? 'Your existing listing status and rental records are kept.' : 'Your business is verified, so this listing will be published immediately — no admin review needed.'}</p>
+                {editing && <Button type="button" variant="secondary" disabled={loading} onClick={() => navigate(`/landlord/properties/${id}`)}>Cancel</Button>}
                 <Button type="submit" loading={loading} className="sm:w-auto">
-                  Create Listing
+                  {editing ? 'Save changes' : 'Create Listing'}
                 </Button>
               </div>
             </Card>

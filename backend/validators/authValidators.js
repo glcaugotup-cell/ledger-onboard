@@ -167,6 +167,8 @@ const mfaEnableValidators = [body('code').isString().bail().trim().matches(OTP).
 // a valid code from anyone enrolled with an authenticator app.
 const mfaDisableValidators = [currentPasswordChain(), mfaCodeChain().optional()];
 const mfaRecoveryCodesValidators = [currentPasswordChain(), mfaCodeChain()];
+const mfaEmailEnableValidators = [body('code').isString().bail().trim().matches(OTP).withMessage('Enter the 6-digit code sent to your email')];
+const mfaEmailResendValidators = [body('challengeToken').isString().bail().notEmpty().isLength({ max: 2048 })];
 
 module.exports = {
   firstNameChain,
@@ -187,4 +189,6 @@ module.exports = {
   mfaEnableValidators,
   mfaDisableValidators,
   mfaRecoveryCodesValidators,
+  mfaEmailEnableValidators,
+  mfaEmailResendValidators,
 };

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -43,6 +43,32 @@ function renderContent(props) {
 describe('DiscoverContent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('a late response from an older search cannot replace the newer results', async () => {
+    let resolveOld;
+    PropertyApi.search.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }))
+      .mockResolvedValue({ properties: [{ ...properties[0], _id: 'new', propertyName: 'New Search Result' }] });
+    const user = userEvent.setup(); renderContent();
+    await waitFor(() => expect(PropertyApi.search).toHaveBeenCalledTimes(1));
+    await user.type(screen.getByLabelText('Search'), 'New');
+    await screen.findByText('New Search Result');
+    await act(async () => resolveOld({ properties }));
+    expect(screen.getByText('New Search Result')).toBeInTheDocument();
+    expect(screen.queryByText('Dagupan Demo Boarding House')).not.toBeInTheDocument();
+  });
+
+  it('an obsolete failed search cannot erase successful newer results', async () => {
+    let rejectOld;
+    PropertyApi.search.mockImplementationOnce(() => new Promise((resolve, reject) => { rejectOld = reject; }))
+      .mockResolvedValue({ properties });
+    const user = userEvent.setup(); renderContent();
+    await waitFor(() => expect(PropertyApi.search).toHaveBeenCalledTimes(1));
+    await user.type(screen.getByLabelText('Search'), 'House');
+    await screen.findByText('Dagupan Demo Boarding House');
+    await act(async () => rejectOld(new Error('obsolete request')));
+    expect(screen.getByText('Dagupan Demo Boarding House')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('searches on mount with no filters and renders results as cards', async () => {

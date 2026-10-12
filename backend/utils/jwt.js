@@ -58,7 +58,7 @@ function mfaChallengeKey() {
 }
 
 function signMfaChallengeToken(user) {
-  return jwt.sign({ sub: String(user._id), purpose: MFA_CHALLENGE_PURPOSE }, mfaChallengeKey(), { expiresIn: MFA_CHALLENGE_TTL, jwtid: newTokenId() });
+  return jwt.sign({ sub: String(user._id), purpose: MFA_CHALLENGE_PURPOSE, tv: tokenVersionOf(user.tokenVersion) }, mfaChallengeKey(), { expiresIn: MFA_CHALLENGE_TTL, jwtid: newTokenId() });
 }
 
 function verifyMfaChallengeToken(token) {

@@ -6,7 +6,7 @@ import AuthApi from '../services/AuthApi.js';
 import { ApiClientError } from '../services/apiClient.js';
 
 vi.mock('../services/AuthApi.js', () => ({
-  default: { mfaSetup: vi.fn(), mfaEnable: vi.fn(), mfaDisable: vi.fn(), mfaRegenerateBackupCodes: vi.fn() },
+  default: { mfaSetup: vi.fn(), mfaEnable: vi.fn(), mfaDisable: vi.fn(), mfaRegenerateBackupCodes: vi.fn(), mfaEmailSetup: vi.fn(), mfaEmailEnable: vi.fn(), mfaEmailCode: vi.fn() },
 }));
 
 const SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
@@ -35,6 +35,38 @@ async function goToScanStep(user) {
 }
 
 describe('TwoFactorCard', () => {
+  it('email restoration: verifies a mailed code before enabling email two-factor without a QR', async () => {
+    AuthApi.mfaEmailSetup.mockResolvedValue({ message: 'Check your email for a verification code.' });
+    AuthApi.mfaEmailEnable.mockResolvedValue({ user: { ...OFF, mfaEnabled: true, mfaMethod: 'email', emailMfaEnrolled: true } });
+    const person = userEvent.setup();
+    const { onChanged } = renderCard({ ...OFF, emailAccountFlowsAvailable: true });
+    await person.click(screen.getByRole('button', { name: /set up email codes/i }));
+    await person.type(screen.getByLabelText(/current password/i), 'Str0ng!Pass');
+    await person.click(screen.getByRole('button', { name: /^continue$/i }));
+    expect(AuthApi.mfaEmailSetup).toHaveBeenCalledWith({ password: 'Str0ng!Pass' });
+    await person.type(await screen.findByLabelText('Email verification code'), '12a34 56');
+    await person.click(screen.getByRole('button', { name: /^turn on$/i }));
+    expect(AuthApi.mfaEmailEnable).toHaveBeenCalledWith({ code: '123456' });
+    expect(onChanged).toHaveBeenCalled();
+    expect(screen.queryByAltText(/qr code/i)).not.toBeInTheDocument();
+  });
+
+  it('email restoration: requires a settings email code to turn email two-factor off', async () => {
+    AuthApi.mfaEmailCode.mockResolvedValue({ message: 'Check your email for a verification code.' });
+    AuthApi.mfaDisable.mockResolvedValue({ user: OFF });
+    const person = userEvent.setup();
+    const { onChanged } = renderCard({ ...OFF, mfaEnabled: true, mfaMethod: 'email', emailMfaEnrolled: true });
+    expect(screen.getByText(/signing in asks for a code sent to your email/i)).toBeInTheDocument();
+    await person.click(screen.getByRole('button', { name: /^turn off$/i }));
+    await person.type(screen.getByLabelText(/current password/i), 'Str0ng!Pass');
+    await person.click(screen.getByRole('button', { name: /send email code/i }));
+    expect(AuthApi.mfaEmailCode).toHaveBeenCalledWith({ password: 'Str0ng!Pass' });
+    await person.type(await screen.findByLabelText('Email verification code'), '123456');
+    await person.click(screen.getByRole('button', { name: /turn off two-factor/i }));
+    expect(AuthApi.mfaDisable).toHaveBeenCalledWith({ password: 'Str0ng!Pass', code: '123456' });
+    expect(onChanged).toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

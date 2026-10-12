@@ -98,6 +98,7 @@ export default function App() {
                 <Route path="/landlord/dashboard" element={<LandlordDashboardPage />} />
                 <Route path="/landlord/properties" element={<PropertiesPage />} />
                 <Route path="/landlord/properties/new" element={<PropertyFormPage />} />
+                <Route path="/landlord/properties/:id/edit" element={<PropertyFormPage />} />
                 <Route path="/landlord/properties/:id" element={<PropertyManagePage />} />
                 <Route path="/landlord/caretakers" element={<CaretakersPage />} />
                 <Route path="/landlord/reservations" element={<LandlordReservationsPage />} />

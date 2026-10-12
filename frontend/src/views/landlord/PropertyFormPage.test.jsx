@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,17 +7,18 @@ import PropertyApi from '../../services/PropertyApi.js';
 import { ApiClientError } from '../../services/apiClient.js';
 import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.js';
 
-const { useAuthMock, useNotificationsMock, navigateMock } = vi.hoisted(() => ({
+const { useAuthMock, useNotificationsMock, navigateMock, routeParams } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   useNotificationsMock: vi.fn(),
   navigateMock: vi.fn(),
+  routeParams: { value: {} },
 }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
-vi.mock('../../services/PropertyApi.js', () => ({ default: { create: vi.fn() } }));
+vi.mock('../../services/PropertyApi.js', () => ({ default: { create: vi.fn(), update: vi.fn(), getForManagement: vi.fn() } }));
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
-  return { ...actual, useNavigate: () => navigateMock };
+  return { ...actual, useNavigate: () => navigateMock, useParams: () => routeParams.value };
 });
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }) => <div>{children}</div>,
@@ -60,8 +61,51 @@ vi.setConfig({ testTimeout: 15000 });
 describe('PropertyFormPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    routeParams.value = {};
     useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 'l1', fullName: 'Landlord Cruz', role: 'landlord' } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());
+  });
+
+  it('dropped photos use the same upload validation and removal as selected photos', async () => {
+    renderPage();
+    const input = screen.getByLabelText('Upload property photos');
+    const file = new File(['fixture'], 'dropped.png', { type: 'image/png' });
+    fireEvent.drop(input.closest('label'), { dataTransfer: { files: [file] } });
+    expect(await screen.findByRole('img', { name: 'Property photo 1' })).toBeInTheDocument();
+    fireEvent.drop(input.closest('label'), { dataTransfer: { files: [new File(['bad'], 'bad.txt', { type: 'text/plain' })] } });
+    expect(screen.getByText('Photos must be JPG, PNG, or WEBP files.')).toBeInTheDocument();
+    expect(screen.getAllByRole('img', { name: /Property photo/ })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove photo 1' }));
+    expect(screen.queryByRole('img', { name: 'Property photo 1' })).not.toBeInTheDocument();
+  });
+
+  it('editing loads existing details and saves metadata without replacing existing media or creating a listing', async () => {
+    routeParams.value = { id: 'p1' };
+    PropertyApi.getForManagement.mockResolvedValue({ property: { _id: 'p1', propertyName: 'Original House',
+      description: 'Original description', address: { street: '123 Main St', barangay: 'Poblacion Oeste' },
+      propertyType: 'Bedspace', tenantGenderPolicy: 'Co-Ed', amenities: ['WiFi'], houseRules: [], nearbyUniversities: [],
+      images: ['/uploads/properties/fixture.png'], videoUrl: '/uploads/properties/fixture.mp4' } });
+    PropertyApi.update.mockResolvedValue({ property: { _id: 'p1' } });
+    const user = userEvent.setup(); renderPage();
+    await waitFor(() => expect(screen.getByLabelText('Property name')).toHaveValue('Original House'));
+    await user.clear(screen.getByLabelText('Property name'));
+    await user.type(screen.getByLabelText('Property name'), 'Updated House');
+    await user.click(screen.getByRole('button', { name: 'Remove WiFi' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(PropertyApi.update).toHaveBeenCalledWith('p1', expect.objectContaining({ propertyName: 'Updated House', amenities: [] })));
+    expect(PropertyApi.update.mock.calls[0][1]).not.toHaveProperty('images');
+    expect(PropertyApi.update.mock.calls[0][1]).not.toHaveProperty('videoUrl');
+    expect(PropertyApi.create).not.toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith('/landlord/properties/p1', { replace: true });
+  });
+
+  it('failed edit loading cannot submit a blank form over an existing property', async () => {
+    routeParams.value = { id: 'p1' };
+    PropertyApi.getForManagement.mockRejectedValue(new Error('fixture denied'));
+    renderPage();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not load.*property/i);
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
+    expect(PropertyApi.update).not.toHaveBeenCalled();
   });
 
   it('submits the form as multipart form data with nested address/coordinate fields sourced from the selected barangay', async () => {

@@ -17,6 +17,7 @@ import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import { ReviewForm } from '../../components/ReviewForm.jsx';
 import TwoFactorCard from '../../components/TwoFactorCard.jsx';
 import { MFA_CODE_PROMPT, cleanMfaCode } from '../../utils/mfa.js';
+import EmailCodeRequestButton from '../../components/EmailCodeRequestButton.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
 import { formatDate, formatStatus } from '../../utils/format.js';
@@ -106,7 +107,8 @@ export default function ProfilePage() {
   const { user, refreshProfile, logout, changePassword } = useAuth();
   const navigate = useNavigate();
   const role = user?.role;
-  const twoFactorOn = Boolean(user?.mfaEnabled && user?.mfaMethod === 'totp');
+  const emailTwoFactorOn = Boolean(user?.mfaEnabled && user?.mfaMethod === 'email' && user?.emailMfaEnrolled);
+  const twoFactorOn = Boolean(user?.mfaEnabled && user?.mfaMethod === 'totp') || emailTwoFactorOn;
 
   const [phone, setPhone] = useState(user?.phone || '');
   const [phoneError, setPhoneError] = useState('');
@@ -238,7 +240,8 @@ export default function ProfilePage() {
     if (passwordError) errors.newPassword = passwordError.endsWith('.') ? passwordError : `${passwordError}.`;
     if (!pwConfirm) errors.confirm = 'Please confirm your new password.';
     else if (pwConfirm !== pwNew) errors.confirm = 'Passwords do not match.';
-    if (twoFactorOn && !/^(\d{6}|[A-Z0-9]{5}-?[A-Z0-9]{5})$/.test(pwCode)) errors.code = 'Enter the 6-digit code from your authenticator app, or a backup code.';
+    if (emailTwoFactorOn && !/^\d{6}$/.test(pwCode)) errors.code = 'Enter the 6-digit code sent to your email.';
+    else if (twoFactorOn && !/^(\d{6}|[A-Z0-9]{5}-?[A-Z0-9]{5})$/.test(pwCode)) errors.code = 'Enter the 6-digit code from your authenticator app, or a backup code.';
     setPwErrors(errors);
     if (Object.keys(errors).length) return;
 
@@ -391,7 +394,7 @@ export default function ProfilePage() {
           {pwStep === 'idle' && (
             <div className="space-y-3">
               <p className="text-sm text-gray-500">
-                Enter your current password and choose a new one{twoFactorOn ? ', with a code from your authenticator app' : ''}. You stay signed in
+                Enter your current password and choose a new one{emailTwoFactorOn ? ', with a code sent to your email' : twoFactorOn ? ', with a code from your authenticator app' : ''}. You stay signed in
                 here; every other device is signed out.
               </p>
               <Button onClick={startPasswordChange}>Change password</Button>
@@ -403,7 +406,8 @@ export default function ProfilePage() {
                 <PasswordInput value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} autoComplete="current-password" />
               </Field>
               {twoFactorOn && (
-                <Field required label="Authenticator or backup code" error={pwErrors.code} hint={MFA_CODE_PROMPT}>
+                <Field required label={emailTwoFactorOn ? 'Email verification code' : 'Authenticator or backup code'} error={pwErrors.code}
+                  hint={emailTwoFactorOn ? 'Enter the 6-digit code sent to your email.' : MFA_CODE_PROMPT}>
                   <TextInput
                     autoComplete="one-time-code"
                     autoCapitalize="characters"
@@ -415,6 +419,8 @@ export default function ProfilePage() {
                   />
                 </Field>
               )}
+              {emailTwoFactorOn && <EmailCodeRequestButton disabled={!pwCurrent || pwLoading}
+                request={() => AuthApi.mfaEmailCode({ password: pwCurrent })} />}
               <div>
                 <Field required label="New password" error={pwErrors.newPassword}>
                   <PasswordInput value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" />

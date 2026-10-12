@@ -22,7 +22,8 @@ class PropertyApi extends BaseApiClient {
   }
 
   update(id, formData) {
-    return this.patch(`/properties/${id}`, formData, UPLOAD_CONFIG);
+    // JSON preserves intentionally empty lists during metadata edits; uploads stay multipart.
+    return this.patch(`/properties/${id}`, formData, formData instanceof FormData ? UPLOAD_CONFIG : undefined);
   }
 
   remove(id) {

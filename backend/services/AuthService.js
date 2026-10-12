@@ -10,6 +10,7 @@ const { randomCode, normalizeCode } = require('../utils/oneTimeCodes');
 const { signAccessToken, signRefreshToken, verifyRefreshToken, signMfaChallengeToken, verifyMfaChallengeToken, tokenVersionOf } = require('../utils/jwt');
 const MfaService = require('./MfaService');
 const ResetCodeService = require('./ResetCodeService');
+const EmailOtpService = require('./EmailOtpService');
 const AccountLifecycleService = require('./AccountLifecycleService');
 const { sanitizeUser } = require('../utils/sanitize');
 const { deriveFullName } = require('../utils/name');
@@ -181,6 +182,11 @@ class AuthService {
     if (MfaService.isEnrolled(user)) {
       return { mfaRequired: true, challengeToken: signMfaChallengeToken(user) };
     }
+    if (EmailOtpService.isEnrolled(user)) {
+      const challengeToken = signMfaChallengeToken(user);
+      await EmailOtpService.issue(user, 'login', challengeToken);
+      return { mfaRequired: true, mfaMethod: 'email', challengeToken, resendAfterSeconds: 45 };
+    }
 
     return this._finalizeLogin(user);
   }
@@ -199,10 +205,28 @@ class AuthService {
     if (!user) throw sessionExpired();
     this._assertLoginableStatus(user);
     // Two-factor turned off in the meantime: start over rather than accept a code for nothing.
-    if (!MfaService.isEnrolled(user)) throw sessionExpired();
-
-    await MfaService.verifyCode(user, code);
+    if (tokenVersionOf(payload.tv) !== tokenVersionOf(user.tokenVersion)) throw sessionExpired();
+    if (EmailOtpService.isEnrolled(user)) {
+      if (!(await EmailOtpService.consume(user, 'login', code, { context: challengeToken }))) throw ApiError.badRequest('Invalid or expired code', 'INVALID_OTP');
+    } else {
+      if (!MfaService.isEnrolled(user)) throw sessionExpired();
+      await MfaService.verifyCode(user, code);
+    }
     return this._finalizeLogin(user);
+  }
+
+  async resendLoginEmail({ challengeToken }) {
+    let payload;
+    try { payload = verifyMfaChallengeToken(challengeToken); } catch {
+      throw ApiError.unauthorized('Your sign-in has expired. Please sign in again.', 'MFA_CHALLENGE_INVALID');
+    }
+    const user = await UserRepository.findByIdWithSecrets(payload.sub);
+    if (!user || !EmailOtpService.isEnrolled(user) || tokenVersionOf(payload.tv) !== tokenVersionOf(user.tokenVersion)
+      || user.emailCodes?.login?.context !== challengeToken) {
+      throw ApiError.unauthorized('Your sign-in has expired. Please sign in again.', 'MFA_CHALLENGE_INVALID');
+    }
+    this._assertLoginableStatus(user);
+    return EmailOtpService.issue(user, 'login', challengeToken);
   }
 
   /** New access and refresh tokens at the account's current session version; only this refresh token stays valid. */
@@ -308,7 +332,17 @@ class AuthService {
   // Never confirm or deny whether an email is registered.
 
   /** Nothing is looked up or sent: the same instructions for every email. */
-  async forgotPassword() {
+  async forgotPassword({ email } = {}) {
+    if (env.emailAccountFlowsEnabled) {
+      const user = email ? await UserRepository.findByEmail(email, { withSecrets: true }) : null;
+      if (user && user.emailVerified && user.accountStatus !== ACCOUNT_STATUS.PENDING_ACTIVATION) {
+        try { await EmailOtpService.issue(user, 'reset'); } catch {
+          // Always the same response, including cooldowns and provider outages.
+          console.warn('[AuthService] Password reset email was not sent.');
+        }
+      }
+      return { message: 'If an eligible account matches that email, a reset code has been sent. You can also use your authenticator, backup or administrator reset code.' };
+    }
     return { message: FORGOT_PASSWORD_MESSAGE };
   }
 
@@ -355,6 +389,7 @@ class AuthService {
     if (!valid) throw ApiError.badRequest('Current password is incorrect', 'INVALID_CURRENT_PASSWORD');
     // Checked only after the password, so the code counter can't be moved without it.
     if (MfaService.isEnrolled(user)) await MfaService.verifyCode(user, code);
+    if (EmailOtpService.isEnrolled(user) && !(await EmailOtpService.consume(user, 'settings', code))) throw ResetCodeService.invalidCode();
 
     const passwordHash = await hashPassword(newPassword);
     const updated = await UserRepository.updateById(userId, { passwordHash, $inc: { tokenVersion: 1 } });
@@ -514,6 +549,7 @@ class AuthService {
       accountStatus: ACCOUNT_STATUS.PENDING_ACTIVATION,
     });
     const { code, expiresAt } = await this._issueActivationCode(caretaker._id);
+    await this._emailCaretakerInvitation(caretaker, code, landlordId);
 
     await AuditLogRepository.record({
       action: 'CARETAKER_CREATED',
@@ -538,6 +574,7 @@ class AuthService {
     }
 
     const { code, expiresAt } = await this._issueActivationCode(caretaker._id, { invitationResentAt: new Date() });
+    await this._emailCaretakerInvitation(caretaker, code, landlordId);
     await AuditLogRepository.record({
       action: 'CARETAKER_INVITATION_RESENT',
       actorId: landlordId,
@@ -549,6 +586,16 @@ class AuthService {
 
     const updated = await UserRepository.findById(caretaker._id);
     return { caretaker: sanitizeUser(updated), activationCode: code, expiresAt };
+  }
+
+  async _emailCaretakerInvitation(caretaker, code, landlordId) {
+    if (!env.emailAccountFlowsEnabled) return;
+    try {
+      const landlord = await UserRepository.findById(landlordId);
+      await EmailService.sendCaretakerInvitationEmail(caretaker.email, caretaker.fullName, code, landlord?.fullName);
+    } catch {
+      console.warn('[AuthService] Caretaker invitation email was not sent; the landlord activation code is still valid.');
+    }
   }
 
   /**

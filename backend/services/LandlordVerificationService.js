@@ -49,6 +49,15 @@ class LandlordVerificationService {
       targetId: submission._id,
     });
 
+    // Submission and its audit entry are already saved; notification trouble must not invite a duplicate retry.
+    await NotificationService.notifyAdmins({
+      type: 'BUSINESS_VERIFICATION_SUBMITTED',
+      title: 'Business verification needs review',
+      message: 'A landlord submitted business documents for verification.',
+      relatedType: 'LandlordVerification', relatedId: submission._id,
+      link: '/admin/landlord-verifications',
+    }).catch(() => console.warn('[LandlordVerificationService] Admin notifications could not be saved.'));
+
     return { message: 'Documents submitted for review.', submission };
   }
 

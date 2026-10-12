@@ -43,7 +43,8 @@ class PropertyRepository extends BaseRepository {
           as: 'rooms',
         },
       },
-      { $match: { 'rooms.monthlyBaseRent': rentFilter } },
+      // Both bounds must hold for the same room, not two different rooms.
+      { $match: { rooms: { $elemMatch: { monthlyBaseRent: rentFilter } } } },
       { $sort: { createdAt: -1 } },
     ];
     if (typeof skip === 'number') pipeline.push({ $skip: skip });

@@ -35,6 +35,8 @@ import {
 } from '../../utils/validators.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
 import { MFA_CODE_PROMPT, cleanMfaCode } from '../../utils/mfa.js';
+import { cleanAppCode } from '../../utils/mfa.js';
+import EmailCodeRequestButton from '../../components/EmailCodeRequestButton.jsx';
 import logo from '../../assets/Logo.png';
 import houseWelcome from '../../assets/housedesign1.webp';
 import houseExplore from '../../assets/housedesign2.webp';
@@ -182,19 +184,21 @@ function HeroLoginForm({ onSwitch, notice = '', onNoticeDismiss }) {
             <BrandLockup size={48} />
           </div>
           <h2 className="mb-0.5 text-center text-2xl font-extrabold text-gray-900">Two-factor sign-in</h2>
-          <p className="mb-6 text-center text-xs text-gray-500">{MFA_CODE_PROMPT}</p>
+          <p className="mb-6 text-center text-xs text-gray-500">{mfaChallenge.method === 'email' ? 'Enter the 6-digit code sent to your email.' : MFA_CODE_PROMPT}</p>
           <form onSubmit={onVerifyOtp} className="space-y-3.5">
-            <Field required label="Authenticator or backup code" labelClassName="mb-1 block text-xs font-medium text-gray-700"><input
+            <Field required label={mfaChallenge.method === 'email' ? 'Email verification code' : 'Authenticator or backup code'} labelClassName="mb-1 block text-xs font-medium text-gray-700"><input
               type="text"
               maxLength={11}
               autoComplete="one-time-code"
               autoCapitalize="characters"
               spellCheck={false}
               value={otp}
-              onChange={(e) => setOtp(cleanMfaCode(e.target.value))}
+              onChange={(e) => setOtp(mfaChallenge.method === 'email' ? cleanAppCode(e.target.value) : cleanMfaCode(e.target.value))}
               placeholder="123456"
               className="w-full rounded-xl border border-gray-200 bg-gray-50/60 px-4 py-2.5 text-center font-mono text-lg tracking-[0.3em] text-gray-900 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
             /></Field>
+            {mfaChallenge.method === 'email' && <EmailCodeRequestButton initialCooldown={45}
+              request={() => AuthApi.resendLoginEmail({ challengeToken: mfaChallenge.challengeToken })} />}
             {error && <p className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs font-medium text-red-600">{error}</p>}
             <Button type="submit" variant="accent" className="w-full justify-center rounded-xl py-2.5 text-xs" disabled={loading}>
               {loading ? 'Verifying…' : 'Verify & sign in'}
@@ -535,7 +539,7 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
       const { message, code, fieldErrors } = describeApiError(err);
       if (code === 'ACCOUNT_PENDING_VERIFICATION') {
         // Pending unverified registration: the backend re-sent a code, so resume verification.
-        setRegisteredEmail(email);
+        setRegisteredEmail(normalizedForm.email);
         setCooldown(REGISTER_RESEND_COOLDOWN_SECONDS);
         setVerifyInfo(message);
         setStep('verify');

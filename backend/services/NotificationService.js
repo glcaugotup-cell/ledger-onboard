@@ -1,4 +1,6 @@
 const NotificationRepository = require('../repositories/NotificationRepository');
+const UserRepository = require('../repositories/UserRepository');
+const { ROLES, ACCOUNT_STATUS } = require('../utils/constants');
 
 /**
  * In-app notifications. Other services call notify() when a workflow event
@@ -7,6 +9,15 @@ const NotificationRepository = require('../repositories/NotificationRepository')
 class NotificationService {
   async notify({ userId, type, title, message, relatedType = null, relatedId = null, link = null }) {
     return NotificationRepository.create({ userId, type, title, message, relatedType, relatedId, link });
+  }
+
+  async notifyAdmins(notification) {
+    const admins = await UserRepository.findByRole(ROLES.ADMIN, { filter: { accountStatus: ACCOUNT_STATUS.ACTIVE } });
+    // A failed delivery to one admin must not prevent the others from receiving it.
+    const results = await Promise.allSettled(admins.map(admin => this.notify({ ...notification, userId: admin._id })));
+    if (results.some(result => result.status === 'rejected')) {
+      console.warn('[NotificationService] Some admin notifications could not be saved.');
+    }
   }
 
   async listForUser(userId, { onlyUnread, skip, limit } = {}) {

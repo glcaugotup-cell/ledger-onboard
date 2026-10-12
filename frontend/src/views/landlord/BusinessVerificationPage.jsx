@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRightIcon,
   ArrowUpTrayIcon,
@@ -18,14 +18,19 @@ import Button from '../../components/ui/Button.jsx';
 import { FieldRequirement } from '../../components/ui/Field.jsx';
 import { Badge, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,application/pdf';
 const MAX_DOCUMENT_MB = 5;
 
 /** Drag-and-drop (or click-to-browse) upload zone for one required document. Purely presentational — every pick, whether dropped or chosen, still goes through the same `onFileChange` state setter the page already had. */
 function DocumentUploadCard({ label, file, onFileChange, inputId }) {
+  const inputRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
   const [fileError, setFileError] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
   // Same rules as the server's upload filter: PDF/JPG/PNG/WebP, 5 MB. Rejected picks never replace the current file.
   function pick(fileList) {
@@ -39,6 +44,8 @@ function DocumentUploadCard({ label, file, onFileChange, inputId }) {
       return;
     }
     setFileError('');
+    setPreviewOpen(false);
+    setPreviewUrl(picked ? URL.createObjectURL(picked) : null);
     onFileChange(picked);
   }
 
@@ -54,8 +61,8 @@ function DocumentUploadCard({ label, file, onFileChange, inputId }) {
         </div>
       </div>
 
-      <label
-        htmlFor={inputId}
+      <div
+        data-document-upload
         onDragOver={(e) => {
           e.preventDefault();
           setDragActive(true);
@@ -76,12 +83,21 @@ function DocumentUploadCard({ label, file, onFileChange, inputId }) {
         ) : (
           <p className="text-sm text-gray-500">Drag and drop your file here, or</p>
         )}
-        <Button type="button" className="text-xs">
-          Choose file
+        <Button type="button" className="text-xs" onClick={() => inputRef.current?.click()}>
+          {file ? 'Replace file' : 'Choose file'}
         </Button>
-        <input id={inputId} type="file" accept={ACCEPTED_TYPES} aria-label={label} aria-required="true" className="hidden" onChange={(e) => pick(e.target.files)} />
-        <p className="text-xs text-gray-500">Accepted formats: PDF, JPG, PNG (Max 5MB)</p>
-      </label>
+        <input ref={inputRef} id={inputId} type="file" accept={ACCEPTED_TYPES} aria-label={label} aria-required="true" className="hidden" onChange={(e) => { pick(e.target.files); e.target.value = ''; }} />
+        {file && <div className="flex gap-2">
+          <Button type="button" variant="secondary" className="text-xs" onClick={() => setPreviewOpen(true)} aria-label={`View ${label}`}>View</Button>
+          <Button type="button" variant="ghost" className="text-xs" onClick={() => pick(null)} aria-label={`Remove ${label}`}>Remove</Button>
+        </div>}
+        <p className="text-xs text-gray-500">Accepted formats: PDF, JPG, PNG, WebP (Max 5MB)</p>
+      </div>
+      <ConfirmDialog open={previewOpen && Boolean(previewUrl)} title="Document preview" cancelLabel="Close preview" confirmLabel="Open in new tab" onConfirm={() => window.open(previewUrl, '_blank', 'noopener,noreferrer')} onCancel={() => setPreviewOpen(false)}>
+        {file?.type === 'application/pdf'
+          ? <iframe title={`Preview ${label}`} src={previewUrl || undefined} className="h-[60vh] w-full rounded-lg border" />
+          : <img alt={`Preview ${label}`} src={previewUrl || undefined} className="max-h-[60vh] w-full rounded-lg object-contain" />}
+      </ConfirmDialog>
       {fileError && (
         <p className="mt-2 text-xs text-red-600" role="alert">
           {fileError}

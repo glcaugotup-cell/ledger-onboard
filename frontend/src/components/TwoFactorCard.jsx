@@ -8,6 +8,7 @@ import { ErrorBanner, SuccessBanner } from './ui/Feedback.jsx';
 import PasswordInput from './ui/PasswordInput.jsx';
 import { describeApiError } from '../utils/errors.js';
 import { MFA_CODE_PROMPT, cleanAppCode, cleanMfaCode, groupSecret } from '../utils/mfa.js';
+import EmailTwoFactorSettings from './EmailTwoFactorSettings.jsx';
 
 const BACKUP_FILE_NAME = 'ledger-onboard-backup-codes.txt';
 
@@ -134,6 +135,10 @@ export default function TwoFactorCard({ user, onChanged }) {
     </Field>
   );
 
+  if (step === 'email-setup' || (user?.mfaEnabled && user?.mfaMethod === 'email' && user?.emailMfaEnrolled)) {
+    return <EmailTwoFactorSettings user={user} onChanged={onChanged} onCancel={() => reset()} />;
+  }
+
   return (
     <Card title="Two-factor authentication">
       <ErrorBanner message={error} />
@@ -146,6 +151,7 @@ export default function TwoFactorCard({ user, onChanged }) {
             Authenticator or Microsoft Authenticator. No code is ever sent to you.
           </p>
           <Button onClick={() => { setMessage(''); reset('setup-password'); }}>Set up two-factor</Button>
+          {user?.emailAccountFlowsAvailable && <Button variant="secondary" onClick={() => { setMessage(''); reset('email-setup'); }}>Set up email codes</Button>}
         </div>
       )}
 

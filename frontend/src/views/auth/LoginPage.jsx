@@ -11,6 +11,8 @@ import { describeApiError } from '../../utils/errors.js';
 import { useAuthedRedirect } from '../../routes/useAuthedRedirect.js';
 import { validateLoginEmail, validateLoginPassword } from '../../utils/validators.js';
 import { MFA_CODE_PROMPT, cleanMfaCode } from '../../utils/mfa.js';
+import { cleanAppCode } from '../../utils/mfa.js';
+import EmailCodeRequestButton from '../../components/EmailCodeRequestButton.jsx';
 
 const FIELD_VALIDATORS = { email: validateLoginEmail, password: validateLoginPassword };
 
@@ -125,14 +127,14 @@ export default function LoginPage() {
     return (
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Two-factor sign-in</h1>
-        <p className="mt-1 text-sm text-gray-500">{MFA_CODE_PROMPT}</p>
+        <p className="mt-1 text-sm text-gray-500">{mfaChallenge.method === 'email' ? 'Enter the 6-digit code sent to your email.' : MFA_CODE_PROMPT}</p>
 
         <form onSubmit={onVerifyOtp} className="mt-6 space-y-4">
           <ErrorBanner message={error} />
-          <Field required label="Authenticator or backup code">
+          <Field required label={mfaChallenge.method === 'email' ? 'Email verification code' : 'Authenticator or backup code'}>
             <TextInput
               value={otp}
-              onChange={(e) => setOtp(cleanMfaCode(e.target.value))}
+              onChange={(e) => setOtp(mfaChallenge.method === 'email' ? cleanAppCode(e.target.value) : cleanMfaCode(e.target.value))}
               placeholder="123456"
               autoComplete="one-time-code"
               autoCapitalize="characters"
@@ -141,6 +143,8 @@ export default function LoginPage() {
               required
             />
           </Field>
+          {mfaChallenge.method === 'email' && <EmailCodeRequestButton initialCooldown={45}
+            request={() => AuthApi.resendLoginEmail({ challengeToken: mfaChallenge.challengeToken })} />}
           <Button type="submit" variant="accent" className="w-full" loading={loading}>
             Verify &amp; sign in
           </Button>

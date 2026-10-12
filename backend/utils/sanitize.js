@@ -4,6 +4,10 @@ function sanitizeUser(userDoc) {
   const obj = typeof userDoc.toObject === 'function' ? userDoc.toObject() : { ...userDoc };
   delete obj.passwordHash;
   delete obj.otp;
+  obj.emailMfaEnrolled = Boolean(obj.mfaEnabled && obj.mfaMethod === 'email' && obj.emailMfaEnabledAt);
+  obj.emailAccountFlowsAvailable = require('../config/env').emailAccountFlowsEnabled;
+  delete obj.emailMfaEnabledAt;
+  delete obj.emailCodes;
   delete obj.mfaTotp;
   delete obj.passwordReset;
   delete obj.accountRecovery;

@@ -45,6 +45,7 @@ const GROUPS = Object.freeze({
 /** Two-factor switched on without an authenticator secret (MfaService.isEnrolled is false for these). */
 const EMAIL_TWO_FACTOR_FILTER = {
   mfaEnabled: true,
+  emailMfaEnabledAt: null, // confirmed enrollments created by the restored email flow are not legacy accounts
   $or: [{ mfaMethod: { $ne: MFA_METHOD.TOTP } }, { 'mfaTotp.secretEnc': null }],
 };
 const UNVERIFIED_FILTER = { emailVerified: false };
@@ -92,6 +93,9 @@ async function audit(action, userId, metadata = {}) {
  * changes nothing twice.
  */
 async function applyChanges() {
+  if (['EMAIL_ACCOUNT_FLOWS_ENABLED', 'EMAIL_VERIFICATION_REQUIRED'].some(name => (process.env[name] || '').trim().toLowerCase() === 'true')) {
+    throw new Error('This legacy cleanup cannot run while email account flows or email registration verification are enabled.');
+  }
   const User = require('../models/User');
   const { unusablePasswordHash } = require('../utils/password');
   const NotificationService = require('../services/NotificationService');

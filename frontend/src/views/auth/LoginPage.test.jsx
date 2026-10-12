@@ -17,6 +17,19 @@ function renderLoginPage() {
 }
 
 describe('LoginPage', () => {
+  it('email restoration: asks for the emailed login code and prevents an immediate resend', async () => {
+    const verifyLoginOtp = vi.fn().mockResolvedValue({ role: 'tenant' });
+    useAuthMock.mockReturnValue({ login: vi.fn(), verifyLoginOtp, user: null,
+      mfaChallenge: { email: 'email-login-test@gmail.com', challengeToken: 'test-challenge', method: 'email' } });
+    const person = userEvent.setup();
+    renderLoginPage();
+    expect(screen.getByText(/enter the 6-digit code sent to your email/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /resend.*seconds/i })).toBeDisabled();
+    await person.type(screen.getByLabelText('Email verification code'), '12a34 56');
+    await person.click(screen.getByRole('button', { name: /verify.*sign in/i }));
+    expect(verifyLoginOtp).toHaveBeenCalledWith('123456');
+  });
+
   afterEach(() => {
     useAuthMock.mockReset();
   });

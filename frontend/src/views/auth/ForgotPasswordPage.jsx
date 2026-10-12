@@ -31,7 +31,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <AuthLayout title="Forgot your password?" subtitle="No email is sent. You can reset it with a code you already have.">
+    <AuthLayout title="Forgot your password?" subtitle="Request a reset code by email when available, or use a recovery code you already have.">
       <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-gray-600" aria-label="Ways to reset your password">
         <li>a 6-digit code from your authenticator app, if two-factor sign-in is on;</li>
         <li>one of your backup codes; or</li>

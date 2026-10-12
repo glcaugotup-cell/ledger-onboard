@@ -63,7 +63,7 @@ export default function ResetPasswordPage() {
         <Field required label="Email">
           <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         </Field>
-        <Field required label="Authenticator, backup or reset code" hint="123456, XXXXX-XXXXX or XXXX-XXXX">
+        <Field required label="Authenticator, backup or reset code" hint="An emailed reset code also works when email recovery is available. 123456, XXXXX-XXXXX or XXXX-XXXX">
           <TextInput
             value={form.code}
             onChange={(e) => setForm({ ...form, code: cleanMfaCode(e.target.value) })}

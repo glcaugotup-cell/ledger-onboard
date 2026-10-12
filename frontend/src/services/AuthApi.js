@@ -95,6 +95,10 @@ class AuthApi extends BaseApiClient {
   mfaRegenerateBackupCodes({ password, code }) {
     return this.post('/auth/mfa/recovery-codes', { password, code });
   }
+  mfaEmailSetup({ password }) { return this.post('/auth/mfa/email/setup', { password }); }
+  mfaEmailEnable({ code }) { return this.post('/auth/mfa/email/enable', { code }); }
+  mfaEmailCode({ password }) { return this.post('/auth/mfa/email/code', { password }); }
+  resendLoginEmail({ challengeToken }) { return this.post('/auth/mfa/email/resend', { challengeToken }); }
 }
 
 export default new AuthApi();

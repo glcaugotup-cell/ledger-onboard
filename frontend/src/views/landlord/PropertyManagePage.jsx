@@ -436,6 +436,8 @@ export default function PropertyManagePage() {
         title={property.propertyName}
         description={`${property.address.street}, ${property.address.barangay}, ${property.address.city}`}
         actions={
+          <>
+          <Button variant="secondary" onClick={() => navigate(`/landlord/properties/${id}/edit`)}>Edit property</Button>
           <Button
             variant="danger"
             onClick={() => {
@@ -445,6 +447,7 @@ export default function PropertyManagePage() {
           >
             Delete property
           </Button>
+          </>
         }
       >
         <div className="mt-2">

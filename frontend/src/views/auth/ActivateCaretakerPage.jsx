@@ -98,7 +98,7 @@ export default function ActivateCaretakerPage() {
   return (
     <AuthLayout
       title="Activate your caretaker account"
-      subtitle="Enter your email, the activation code your landlord gave you, and choose a new password."
+      subtitle="Enter your email, the activation code your landlord gave you (also available in your invitation email), and choose a new password."
     >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {fromOldLink && (
@@ -120,7 +120,7 @@ export default function ActivateCaretakerPage() {
             required
           />
         </Field>
-        <Field required label="Activation code" hint="XXXXX-XXXXX, from your landlord" error={fieldErrors.code}>
+        <Field required label="Activation code" hint="XXXXX-XXXXX, from your landlord or invitation email" error={fieldErrors.code}>
           <TextInput
             value={form.code}
             onChange={(e) => onFieldChange('code', cleanMfaCode(e.target.value))}

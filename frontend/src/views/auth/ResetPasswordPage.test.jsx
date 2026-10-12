@@ -36,14 +36,15 @@ describe('ResetPasswordPage', () => {
     expect(code).toHaveValue('ABCDE-FGHJK');
   });
 
-  it('explains the three kinds of code and never mentions email', () => {
+  // Email restoration rule: emailed codes are accepted alongside authenticator, backup and admin codes.
+  it('explains emailed codes and the existing recovery codes', () => {
     render(
       <MemoryRouter>
         <ResetPasswordPage />
       </MemoryRouter>
     );
     expect(screen.getByText(/authenticator app, one of your backup codes, or a reset code from an administrator/i)).toBeInTheDocument();
-    expect(screen.queryByText(/emailed/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/emailed reset code/i)).toBeInTheDocument();
   });
 
   it('sends an admin reset code as typed', async () => {

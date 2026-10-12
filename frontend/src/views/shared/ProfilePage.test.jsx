@@ -18,6 +18,7 @@ vi.mock('../../services/AuthApi.js', () => ({
   default: {
     updateMe: vi.fn(), forgotPassword: vi.fn(), resetPassword: vi.fn(), deactivateAccount: vi.fn(),
     mfaSetup: vi.fn(), mfaEnable: vi.fn(), mfaDisable: vi.fn(), mfaRegenerateBackupCodes: vi.fn(),
+    mfaEmailCode: vi.fn(),
   },
 }));
 vi.mock('../../services/ReviewApi.js', () => ({ default: { listEligible: vi.fn(), submit: vi.fn() } }));
@@ -51,6 +52,21 @@ function renderPage(user = USERS.tenant) {
 }
 
 describe('ProfilePage', () => {
+  it('email restoration: sends a settings code and requires it when changing an email-two-factor password', async () => {
+    AuthApi.mfaEmailCode.mockResolvedValue({ message: 'Check your email for a verification code.' });
+    const person = userEvent.setup();
+    const { changePassword } = renderPage({ ...USERS.tenant, mfaEnabled: true, mfaMethod: 'email', emailMfaEnrolled: true });
+    await person.click(screen.getByRole('button', { name: /^change password$/i }));
+    await person.type(screen.getByLabelText('Current password'), 'Current1!Pass');
+    await person.click(screen.getByRole('button', { name: /send email code/i }));
+    expect(AuthApi.mfaEmailCode).toHaveBeenCalledWith({ password: 'Current1!Pass' });
+    await person.type(await screen.findByLabelText('Email verification code'), '123456');
+    await person.type(screen.getByLabelText('New password'), 'NewStr0ng!Pass');
+    await person.type(screen.getByLabelText('Confirm password'), 'NewStr0ng!Pass');
+    await person.click(screen.getByRole('button', { name: /save.*password|update password/i }));
+    expect(changePassword).toHaveBeenCalledWith({ currentPassword: 'Current1!Pass', newPassword: 'NewStr0ng!Pass', code: '123456' });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

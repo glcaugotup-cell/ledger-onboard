@@ -30,8 +30,8 @@ describe('ForgotPasswordPage', () => {
     expect(screen.getByText(/i have a code/i)).toBeInTheDocument();
   });
 
-  // Phase 4 rule: nothing is emailed; the page lists the codes that can reset a password.
-  it('lists the three ways to reset and never says a code will be emailed', () => {
+  // Email restoration rule: offer emailed reset codes while retaining all existing recovery options.
+  it('explains email reset codes and the three existing recovery options', () => {
     render(
       <MemoryRouter>
         <ForgotPasswordPage />
@@ -41,8 +41,8 @@ describe('ForgotPasswordPage', () => {
     expect(options).toHaveTextContent(/authenticator app/i);
     expect(options).toHaveTextContent(/backup codes/i);
     expect(options).toHaveTextContent(/reset code from an administrator/i);
-    expect(screen.getByText(/no email is sent/i)).toBeInTheDocument();
-    expect(screen.queryByText(/we.ll email/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/request a reset code by email/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no email is sent/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /send verification code/i })).not.toBeInTheDocument();
   });
 

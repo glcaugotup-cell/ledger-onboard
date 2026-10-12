@@ -100,6 +100,12 @@ const env = {
   otpTtlMinutes: Number(process.env.OTP_TTL_MINUTES) || 10,
   // When false, new accounts can sign in at once and no sign-up code is sent.
   emailVerificationRequired: emailVerificationSetting === 'true',
+  // Explicit rollout switch: existing email-free deployments and recovery methods stay usable.
+  emailAccountFlowsEnabled: (() => {
+    const value = (process.env.EMAIL_ACCOUNT_FLOWS_ENABLED || 'false').trim().toLowerCase();
+    if (!['true', 'false'].includes(value)) throw new Error('EMAIL_ACCOUNT_FLOWS_ENABLED must be true or false');
+    return value === 'true';
+  })(),
   // Buffer (32 bytes) or null when unset outside production. Never logged.
   mfaEncryptionKey,
 

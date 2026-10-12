@@ -96,6 +96,19 @@ class AuthController {
     sendSuccess(res, { data: result });
   });
 
+  mfaEmailSetup = asyncHandler(async (req, res) => {
+    sendSuccess(res, { data: await MfaService.emailSetup(req.user.id, req.body) });
+  });
+  mfaEmailEnable = asyncHandler(async (req, res) => {
+    sendSuccess(res, { data: await MfaService.emailEnable(req.user.id, req.body) });
+  });
+  mfaEmailCode = asyncHandler(async (req, res) => {
+    sendSuccess(res, { data: await MfaService.emailSettingsCode(req.user.id, req.body) });
+  });
+  mfaEmailResend = asyncHandler(async (req, res) => {
+    sendSuccess(res, { data: await AuthService.resendLoginEmail(req.body) });
+  });
+
   mfaEnable = asyncHandler(async (req, res) => {
     const result = await MfaService.enable(req.user.id, req.body);
     sendSuccess(res, { data: result });

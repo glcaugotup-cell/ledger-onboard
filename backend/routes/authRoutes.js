@@ -18,6 +18,8 @@ const {
   mfaEnableValidators,
   mfaDisableValidators,
   mfaRecoveryCodesValidators,
+  mfaEmailEnableValidators,
+  mfaEmailResendValidators,
 } = require('../validators/authValidators');
 
 const router = express.Router();
@@ -44,5 +46,9 @@ router.post('/mfa/setup', authenticate, limit.mfa, mfaSetupValidators, validate,
 router.post('/mfa/enable', authenticate, limit.mfa, mfaEnableValidators, validate, AuthController.mfaEnable);
 router.post('/mfa/disable', authenticate, limit.mfa, mfaDisableValidators, validate, AuthController.mfaDisable);
 router.post('/mfa/recovery-codes', authenticate, limit.mfa, mfaRecoveryCodesValidators, validate, AuthController.mfaRegenerateBackupCodes);
+router.post('/mfa/email/setup', authenticate, limit.mfaEmailSetup, mfaSetupValidators, validate, AuthController.mfaEmailSetup);
+router.post('/mfa/email/enable', authenticate, limit.mfa, mfaEmailEnableValidators, validate, AuthController.mfaEmailEnable);
+router.post('/mfa/email/code', authenticate, limit.mfaEmailCode, mfaSetupValidators, validate, AuthController.mfaEmailCode);
+router.post('/mfa/email/resend', limit.mfaEmailResend, mfaEmailResendValidators, validate, AuthController.mfaEmailResend);
 
 module.exports = router;

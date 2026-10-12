@@ -2,6 +2,15 @@ const mongoose = require('mongoose');
 const { ROLES, ACCOUNT_STATUS, MFA_METHOD, VERIFICATION_STATUS } = require('../utils/constants');
 
 const { Schema } = mongoose;
+const emailCodeSchema = new Schema({
+  codeHash: { type: String, default: null },
+  expiresAt: { type: Date, default: null },
+  issuedAt: { type: Date, default: null },
+  context: { type: String, default: null },
+  tokenVersion: { type: Number, default: 0 },
+  failedAttempts: { type: Number, default: 0 },
+  lockedUntil: { type: Date, default: null },
+}, { _id: false });
 
 const GMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
 const PH_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
@@ -95,6 +104,13 @@ const userSchema = new Schema(
       type: String,
       enum: Object.values(MFA_METHOD),
       default: MFA_METHOD.NONE,
+    },
+    // Explicit confirmation marker; retired email flags alone never reactivate two-factor.
+    emailMfaEnabledAt: { type: Date, default: null },
+    emailCodes: {
+      type: new Schema({ setup: emailCodeSchema, login: emailCodeSchema, reset: emailCodeSchema, settings: emailCodeSchema }, { _id: false }),
+      default: () => ({}),
+      select: false,
     },
     // Registration email verification (separate from caretaker PENDING_ACTIVATION).
     // Only AuthService.register() sets this to false, and only when EMAIL_VERIFICATION_REQUIRED=true.

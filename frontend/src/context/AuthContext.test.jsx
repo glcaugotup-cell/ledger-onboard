@@ -44,6 +44,16 @@ function renderHarness() {
 }
 
 describe('AuthContext', () => {
+  it('email restoration: retains the method on an email login challenge without creating a session', async () => {
+    AuthApi.login.mockResolvedValue({ mfaRequired: true, mfaMethod: 'email', challengeToken: 'test-challenge' });
+    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
+    await waitFor(() => expect(result.current.status).toBe('unauthenticated'));
+    await act(async () => { await result.current.login({ email: 'email-login-test@gmail.com', password: 'test-only' }); });
+    expect(result.current.mfaChallenge).toEqual({ email: 'email-login-test@gmail.com', challengeToken: 'test-challenge', method: 'email' });
+    expect(result.current.user).toBeNull();
+    expect(localStorage.getItem(REFRESH_KEY)).toBeNull();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();

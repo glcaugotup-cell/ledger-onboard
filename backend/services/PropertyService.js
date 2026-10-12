@@ -4,6 +4,7 @@ const ReviewRepository = require('../repositories/PropertyReviewRepository');
 const UserRepository = require('../repositories/UserRepository');
 const ReservationRepository = require('../repositories/ReservationRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
+const NotificationService = require('./NotificationService');
 const FileStorageService = require('./FileStorageService');
 const { FILE_CATEGORIES } = require('./FileStorageService');
 const ApiError = require('../utils/ApiError');
@@ -320,6 +321,11 @@ class PropertyService {
     if (!property.caretakerIds.some((id) => String(id) === String(caretakerId))) {
       property.caretakerIds.push(caretakerId);
       await property.save();
+      await NotificationService.notify({
+        userId: caretakerId, type: 'PROPERTY_ASSIGNED', title: 'Property assigned',
+        message: `You were assigned to ${property.propertyName}. View your assigned rooms and tasks.`,
+        relatedType: 'Property', relatedId: property._id, link: '/caretaker/rooms',
+      }).catch(() => console.warn('[PropertyService] Assignment notification could not be saved.'));
     }
     return property;
   }
@@ -327,8 +333,15 @@ class PropertyService {
   async unassignCaretaker(propertyId, requester, caretakerId) {
     const property = await this._findManageable(propertyId);
     this._assertLandlordOwnsOrAdmin(property, requester);
+    const wasAssigned = property.caretakerIds.some(id => String(id) === String(caretakerId));
+    if (!wasAssigned) return property;
     property.caretakerIds = property.caretakerIds.filter((id) => String(id) !== String(caretakerId));
     await property.save();
+    await NotificationService.notify({
+      userId: caretakerId, type: 'PROPERTY_UNASSIGNED', title: 'Property assignment removed',
+      message: `You are no longer assigned to ${property.propertyName}.`,
+      relatedType: 'Property', relatedId: property._id, link: '/caretaker/rooms',
+    }).catch(() => console.warn('[PropertyService] Assignment notification could not be saved.'));
     return property;
   }
 

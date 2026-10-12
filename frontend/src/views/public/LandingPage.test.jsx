@@ -272,6 +272,20 @@ describe('LandingPage', () => {
 });
 
 describe('LandingPage Hero two-factor code step', () => {
+  it('email restoration: the Hero form verifies email codes without asking for an authenticator', async () => {
+    const verifyLoginOtp = vi.fn().mockResolvedValue({ role: 'tenant' });
+    useAuthMock.mockReturnValue({ login: vi.fn(), register: vi.fn(), verifyLoginOtp, user: null,
+      mfaChallenge: { email: 'email-login-test@gmail.com', challengeToken: 'test-challenge', method: 'email' } });
+    const person = userEvent.setup();
+    renderLandingPage();
+    expect(screen.getByText(/enter the 6-digit code sent to your email/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /resend.*seconds/i })).toBeDisabled();
+    expect(screen.queryByLabelText('Authenticator or backup code')).not.toBeInTheDocument();
+    await person.type(screen.getByLabelText('Email verification code'), '123456');
+    await person.click(screen.getByRole('button', { name: /verify.*sign in/i }));
+    expect(verifyLoginOtp).toHaveBeenCalledWith('123456');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     PropertyApi.search.mockResolvedValue({ properties: [] });
@@ -367,6 +381,51 @@ describe('LandingPage Hero sign-up when the backend does or does not require ema
     expect(await screen.findByRole('heading', { name: /verify your email/i })).toBeInTheDocument();
     expect(authMode(container)).toBe('register');
     expect(screen.queryByText('Your account has been created. You can now log in.')).not.toBeInTheDocument();
+  });
+
+  it('registration OTP regression: resumes and verifies a pending registration', async () => {
+    const message = 'This email already has a pending verification. Enter the code we sent, or cancel and start over.';
+    const register = vi.fn().mockRejectedValue(new ApiClientError(message, 'ACCOUNT_PENDING_VERIFICATION', 409));
+    useAuthMock.mockReturnValue({ login: vi.fn(), register, verifyLoginOtp: vi.fn(), mfaChallenge: null, user: null });
+    AuthApi.verifyRegistrationOtp.mockResolvedValue({ message: 'Email verified. You can now log in.' });
+    const user = userEvent.setup();
+    const { container } = renderLandingPage();
+
+    await registerThroughHero(user);
+    expect(await screen.findByRole('heading', { name: /verify your email/i })).toBeInTheDocument();
+    expect(authMode(container)).toBe('register');
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(screen.getByText('juan.delacruz@gmail.com')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /resend otp in/i })).toBeDisabled();
+    await user.type(screen.getByLabelText(/verification code/i), '123456');
+    await user.click(screen.getByRole('button', { name: /^verify email$/i }));
+
+    expect(AuthApi.verifyRegistrationOtp).toHaveBeenCalledWith({ email: 'juan.delacruz@gmail.com', code: '123456' });
+    expect(await screen.findByRole('heading', { name: /registration successful/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /go to login/i }));
+    expect(authMode(container)).toBe('login');
+  });
+
+  it('registration OTP regression: allows retry after email delivery fails', async () => {
+    const message = 'Unable to send verification code. Please try again.';
+    const register = vi.fn()
+      .mockRejectedValueOnce(new ApiClientError(message, 'OTP_EMAIL_DELIVERY_FAILED', 400))
+      .mockRejectedValueOnce(new ApiClientError('Registration is awaiting verification.', 'ACCOUNT_PENDING_VERIFICATION', 409));
+    useAuthMock.mockReturnValue({ login: vi.fn(), register, verifyLoginOtp: vi.fn(), mfaChallenge: null, user: null });
+    const user = userEvent.setup();
+    const { container } = renderLandingPage();
+
+    const registerPanel = await registerThroughHero(user);
+    expect(await registerPanel.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /verify your email/i })).not.toBeInTheDocument();
+    expect(registerPanel.getByPlaceholderText('yourname@gmail.com')).toHaveValue('juan.delacruz@gmail.com');
+    await user.click(registerPanel.getByRole('button', { name: /^register$/i }));
+
+    expect(await screen.findByRole('heading', { name: /verify your email/i })).toBeInTheDocument();
+    expect(register).toHaveBeenCalledTimes(2);
+    expect(authMode(container)).toBe('register');
+    expect(screen.getByText('juan.delacruz@gmail.com')).toBeInTheDocument();
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
   });
 
   it('points an already-registered email to Login', async () => {

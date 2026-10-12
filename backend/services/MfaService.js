@@ -10,6 +10,7 @@ const { randomCode, normalizeCode } = require('../utils/oneTimeCodes');
 const { sanitizeUser } = require('../utils/sanitize');
 const { MFA_METHOD } = require('../utils/constants');
 const env = require('../config/env');
+const EmailOtpService = require('./EmailOtpService');
 
 /** Shown in the authenticator app next to the code. */
 const MFA_ISSUER = 'Ledger OnBoard';
@@ -45,7 +46,7 @@ class MfaService {
   /** Step 1: a new secret, held as pending until a code from the app confirms it. */
   async setup(userId, { password }) {
     const user = await this._loadWithPassword(userId, password);
-    if (this.isEnrolled(user)) {
+    if (this.isEnrolled(user) || EmailOtpService.isEnrolled(user)) {
       throw ApiError.conflict('Two-factor sign-in is already on. Turn it off first to set it up again.', 'MFA_ALREADY_ENABLED');
     }
     const key = this._key();
@@ -62,7 +63,7 @@ class MfaService {
   /** Step 2: a correct code from the app turns two-factor on and returns the backup codes, once. */
   async enable(userId, { code }) {
     const user = await this._load(userId);
-    if (this.isEnrolled(user)) {
+    if (this.isEnrolled(user) || EmailOtpService.isEnrolled(user)) {
       throw ApiError.conflict('Two-factor sign-in is already on.', 'MFA_ALREADY_ENABLED');
     }
     if (!user.mfaTotp?.pendingSecretEnc) {
@@ -77,7 +78,9 @@ class MfaService {
     }
 
     const backupCodes = this._newBackupCodes();
-    const updated = await UserRepository.updateById(user._id, {
+    const updated = await UserRepository.model.findOneAndUpdate({ _id: user._id,
+      emailMfaEnabledAt: null, 'mfaTotp.pendingSecretEnc': user.mfaTotp.pendingSecretEnc,
+    }, { $set: {
       mfaEnabled: true,
       mfaMethod: MFA_METHOD.TOTP,
       'mfaTotp.secretEnc': user.mfaTotp.pendingSecretEnc,
@@ -86,7 +89,8 @@ class MfaService {
       'mfaTotp.backupCodeHashes': backupCodes.map((c) => this._hashBackupCode(c)),
       'mfaTotp.failedAttempts': 0,
       'mfaTotp.lockedUntil': null,
-    });
+    } }, { new: true }).exec();
+    if (!updated) throw ApiError.conflict('Two-factor settings changed. Start again.', 'MFA_ALREADY_ENABLED');
     await AuditLogRepository.record({ action: 'MFA_ENABLED', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id });
     return { backupCodes, user: sanitizeUser(updated) };
   }
@@ -95,9 +99,35 @@ class MfaService {
   async disable(userId, { password, code }) {
     const user = await this._loadWithPassword(userId, password);
     if (this.isEnrolled(user)) await this.verifyCode(user, code);
-    const updated = await UserRepository.updateById(user._id, { mfaEnabled: false, mfaMethod: MFA_METHOD.NONE, ...CLEARED_TOTP_STATE });
+    if (EmailOtpService.isEnrolled(user) && !(await EmailOtpService.consume(user, 'settings', code))) throw invalidCode();
+    const updated = await UserRepository.updateById(user._id, { mfaEnabled: false, mfaMethod: MFA_METHOD.NONE,
+      emailMfaEnabledAt: null, emailCodes: {}, ...CLEARED_TOTP_STATE });
     await AuditLogRepository.record({ action: 'MFA_DISABLED', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id });
     return { user: sanitizeUser(updated) };
+  }
+
+  async emailSetup(userId, { password }) {
+    const user = await this._loadWithPassword(userId, password);
+    if (this.isEnrolled(user) || EmailOtpService.isEnrolled(user)) throw ApiError.conflict('Turn off your current two-factor method before choosing another.', 'MFA_ALREADY_ENABLED');
+    return EmailOtpService.issue(user, 'setup');
+  }
+
+  async emailEnable(userId, { code }) {
+    EmailOtpService.assertAvailable();
+    const user = await this._load(userId);
+    if (this.isEnrolled(user) || EmailOtpService.isEnrolled(user)) throw ApiError.conflict('Two-factor sign-in is already on.', 'MFA_ALREADY_ENABLED');
+    if (!(await EmailOtpService.consume(user, 'setup', code))) throw invalidCode();
+    const updated = await UserRepository.model.findOneAndUpdate({ _id: user._id, emailMfaEnabledAt: null, 'mfaTotp.secretEnc': null },
+      { $set: { mfaEnabled: true, mfaMethod: MFA_METHOD.EMAIL, emailMfaEnabledAt: new Date(), ...CLEARED_TOTP_STATE } }, { new: true }).exec();
+    if (!updated) throw ApiError.conflict('Two-factor settings changed. Start again.', 'MFA_ALREADY_ENABLED');
+    await AuditLogRepository.record({ action: 'MFA_ENABLED', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id, metadata: { method: 'email' } });
+    return { user: sanitizeUser(updated) };
+  }
+
+  async emailSettingsCode(userId, { password }) {
+    const user = await this._loadWithPassword(userId, password);
+    if (!EmailOtpService.isEnrolled(user)) throw ApiError.badRequest('Email two-factor sign-in is not on.', 'MFA_NOT_ENABLED');
+    return EmailOtpService.issue(user, 'settings');
   }
 
   /** Replaces every backup code; the old ones stop working. Returned once. */

@@ -5,6 +5,7 @@ const { compareOtp } = require('../utils/otp');
 const { normalizeCode } = require('../utils/oneTimeCodes');
 const { PASSWORD_RESET_CODE } = require('../utils/constants');
 const MfaService = require('./MfaService');
+const EmailOtpService = require('./EmailOtpService');
 
 // Code-only requests (no password): each endpoint has its own failure counter on the account,
 // so failing one never locks another, and none of them touches the sign-in code lock.
@@ -33,6 +34,7 @@ class ResetCodeService {
     if (normalized.length === PASSWORD_RESET_CODE.LENGTH) {
       return (await this._matchesAdminCode(user, normalized)) ? 'admin_code' : null;
     }
+    if (/^\d{6}$/.test(normalized) && await EmailOtpService.consume(user, 'reset', normalized, { countFailures: false })) return 'email';
     return MfaService.consumeCode(user, code); // null when two-factor is off
   }
 
@@ -76,6 +78,7 @@ class ResetCodeService {
       refreshTokenHash: null,
       $inc: { tokenVersion: 1 },
       otp: { codeHash: null, purpose: null, expiresAt: null, attempts: 0 },
+      emailCodes: {},
       [`${counter}.failedAttempts`]: 0,
       [`${counter}.lockedUntil`]: null,
     };

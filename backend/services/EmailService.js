@@ -105,7 +105,8 @@ class EmailService {
 
   sendOtpEmail(to, code, purpose, firstName) {
     const purposeLabel =
-      purpose === 'login_mfa' ? 'Login verification' : purpose === 'email_verification' ? 'Email verification' : 'Password reset';
+      purpose === 'login_mfa' ? 'Login verification' : purpose === 'email_verification' ? 'Email verification'
+        : purpose === 'email_mfa_setup' ? 'Email two-factor setup' : purpose === 'email_mfa_settings' ? 'Security settings verification' : 'Password reset';
     const subject =
       purpose === 'email_verification' ? 'Verify your Ledger OnBoard account' : `Ledger OnBoard — ${purposeLabel} code`;
     return this._sendMessage(to, subject, {
@@ -120,6 +121,18 @@ class EmailService {
   }
 
   /** Sent when a landlord approves a reservation: where, when, and who to contact to arrange the move-in. */
+  sendCaretakerInvitationEmail(to, fullName, code, landlordName) {
+    return this._sendMessage(to, 'Ledger OnBoard Caretaker Invitation', {
+      category: 'Caretaker invitation', title: "You're invited to join", greeting: `Hi ${fullName},`,
+      paragraphs: [`${landlordName || 'Your landlord'} invited you to become a caretaker on Ledger OnBoard.`,
+        'Open the activation page, enter your email and the code below, and choose your own password.'],
+      highlight: { label: 'Your activation code', value: code },
+      details: [['Invitation expires', 'In 3 days']],
+      action: { label: 'Activate my account', url: this._appLink('/activate-caretaker') },
+      note: 'This code works once. If the invitation was unexpected, ignore it. Your landlord can issue a new code if needed.',
+    });
+  }
+
   sendReservationApprovedEmail(to, { tenantName, propertyName, location, roomNumber, moveInDate, holdUntil, landlord, caretaker }) {
     const details = [
       ['Property', propertyName],

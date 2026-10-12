@@ -75,7 +75,7 @@ export function AuthProvider({ children }) {
       const result = await AuthApi.login({ email, password });
       if (result.mfaRequired) {
         // Held only in memory: the 5-minute token that the code step exchanges for a session.
-        setMfaChallenge({ email, challengeToken: result.challengeToken });
+        setMfaChallenge({ email, challengeToken: result.challengeToken, ...(result.mfaMethod ? { method: result.mfaMethod } : {}) });
         return { mfaRequired: true };
       }
       persistSession(result);

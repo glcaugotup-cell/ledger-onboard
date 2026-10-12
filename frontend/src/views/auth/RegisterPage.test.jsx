@@ -275,6 +275,50 @@ describe('RegisterPage', () => {
     expect(await screen.findByText('Email is already registered')).toBeInTheDocument();
   });
 
+  it('registration OTP regression: resumes and verifies a pending registration', async () => {
+    const message = 'This email already has a pending verification. Enter the code we sent, or cancel and start over.';
+    const register = vi.fn().mockRejectedValue(new ApiClientError(message, 'ACCOUNT_PENDING_VERIFICATION', 409));
+    useAuthMock.mockReturnValue({ register });
+    AuthApi.verifyRegistrationOtp.mockResolvedValue({ message: 'Email verified. You can now log in.' });
+    const user = userEvent.setup();
+    renderRegisterPage();
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /^register$/i }));
+
+    expect(await screen.findByRole('heading', { name: /verify your email/i })).toBeInTheDocument();
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(screen.getByText('juan.delacruz@gmail.com')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /resend otp in/i })).toBeDisabled();
+    await user.type(screen.getByLabelText(/verification code/i), '123456');
+    await user.click(screen.getByRole('button', { name: /^verify email$/i }));
+
+    expect(AuthApi.verifyRegistrationOtp).toHaveBeenCalledWith({ email: 'juan.delacruz@gmail.com', code: '123456' });
+    expect(await screen.findByRole('heading', { name: /registration successful/i })).toBeInTheDocument();
+  });
+
+  it('registration OTP regression: allows retry after email delivery fails', async () => {
+    const message = 'Unable to send verification code. Please try again.';
+    const register = vi.fn()
+      .mockRejectedValueOnce(new ApiClientError(message, 'OTP_EMAIL_DELIVERY_FAILED', 400))
+      .mockRejectedValueOnce(new ApiClientError('Registration is awaiting verification.', 'ACCOUNT_PENDING_VERIFICATION', 409));
+    useAuthMock.mockReturnValue({ register });
+    const user = userEvent.setup();
+    renderRegisterPage();
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /^register$/i }));
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /verify your email/i })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/email/i)).toHaveValue('juan.delacruz@gmail.com');
+    await user.click(screen.getByRole('button', { name: /^register$/i }));
+
+    expect(await screen.findByRole('heading', { name: /verify your email/i })).toBeInTheDocument();
+    expect(register).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('juan.delacruz@gmail.com')).toBeInTheDocument();
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+  });
+
   it('shows a Cancel button on the verify-email step that cancels the pending registration and returns to the form', async () => {
     const register = vi.fn().mockResolvedValue({});
     useAuthMock.mockReturnValue({ register });

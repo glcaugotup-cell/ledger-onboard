@@ -6,6 +6,7 @@ const SECRET_FIELDS = [
   '+passwordHash',
   '+otp.codeHash', '+otp.purpose', '+otp.expiresAt', '+otp.attempts',
   '+refreshTokenHash',
+  '+emailCodes',
   '+mfaTotp.secretEnc', '+mfaTotp.pendingSecretEnc', '+mfaTotp.lastUsedStep',
   '+mfaTotp.backupCodeHashes', '+mfaTotp.failedAttempts', '+mfaTotp.lockedUntil',
   '+passwordReset.failedAttempts', '+passwordReset.lockedUntil',

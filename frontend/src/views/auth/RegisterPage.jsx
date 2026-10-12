@@ -207,7 +207,7 @@ export default function RegisterPage() {
       const { message, code, fieldErrors } = describeApiError(err);
       if (code === 'ACCOUNT_PENDING_VERIFICATION') {
         // Pending unverified registration: the backend re-sent a code, so resume verification.
-        setRegisteredEmail(email);
+        setRegisteredEmail(normalizedForm.email);
         setCooldown(RESEND_COOLDOWN_SECONDS);
         setVerifyInfo(message);
         setStep('verify');

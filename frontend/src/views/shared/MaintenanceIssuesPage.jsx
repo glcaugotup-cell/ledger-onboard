@@ -282,7 +282,7 @@ export function MaintenanceIssuesContent({ embedded = false, highlightIssueId = 
     </div>}
 
     {role === 'landlord' && <Card className="mb-4"><div className="grid gap-3 sm:grid-cols-3">
-      <Select aria-label="Filter by urgency" value={filters.urgency} onChange={(e) => setFilters({ ...filters, urgency: e.target.value })}><option value="">All urgency</option>{['high', 'medium', 'low'].map((x) => <option key={x} value={x}>{x}</option>)}</Select>
+      <Select aria-label="Filter by urgency" value={filters.urgency} onChange={(e) => setFilters({ ...filters, urgency: e.target.value })}><option value="">All urgency</option>{['high', 'medium', 'low'].map((x) => <option key={x} value={x}>{capitalizeFirst(x)}</option>)}</Select>
       <Select aria-label="Filter by category" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })}><option value="">All categories</option>{CATEGORIES.map((x) => <option key={x}>{x}</option>)}</Select>
       <Select aria-label="Filter by room" value={filters.room} onChange={(e) => setFilters({ ...filters, room: e.target.value })}><option value="">All room units</option>{[...new Map(issues.map((i) => [String(i.roomId?._id || i.roomId), i.roomId])).entries()].map(([id, room]) => <option key={id} value={id}>Room {room?.roomNumber || id.slice(-5)}</option>)}</Select>
     </div></Card>}

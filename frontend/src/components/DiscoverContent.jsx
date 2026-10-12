@@ -58,19 +58,21 @@ export default function DiscoverContent({ linkPrefix = '/tenant/properties', map
 
   useEffect(() => {
     if (filters.minRent !== '' && filters.maxRent !== '' && Number(filters.minRent) > Number(filters.maxRent)) return undefined;
+    let active = true;
     const timeout = setTimeout(() => {
       setLoading(true);
       setError('');
       const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ''));
       PropertyApi.search(params)
-        .then(({ properties: list }) => setProperties(list))
+        .then(({ properties: list }) => { if (active) setProperties(list); })
         .catch(() => {
+          if (!active) return;
           setProperties([]);
           setError('Could not load properties. Please try again.');
         })
-        .finally(() => setLoading(false));
+        .finally(() => { if (active) setLoading(false); });
     }, 300); // light debounce so typing doesn't fire a request per keystroke
-    return () => clearTimeout(timeout);
+    return () => { active = false; clearTimeout(timeout); };
   }, [filters]);
 
   const update = (key) => (e) => {
