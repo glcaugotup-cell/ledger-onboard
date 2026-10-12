@@ -9,8 +9,23 @@ import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
 import { describeApiError } from '../../utils/errors.js';
-import { validatePassword } from '../../utils/validators.js';
+import { validateGmail, validatePassword } from '../../utils/validators.js';
 import { cleanMfaCode } from '../../utils/mfa.js';
+
+const ACTIVATION_CODE = /^[A-Z0-9]{5}-?[A-Z0-9]{5}$/;
+
+function validateActivationCode(code) {
+  if (!code) return 'Enter the activation code from your landlord';
+  if (!ACTIVATION_CODE.test(code)) return 'The code has 10 letters and numbers, like XXXXX-XXXXX';
+  return null;
+}
+
+/** One wrong field: its own message on top. Several: how many need fixing. Each field also shows its message. */
+function summarize(fieldErrors) {
+  const messages = Object.values(fieldErrors).filter(Boolean);
+  if (messages.length === 1) return messages[0].endsWith('.') ? messages[0] : `${messages[0]}.`;
+  return messages.length ? `Fix the ${messages.length} highlighted fields.` : '';
+}
 
 /** A caretaker activates their account with their email, the code from their landlord and a new password. */
 export default function ActivateCaretakerPage() {
@@ -23,23 +38,36 @@ export default function ActivateCaretakerPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [confirmError, setConfirmError] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({}); // { email, code, password }
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Editing a field clears its own message.
+  const onFieldChange = (key, value) => {
+    setForm((f) => ({ ...f, [key]: value }));
+    setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
+  };
+
+  const showFieldErrors = (errors) => {
+    setFieldErrors(errors);
+    setError(summarize(errors));
+  };
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setConfirmError('');
 
-    if (!form.email.trim() || !form.code) {
-      setError('Enter your email and the activation code from your landlord.');
+    const errors = {
+      email: validateGmail(form.email.trim().toLowerCase()),
+      code: validateActivationCode(form.code),
+      password: validatePassword(password),
+    };
+    if (Object.values(errors).some(Boolean)) {
+      showFieldErrors(errors);
       return;
     }
-    const passwordError = validatePassword(password);
-    if (passwordError) {
-      setError(`${passwordError}.`);
-      return;
-    }
+    setFieldErrors({});
     if (!confirmPassword) {
       setConfirmError('Please confirm your password.');
       return;
@@ -57,7 +85,11 @@ export default function ActivateCaretakerPage() {
       setSuccess(res.message);
       setTimeout(() => navigate('/', { replace: true }), 1200);
     } catch (err) {
-      setError(describeApiError(err).message);
+      // A validation error names its fields (email, code, password): show each under its field.
+      const { message, fieldErrors: serverErrors } = describeApiError(err);
+      const named = { email: serverErrors.email, code: serverErrors.code, password: serverErrors.password };
+      if (Object.values(named).some(Boolean)) showFieldErrors(named);
+      else setError(message);
     } finally {
       setLoading(false);
     }
@@ -77,13 +109,22 @@ export default function ActivateCaretakerPage() {
         <ErrorBanner message={error} />
         <SuccessBanner message={success} />
 
-        <Field required label="Email">
-          <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" required />
+        <Field required label="Email" error={fieldErrors.email}>
+          <TextInput
+            type="email"
+            maxLength={254}
+            value={form.email}
+            onChange={(e) => onFieldChange('email', e.target.value)}
+            autoComplete="email"
+            error={fieldErrors.email}
+            required
+          />
         </Field>
-        <Field required label="Activation code" hint="XXXXX-XXXXX, from your landlord">
+        <Field required label="Activation code" hint="XXXXX-XXXXX, from your landlord" error={fieldErrors.code}>
           <TextInput
             value={form.code}
-            onChange={(e) => setForm({ ...form, code: cleanMfaCode(e.target.value) })}
+            onChange={(e) => onFieldChange('code', cleanMfaCode(e.target.value))}
+            error={fieldErrors.code}
             autoComplete="one-time-code"
             autoCapitalize="characters"
             spellCheck={false}
@@ -93,8 +134,16 @@ export default function ActivateCaretakerPage() {
         </Field>
 
         <div>
-          <Field required label="New password">
-            <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <Field required label="New password" error={fieldErrors.password}>
+            <PasswordInput
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, password: undefined }));
+              }}
+              error={fieldErrors.password}
+              required
+            />
           </Field>
           <PasswordStrengthIndicator password={password} />
         </div>

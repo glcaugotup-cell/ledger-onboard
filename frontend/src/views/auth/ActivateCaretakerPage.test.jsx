@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +9,9 @@ import { ApiClientError } from '../../services/apiClient.js';
 vi.mock('../../services/AuthApi.js', () => ({ default: { activateCaretaker: vi.fn() } }));
 
 const VALID_PASSWORD = 'Str0ng!Pass1';
+
+/** The field (label) that wraps the input with this label, including its message. */
+const fieldOf = (label) => screen.getByLabelText(label).closest('label');
 
 // Phase 5 rule: activation takes the caretaker's email and the code from their landlord (no link token).
 async function fillEmailAndCode(user) {
@@ -244,8 +247,58 @@ describe('ActivateCaretakerPage — email and activation code (phase 5)', () => 
     await user.type(screen.getByLabelText(/^confirm password/i), VALID_PASSWORD);
     await user.click(screen.getByRole('button', { name: 'Activate account' }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Enter your email and the activation code from your landlord.');
+    // Each missing field says what it needs, under the field itself.
+    expect(screen.getByRole('alert')).toHaveTextContent('Fix the 2 highlighted fields.');
+    expect(within(fieldOf('Email')).getByText('Email is required')).toBeInTheDocument();
+    expect(within(fieldOf('Activation code')).getByText('Enter the activation code from your landlord')).toBeInTheDocument();
     expect(AuthApi.activateCaretaker).not.toHaveBeenCalled();
+  });
+
+  it('points at the field to fix: a mistyped email domain (gmail.cpm) is caught before sending', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText('Email'), 'nida.calaycay@gmail.cpm');
+    await user.type(screen.getByLabelText('Activation code'), 'abcde-fghjk');
+    await user.type(screen.getByLabelText(/^new password/i), VALID_PASSWORD);
+    await user.type(screen.getByLabelText(/^confirm password/i), VALID_PASSWORD);
+    await user.click(screen.getByRole('button', { name: 'Activate account' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Must be a valid @gmail.com address.');
+    expect(within(fieldOf('Email')).getByText('Must be a valid @gmail.com address')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toHaveClass('border-red-400');
+    expect(AuthApi.activateCaretaker).not.toHaveBeenCalled();
+
+    // Fixing the field clears its message.
+    await user.clear(screen.getByLabelText('Email'));
+    await user.type(screen.getByLabelText('Email'), 'nida.calaycay@gmail.com');
+    expect(within(fieldOf('Email')).queryByText('Must be a valid @gmail.com address')).not.toBeInTheDocument();
+  });
+
+  it('a code that is too short is flagged on the code field', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText('Email'), 'pedro.reyes@gmail.com');
+    await user.type(screen.getByLabelText('Activation code'), 'ABCDE-FGH');
+    await user.type(screen.getByLabelText(/^new password/i), VALID_PASSWORD);
+    await user.type(screen.getByLabelText(/^confirm password/i), VALID_PASSWORD);
+    await user.click(screen.getByRole('button', { name: 'Activate account' }));
+
+    expect(within(fieldOf('Activation code')).getByText('The code has 10 letters and numbers, like XXXXX-XXXXX')).toBeInTheDocument();
+    expect(AuthApi.activateCaretaker).not.toHaveBeenCalled();
+  });
+
+  it('shows the server\'s field messages under their fields instead of just "Validation failed"', async () => {
+    AuthApi.activateCaretaker.mockRejectedValue(new ApiClientError('Validation failed', 'VALIDATION_ERROR', 400, [{ field: 'email', message: 'Email must be a valid @gmail.com address' }]));
+    const user = userEvent.setup();
+    renderPage();
+    await fillEmailAndCode(user);
+    await user.type(screen.getByLabelText(/^new password/i), VALID_PASSWORD);
+    await user.type(screen.getByLabelText(/^confirm password/i), VALID_PASSWORD);
+    await user.click(screen.getByRole('button', { name: 'Activate account' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Email must be a valid @gmail.com address.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Validation failed');
+    expect(within(fieldOf('Email')).getByText('Email must be a valid @gmail.com address')).toBeInTheDocument();
   });
 
   it('upper-cases the code as it is typed', async () => {
