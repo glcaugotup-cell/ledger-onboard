@@ -57,6 +57,12 @@ describe('LandingPage', () => {
     expect(screen.getByRole('link', { name: 'Contact Us' })).toHaveAttribute('href', '#contact');
   });
 
+  it('links from the Hero login form to account recovery and caretaker activation, like the /login page', () => {
+    renderLandingPage();
+    expect(screen.getByRole('link', { name: 'Recover an archived account' })).toHaveAttribute('href', '/account-recovery');
+    expect(screen.getByRole('link', { name: 'Activate a caretaker account' })).toHaveAttribute('href', '/activate-caretaker');
+  });
+
   it('shows the Login form by default in the Hero and lets the visitor slide to Register without navigating away', async () => {
     const user = userEvent.setup();
     renderLandingPage();

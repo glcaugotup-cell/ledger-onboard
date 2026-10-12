@@ -296,6 +296,17 @@ function HeroLoginForm({ onSwitch, notice = '', onNoticeDismiss }) {
             )}
           </Button>
 
+          {/* Same two links as the /login page. */}
+          <p className="text-center text-[11px] text-gray-500">
+            <Link to="/account-recovery" className="hover:text-brand-700 hover:underline">
+              Recover an archived account
+            </Link>
+            {' · '}
+            <Link to="/activate-caretaker" className="hover:text-brand-700 hover:underline">
+              Activate a caretaker account
+            </Link>
+          </p>
+
           {needsVerification && (
             <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5">
               <p className="text-xs text-amber-700">Your email address hasn&apos;t been verified yet.</p>
