@@ -155,13 +155,14 @@ describe('DiscoverContent — tenant mapSection layout', () => {
     expect(screen.getAllByTestId('marker')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'Find boarding houses on the map' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Grid' })).not.toBeInTheDocument();
-    expect(mapStub.fitBounds).toHaveBeenCalledWith(
+    // The map is framed in an effect after the markers render (PropertyMap FitToMarkers), so wait for it.
+    await waitFor(() => expect(mapStub.fitBounds).toHaveBeenCalledWith(
       [
         [16.05, 120.34],
         [16.044, 120.3364],
       ],
       expect.any(Object)
-    );
+    ));
   });
 
   it('filters update both the cards and the markers from the same result set', async () => {
@@ -176,7 +177,7 @@ describe('DiscoverContent — tenant mapSection layout', () => {
     await screen.findByText('1 property found');
     expect(screen.getAllByTestId('marker')).toHaveLength(1);
     expect(screen.queryByText('Dagupan Demo Boarding House')).not.toBeInTheDocument();
-    expect(mapStub.setView).toHaveBeenLastCalledWith([16.044, 120.3364], 16); // single result → centered on it
+    await waitFor(() => expect(mapStub.setView).toHaveBeenLastCalledWith([16.044, 120.3364], 16)); // single result → centered on it (after render, like fitBounds)
   });
 
   it('keeps the single map mounted with a clean empty-state message when nothing matches', async () => {
