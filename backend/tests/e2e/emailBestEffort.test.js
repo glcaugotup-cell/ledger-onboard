@@ -194,7 +194,7 @@ describe('EMAIL_TRANSPORT=none across the app', () => {
 
     const results = await AccountLifecycleService.runDailySweep();
 
-    expect(results).toEqual({ warned: 1, archived: 1, failed: 0 });
+    expect(results).toEqual({ warned: 1, archived: 1, failed: 0, deleted: 0 });
     expect(logSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
 

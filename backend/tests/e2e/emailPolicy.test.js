@@ -100,7 +100,7 @@ test('turning notifications off preserves in-app preference and mailbox proof', 
   const u = await user({ emailConfirmedAt: new Date(), notificationPreferences: { email: true, inApp: true } });
   const result = await request(app).patch('/api/users/me').set('Authorization', `Bearer ${signAccessToken(u)}`)
     .send({ notificationPreferences: { email: false } });
-  expect(result.body.data.user.notificationPreferences).toEqual({ email: false, inApp: true });
+  expect(result.body.data.user.notificationPreferences).toMatchObject({ email: false, inApp: true });
   expect(result.body.data.user.emailNotificationsConfirmed).toBe(true);
 });
 test('inactivity warning and archived notice reach confirmed inboxes only', async () => {
@@ -234,4 +234,37 @@ test('unsubscribe links: GET only confirms, POST turns email off, forged links d
     const after = await Users.findById(u._id);
     expect(after.notificationPreferences).toMatchObject({ email: false, inApp: true }); expect(after.emailConfirmedAt).toBeTruthy();
   } finally { env.publicApiUrl = null; }
+});
+test('email categories: saved from the profile; unknown keys ignored; non-booleans refused', async () => {
+  const u = await user({ emailConfirmedAt: new Date() });
+  const patch = (prefs) => request(app).patch('/api/users/me').set('Authorization', `Bearer ${signAccessToken(u)}`).send({ notificationPreferences: prefs });
+  const saved = await patch({ emailCategories: { bills: false, payments: true, hacked: false } });
+  expect(saved.status).toBe(200);
+  expect(saved.body.data.user.notificationPreferences.emailCategories).toMatchObject({ bills: false, payments: true, reservations: true });
+  expect(saved.body.data.user.notificationPreferences.emailCategories.hacked).toBeUndefined();
+  expect((await patch({ emailCategories: { bills: 'nope' } })).status).toBe(400);
+});
+test('an unticked category stops those emails only; in-app notifications and other categories continue', async () => {
+  const Notifications = require('../../services/NotificationService'); const Notification = require('../../models/Notification');
+  const u = await user({ emailConfirmedAt: new Date(), notificationPreferences: { email: true, inApp: true, emailCategories: { bills: false } } });
+  await Notifications.notify({ userId: u._id, type: 'BILL_CREATED', title: 'New bill', message: 'Your bill is ready.' });
+  expect(send).not.toHaveBeenCalled();
+  await Notifications.notify({ userId: u._id, type: 'RESERVATION_REJECTED', title: 'Reservation rejected', message: 'Sorry.' });
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(await Notification.countDocuments({ userId: u._id })).toBe(2);
+
+  const Billing = require('../../models/BillingSOA');
+  await Billing.create({ tenantId: u._id, roomId: new (require('mongoose').Types.ObjectId)(), billingPeriod: new Date('2026-12-01'),
+    baseRent: 2000, totalAmountDue: 2000, remainingBalance: 2000, dueDate: new Date('2026-12-15T04:00:00Z') });
+  send.mockClear();
+  await require('../../services/BillingReminderService').runForTenant(u._id, new Date('2026-12-12T04:00:00Z'));
+  expect(send).not.toHaveBeenCalled();
+});
+test('security notices still send with every category off', async () => {
+  const off = Object.fromEntries(['reservations', 'bills', 'payments', 'verification', 'assignments', 'account'].map((k) => [k, false]));
+  const u = await user({ emailConfirmedAt: new Date(), notificationPreferences: { email: true, inApp: true, emailCategories: off } });
+  await request(app).patch('/api/auth/change-password').set('Authorization', `Bearer ${signAccessToken(u)}`)
+    .send({ currentPassword: password, newPassword: 'Other1!Password' });
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(send.mock.calls[0][0].subject).toContain('Your password was changed');
 });

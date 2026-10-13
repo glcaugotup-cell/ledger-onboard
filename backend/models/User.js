@@ -86,6 +86,15 @@ const userSchema = new Schema(
     // Why the account was last suspended/deactivated/closed (admin-selected reasons or self-closure).
     statusReason: { type: String, default: null },
     statusChangedAt: { type: Date, default: null },
+    // Admin Archive (status pending_deletion): who moved it there, when it will be erased, and the
+    // status it returns to if restored. deletedAt is set once the personal details are erased.
+    deletion: {
+      requestedAt: { type: Date, default: null },
+      requestedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      scheduledFor: { type: Date, default: null },
+      previousStatus: { type: String, default: null },
+    },
+    deletedAt: { type: Date, default: null },
     // Caretakers only: when they accepted the invitation, and when the landlord last resent it.
     activatedAt: { type: Date, default: null },
     invitationResentAt: { type: Date, default: null },
@@ -172,6 +181,15 @@ const userSchema = new Schema(
     notificationPreferences: {
       email: { type: Boolean, default: true },
       inApp: { type: Boolean, default: true },
+      // Per-category email choices (utils/emailCategories); a missing value means on.
+      emailCategories: {
+        reservations: { type: Boolean, default: true },
+        bills: { type: Boolean, default: true },
+        payments: { type: Boolean, default: true },
+        verification: { type: Boolean, default: true },
+        assignments: { type: Boolean, default: true },
+        account: { type: Boolean, default: true },
+      },
     },
     // Privacy Policy consent captured at registration; `at` records when it was given.
     privacyConsent: {

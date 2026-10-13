@@ -30,4 +30,6 @@ const setUserStatusValidators = [
 
 const deactivateInactiveValidators = [reasonChain];
 
-module.exports = { listUsersValidators, setUserStatusValidators, deactivateInactiveValidators };
+const archiveUserValidators = [reasonChain];
+
+module.exports = { listUsersValidators, setUserStatusValidators, deactivateInactiveValidators, archiveUserValidators };

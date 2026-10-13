@@ -13,7 +13,14 @@ const ACCOUNT_STATUS = Object.freeze({
   SUSPENDED: 'suspended',
   DEACTIVATED: 'deactivated',
   ARCHIVED: 'archived',
+  // Moved to the admin Archive: blocked, restorable for 30 days, then erased.
+  PENDING_DELETION: 'pending_deletion',
+  // Erased: personal details wiped; records (bills, payments, reservations) stay as "Deleted user".
+  DELETED: 'deleted',
 });
+
+// Days an account stays in the admin Archive before it is erased automatically.
+const ACCOUNT_DELETION_GRACE_DAYS = 30;
 
 // Admin-issued password reset codes (POST /api/admin/users/:id/reset-code): shown once as XXXX-XXXX.
 const PASSWORD_RESET_CODE = Object.freeze({ LENGTH: 8, TTL_MINUTES: 30 });
@@ -115,6 +122,7 @@ const REVIEW_STATUS = Object.freeze({
 module.exports = {
   ROLES,
   ACCOUNT_STATUS,
+  ACCOUNT_DELETION_GRACE_DAYS,
   MFA_METHOD,
   PASSWORD_RESET_CODE,
   CARETAKER_ACTIVATION_CODE,

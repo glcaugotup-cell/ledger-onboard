@@ -38,6 +38,8 @@ import sidebarHouse from '../../assets/housedesign1.webp';
 import PropertyApi from '../../services/PropertyApi.js';
 import ReservationApi from '../../services/ReservationApi.js';
 
+const roleLabel = (user) => (user?.isMainAdmin ? 'Main Admin' : formatStatus(user?.role));
+
 const NAV_BY_ROLE = {
   tenant: [
     { to: '/tenant/discover', label: 'Discover', icon: MagnifyingGlassIcon },
@@ -203,14 +205,14 @@ function AccountMenu({ user, collapsed = false, mobile = false, dark = false, he
         ) : (
           <span className={`flex shrink-0 items-center justify-center rounded-full bg-[#dcebe2] text-sm font-semibold text-[#174a3b] ${header ? 'h-9 w-9' : 'h-10 w-10'}`} aria-hidden="true">{initials(user?.fullName)}</span>
         )}
-        {!collapsed && <span className={`min-w-0 text-sm leading-tight ${header ? 'hidden text-left sm:block' : 'flex-1'}`}><span className={`block truncate font-medium ${dark ? 'text-white' : 'text-gray-900'}`}>{user?.fullName}</span><span className={`mt-0.5 block truncate text-xs ${dark ? 'text-brand-100' : 'text-gray-600'}`}>{header ? formatStatus(user?.role) : user?.email || formatStatus(user?.role)}</span></span>}
+        {!collapsed && <span className={`min-w-0 text-sm leading-tight ${header ? 'hidden text-left sm:block' : 'flex-1'}`}><span className={`block truncate font-medium ${dark ? 'text-white' : 'text-gray-900'}`}>{user?.fullName}</span><span className={`mt-0.5 block truncate text-xs ${dark ? 'text-brand-100' : 'text-gray-600'}`}>{header ? roleLabel(user) : user?.email || roleLabel(user)}</span></span>}
         {!collapsed && <ChevronUpDownIcon className={`h-4 w-4 shrink-0 ${dark ? 'text-brand-100' : 'text-gray-500'}`} aria-hidden="true" />}
       </button>
       {open && (
         <div className={`absolute z-50 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl ${header ? 'right-0 top-[calc(100%+0.5rem)] w-64' : mobile ? 'bottom-[calc(100%+0.5rem)] left-0 w-full' : 'bottom-0 left-full ml-2 w-64'}`}>
           <div className="flex items-center gap-2.5 border-b border-gray-100 px-3 py-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800" aria-hidden="true">{initials(user?.fullName)}</span>
-            <span className="min-w-0 text-sm leading-tight"><span className="block truncate font-medium text-gray-900">{user?.fullName}</span><span className="block truncate text-xs text-gray-500">{user?.email || formatStatus(user?.role)}</span></span>
+            <span className="min-w-0 text-sm leading-tight"><span className="block truncate font-medium text-gray-900">{user?.fullName}</span><span className="block truncate text-xs text-gray-500">{user?.email || roleLabel(user)}</span></span>
           </div>
           <div className="p-1.5">
             <NavLink to={profilePath} onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 ${focusRing}`}>

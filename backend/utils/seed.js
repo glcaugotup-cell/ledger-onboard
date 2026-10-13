@@ -35,14 +35,14 @@ async function upsertUser(fields) {
 async function main() {
   await connectDB();
 
-  // The admin account is ledgeronboard@gmail.com. User.email is immutable, so the old
+  // The main admin account is ledgeronboard@gmail.com (MAIN_ADMIN_EMAIL). User.email is immutable, so the old
   // demo.admin@gmail.com account is removed rather than renamed.
   const staleAdmin = await UserRepository.findByEmail('demo.admin@gmail.com');
   if (staleAdmin) await UserRepository.deleteById(staleAdmin._id);
   const admin = await upsertUser({
-    firstName: 'Demo',
+    firstName: 'Main',
     lastName: 'Admin',
-    fullName: 'Demo Admin',
+    fullName: 'Main Admin',
     email: 'ledgeronboard@gmail.com',
     phone: '09170000001',
     role: ROLES.ADMIN,

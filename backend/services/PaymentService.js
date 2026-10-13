@@ -216,8 +216,8 @@ class PaymentService {
     try {
       const tenant = await UserRepository.findById(payment.tenantId);
       if (tenant) {
-        if (isApproved) await EmailNotificationService.deliver(tenant, 'sendPaymentVerifiedEmail', [tenant.fullName, verifiedAmount]);
-        else await EmailNotificationService.deliver(tenant, 'sendPaymentRejectedEmail', [tenant.fullName, updated.rejectionReason]);
+        if (isApproved) await EmailNotificationService.deliver(tenant, 'sendPaymentVerifiedEmail', [tenant.fullName, verifiedAmount], { category: 'payments' });
+        else await EmailNotificationService.deliver(tenant, 'sendPaymentRejectedEmail', [tenant.fullName, updated.rejectionReason], { category: 'payments' });
       }
     } catch (err) {
       // eslint-disable-next-line no-console

@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button.jsx';
 import ReasonDialog from '../../components/ReasonDialog.jsx';
 import ResetCodeDialog from '../../components/ResetCodeDialog.jsx';
 import AddAdminDialog from '../../components/AddAdminDialog.jsx';
+import ArchivedAccounts from '../../components/ArchivedAccounts.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import PageHeader from '../../components/layout/PageHeader.jsx';
@@ -19,6 +20,7 @@ const STATUS_TONE = { active: 'green', pending_activation: 'yellow', suspended: 
 
 const SUSPENSION_REASONS = ['Policy violation', 'Suspicious activity', 'Incomplete/invalid information', 'Repeated rule violations', 'Administrative review'];
 const DEACTIVATION_REASONS = ['Policy violation', 'Suspicious activity', 'Incomplete/invalid information', 'Duplicate account', 'Administrative review'];
+const ARCHIVE_REASONS = ['Duplicate account', 'Requested by the account owner', 'Fake or spam account', 'Policy violation', 'Administrative review'];
 const INACTIVITY_REASONS = [`No activity for over ${INACTIVITY_DEACTIVATION_DAYS} days`, 'Account appears abandoned', 'Duplicate account', 'Owner asked for the account to be closed'];
 
 /** Dialog settings per admin action; every one needs a reason and an explicit confirmation. */
@@ -37,6 +39,13 @@ const ACTIONS = {
     confirmLabel: 'Deactivate account',
     done: (u) => `${u.fullName} has been deactivated.`,
   },
+  archive: {
+    title: (u) => `Move ${u.fullName} to the archive?`,
+    message: 'They will be signed out and blocked right away. Any admin can restore the account within 30 days; after that it is deleted automatically (their details are erased, their bills, payments and reservations stay).',
+    reasons: ARCHIVE_REASONS,
+    confirmLabel: 'Move to archive',
+    done: (u) => `${u.fullName} has been moved to the archive. It will be deleted in 30 days unless restored.`,
+  },
   inactive: {
     title: (u) => `Deactivate ${u.fullName} for inactivity?`,
     message: (u) =>
@@ -51,6 +60,8 @@ export default function UsersPage() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState([]);
   const [addingAdmin, setAddingAdmin] = useState(false);
+  // 'accounts' | 'archive'
+  const [view, setView] = useState('accounts');
   const [roleFilter, setRoleFilter] = useState('');
   const [inactiveOnly, setInactiveOnly] = useState(false);
   const [query, setQuery] = useState('');
@@ -106,6 +117,7 @@ export default function UsersPage() {
     setDialogError('');
     try {
       if (action === 'inactive') await AdminApi.deactivateInactive(user._id, reason);
+      else if (action === 'archive') await AdminApi.archiveUser(user._id, reason);
       else await AdminApi.setUserStatus(user._id, { status: action === 'suspend' ? 'suspended' : 'deactivated', reason });
       setSuccess(ACTIONS[action].done(user));
       setPending(null);
@@ -131,13 +143,33 @@ export default function UsersPage() {
         description="Every account on the platform, its status and when it was last active."
         actions={me?.isMainAdmin && <Button onClick={() => { setSuccess(''); setAddingAdmin(true); }}>Add admin</Button>}
       />
+      <div role="tablist" aria-label="User lists" className="mb-4 flex flex-wrap gap-2">
+        {[['accounts', 'Accounts'], ['archive', 'Archive']].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={view === key}
+            onClick={() => {
+              setSuccess('');
+              setError('');
+              setView(key);
+              // The Archive tab loads its own list; coming back refreshes this one.
+              if (key === 'accounts' && view !== 'accounts') load();
+            }}
+            className={`min-h-9 rounded-full px-3 text-sm font-semibold ${view === key ? 'bg-brand-600 text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="mb-5 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="relative sm:w-72">
           <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
           <TextInput type="search" maxLength={254} value={query} onChange={(e) => setQuery(e.target.value.slice(0, 254))} placeholder="Search name or email" aria-label="Search users" className="pl-9" />
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-600">
+          {view === 'accounts' && <label className="flex items-center gap-2 text-sm text-gray-600">
             <input
               type="checkbox"
               checked={inactiveOnly}
@@ -145,7 +177,7 @@ export default function UsersPage() {
               className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-400"
             />
             Inactive {INACTIVITY_DEACTIVATION_DAYS}+ days only
-          </label>
+          </label>}
           <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="sm:w-44" aria-label="Filter by role">
             <option value="">All roles</option>
             {['tenant', 'landlord', 'caretaker', 'admin'].map((r) => (
@@ -156,6 +188,7 @@ export default function UsersPage() {
           </Select>
         </div>
       </div>
+      {view === 'archive' ? <ArchivedAccounts me={me} roleFilter={roleFilter} query={query} /> : <>
       <ErrorBanner message={error} />
       <SuccessBanner message={success} />
       {loading && <LoadingState label="Loading users…" />}
@@ -214,6 +247,9 @@ export default function UsersPage() {
                           </Button>
                         )
                       )}
+                      <Button variant="ghost" onClick={() => openDialog('archive', u)}>
+                        Move to archive
+                      </Button>
                     </>
                   )}
                 </div>
@@ -222,6 +258,7 @@ export default function UsersPage() {
           );
         })}
       </div>
+      </>}
 
       {addingAdmin && <AddAdminDialog onClose={() => setAddingAdmin(false)} onCreated={load} />}
 

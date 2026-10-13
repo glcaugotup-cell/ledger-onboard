@@ -3,6 +3,7 @@ const UserRepository = require('../repositories/UserRepository');
 const EmailNotificationService = require('./EmailNotificationService');
 const { ROLES, ACCOUNT_STATUS } = require('../utils/constants');
 const { verifyUnsubscribeToken } = require('../utils/unsubscribe');
+const { categoryOfNotification } = require('../utils/emailCategories');
 
 // Important events that are also emailed as a copy of the notification. Everything else stays
 // in-app only, keeping email volume low so it is less likely to be treated as spam. Reservation
@@ -13,7 +14,7 @@ const EMAILED_TYPES = new Set([
   'LEAVE_REQUESTED', 'LEAVE_APPROVED', 'LEAVE_DECLINED',
   'BILL_CREATED', 'PAYMENT_SUBMITTED', 'PROPERTY_ASSIGNED',
 ]);
-const NO_EMAIL_STATUSES = new Set([ACCOUNT_STATUS.DEACTIVATED, ACCOUNT_STATUS.ARCHIVED]);
+const NO_EMAIL_STATUSES = new Set([ACCOUNT_STATUS.DEACTIVATED, ACCOUNT_STATUS.ARCHIVED, ACCOUNT_STATUS.PENDING_DELETION, ACCOUNT_STATUS.DELETED]);
 
 /**
  * In-app notifications; important ones are also emailed to a confirmed inbox unless the
@@ -23,16 +24,16 @@ const NO_EMAIL_STATUSES = new Set([ACCOUNT_STATUS.DEACTIVATED, ACCOUNT_STATUS.AR
 class NotificationService {
   async notify({ userId, type, title, message, relatedType = null, relatedId = null, link = null }) {
     const notification = await NotificationRepository.create({ userId, type, title, message, relatedType, relatedId, link });
-    if (EMAILED_TYPES.has(type)) await this._email(userId, { title, message, link });
+    if (EMAILED_TYPES.has(type)) await this._email(userId, { title, message, link }, categoryOfNotification(type));
     return notification;
   }
 
-  async _email(userId, { title, message, link }) {
+  async _email(userId, { title, message, link }, category) {
     // The in-app notification is saved; email trouble must never fail the workflow that raised it.
     try {
       const user = await UserRepository.findById(userId);
       if (!user || NO_EMAIL_STATUSES.has(user.accountStatus)) return;
-      await EmailNotificationService.deliver(user, 'sendNotificationEmail', [user.firstName || user.fullName, { title, message, link }]);
+      await EmailNotificationService.deliver(user, 'sendNotificationEmail', [user.firstName || user.fullName, { title, message, link }], { category });
     } catch (err) {
       console.error('[NotificationService] notification email failed:', err.message);
     }

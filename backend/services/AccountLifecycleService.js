@@ -2,6 +2,7 @@ const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const EmailNotificationService = require('./EmailNotificationService');
 const ResetCodeService = require('./ResetCodeService');
+const AccountDeletionService = require('./AccountDeletionService');
 const ApiError = require('../utils/ApiError');
 const { hashPassword } = require('../utils/password');
 const { ACCOUNT_STATUS } = require('../utils/constants');
@@ -76,6 +77,9 @@ class AccountLifecycleService {
       }
     }
 
+    // Accounts left in the admin Archive past the grace period are erased.
+    results.deleted = await AccountDeletionService.purgeDue(now);
+
     await AuditLogRepository.record({
       action: 'ACCOUNT_LIFECYCLE_SWEEP_COMPLETED',
       metadata: results,
@@ -90,7 +94,7 @@ class AccountLifecycleService {
       archiveWarningSentAt: now,
       scheduledArchiveAt,
     });
-    const delivery = await EmailNotificationService.deliver(user, 'sendArchiveWarningEmail', [user.fullName, env.archiveDays - env.archiveWarningDays]);
+    const delivery = await EmailNotificationService.deliver(user, 'sendArchiveWarningEmail', [user.fullName, env.archiveDays - env.archiveWarningDays], { category: 'account' });
     await AuditLogRepository.record({
       action: 'ACCOUNT_ARCHIVE_WARNING_SENT',
       targetType: 'User',
@@ -109,7 +113,7 @@ class AccountLifecycleService {
     });
     let delivery = { skipped: true };
     try {
-      delivery = await EmailNotificationService.deliver(user, 'sendArchivedNoticeEmail', [user.fullName]);
+      delivery = await EmailNotificationService.deliver(user, 'sendArchivedNoticeEmail', [user.fullName], { category: 'account' });
     } catch {
       // The account is archived either way; recovery does not depend on this notice.
     }

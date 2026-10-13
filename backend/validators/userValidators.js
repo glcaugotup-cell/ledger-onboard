@@ -39,6 +39,7 @@ const updateProfileValidators = [
   phoneChain('emergencyContact.phone', 'Emergency contact phone'),
   body('notificationPreferences.email').optional().isBoolean().toBoolean(),
   body('notificationPreferences.inApp').optional().isBoolean().toBoolean(),
+  body('notificationPreferences.emailCategories.*').optional().isBoolean().withMessage('Email choices must be on or off').toBoolean(),
 ];
 
 module.exports = { updateProfileValidators };

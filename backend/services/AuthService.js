@@ -4,6 +4,7 @@ const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const EmailService = require('./EmailService');
 const EmailNotificationService = require('./EmailNotificationService');
+const { EMAIL_CATEGORIES } = require('../utils/emailCategories');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, comparePassword, unusablePasswordHash } = require('../utils/password');
 const { generateOtp, hashOtp, compareOtp } = require('../utils/otp');
@@ -301,6 +302,9 @@ class AuthService {
     if (user.accountStatus === ACCOUNT_STATUS.PENDING_ACTIVATION) {
       throw ApiError.forbidden('This account has not been activated yet. Ask your landlord for an activation code.', 'ACCOUNT_PENDING_ACTIVATION');
     }
+    if (user.accountStatus === ACCOUNT_STATUS.PENDING_DELETION || user.accountStatus === ACCOUNT_STATUS.DELETED) {
+      throw ApiError.forbidden('This account has been closed by an administrator.', 'ACCOUNT_CLOSED');
+    }
   }
 
   async logout(userId) {
@@ -476,6 +480,11 @@ class AuthService {
     }
     for (const key of ['email', 'inApp']) {
       if (typeof updates.notificationPreferences?.[key] === 'boolean') safeUpdates[`notificationPreferences.${key}`] = updates.notificationPreferences[key];
+    }
+    // Only known categories are saved; anything else in the request is ignored.
+    for (const key of EMAIL_CATEGORIES) {
+      const value = updates.notificationPreferences?.emailCategories?.[key];
+      if (typeof value === 'boolean') safeUpdates[`notificationPreferences.emailCategories.${key}`] = value;
     }
     if (user.role !== ROLES.ADMIN && updates.emergencyContact && typeof updates.emergencyContact === 'object') {
       if (updates.emergencyContact.name !== undefined) safeUpdates['emergencyContact.name'] = updates.emergencyContact.name;

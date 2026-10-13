@@ -5,6 +5,7 @@ const { hashOtp } = require('../utils/otp');
 const { unusablePasswordHash } = require('../utils/password');
 const { deriveFullName } = require('../utils/name');
 const { isMainAdmin } = require('../utils/mainAdmin');
+const AccountDeletionService = require('./AccountDeletionService');
 const { randomCode, normalizeCode } = require('../utils/oneTimeCodes');
 const { ACCOUNT_STATUS, PASSWORD_RESET_CODE, ROLES } = require('../utils/constants');
 
@@ -23,9 +24,13 @@ class AdminService {
    * Loads the target of an admin action. Admin accounts can only be managed by the main admin,
    * and the main admin by no one, so the platform can never lose its last way in.
    */
-  async _loadManageable(actorId, userId) {
+  async _loadManageable(actorId, userId, { allowArchived = false } = {}) {
     const user = await UserRepository.findById(userId);
-    if (!user) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
+    if (!user || user.accountStatus === ACCOUNT_STATUS.DELETED) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
+    // Archived accounts only leave the archive through Restore (or are deleted).
+    if (!allowArchived && user.accountStatus === ACCOUNT_STATUS.PENDING_DELETION) {
+      throw ApiError.conflict('This account is in the archive. Restore it first.', 'ACCOUNT_IN_ARCHIVE');
+    }
     if (isMainAdmin(user)) throw ApiError.forbidden('The main admin account cannot be changed here.', 'CANNOT_MODIFY_MAIN_ADMIN');
     if (user.role === ROLES.ADMIN && !isMainAdmin(await UserRepository.findById(actorId))) {
       throw ApiError.forbidden('Only the main admin can manage admin accounts', 'CANNOT_MODIFY_ADMIN');
@@ -67,8 +72,29 @@ class AdminService {
   async listUsers({ role, accountStatus, skip, limit } = {}) {
     const filter = {};
     if (role) filter.role = role;
-    if (accountStatus) filter.accountStatus = accountStatus;
+    // Archived and erased accounts appear only when asked for (the Archive tab).
+    filter.accountStatus = accountStatus || { $nin: [ACCOUNT_STATUS.PENDING_DELETION, ACCOUNT_STATUS.DELETED] };
     return UserRepository.find(filter, { sort: { createdAt: -1 }, skip, limit });
+  }
+
+  /** Any admin (admins: main admin only): blocks the account and schedules erasure. */
+  async archiveUser(adminId, userId, reason) {
+    const user = await this._loadManageable(adminId, userId);
+    return AccountDeletionService.archive(adminId, user, reason);
+  }
+
+  async restoreUser(adminId, userId) {
+    const user = await this._loadManageable(adminId, userId, { allowArchived: true });
+    return AccountDeletionService.restore(adminId, user);
+  }
+
+  /** Main admin only: erase an archived account now instead of waiting for the grace period. */
+  async deleteUser(adminId, userId) {
+    if (!isMainAdmin(await UserRepository.findById(adminId))) {
+      throw ApiError.forbidden('Only the main admin can permanently delete accounts', 'MAIN_ADMIN_REQUIRED');
+    }
+    const user = await this._loadManageable(adminId, userId, { allowArchived: true });
+    await AccountDeletionService.erase(adminId, user);
   }
 
   async listAuditLogs(filters) {

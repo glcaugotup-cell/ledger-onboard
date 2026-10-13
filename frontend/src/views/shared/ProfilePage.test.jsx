@@ -73,6 +73,34 @@ describe('ProfilePage', () => {
     await person.click(screen.getByRole('button', { name: /turn off email notifications/i }));
     expect(AuthApi.updateMe).toHaveBeenCalledWith({ notificationPreferences: { email: false } });
   });
+  it('email checklist: shows the tenant categories ticked by default and saves only after a change', async () => {
+    AuthApi.updateMe.mockResolvedValue({});
+    const person = userEvent.setup();
+    const { refreshProfile } = renderPage({ ...USERS.tenant, emailNotificationsConfirmed: true, notificationPreferences: { email: true, inApp: true, emailCategories: { payments: false } } });
+    const bills = screen.getByRole('checkbox', { name: /bills and due-date reminders/i });
+    expect(bills).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /payment results/i })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /reservations and move-outs/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /account warnings/i })).toBeChecked();
+    expect(screen.queryByRole('checkbox', { name: /business verification/i })).not.toBeInTheDocument();
+    const save = screen.getByRole('button', { name: /save email preferences/i });
+    expect(save).toBeDisabled();
+    await person.click(bills);
+    await person.click(save);
+    expect(AuthApi.updateMe).toHaveBeenCalledWith({ notificationPreferences: { emailCategories: { reservations: true, bills: false, payments: false, account: true } } });
+    expect(refreshProfile).toHaveBeenCalled();
+    expect(await screen.findByText('Email preferences saved.')).toBeInTheDocument();
+  });
+  it('email checklist: landlords get their own categories; hidden while email is off or unconfirmed', async () => {
+    renderPage({ ...USERS.landlord, emailNotificationsConfirmed: true, notificationPreferences: { email: true, inApp: true } });
+    expect(screen.getByRole('checkbox', { name: /business verification results/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /payments received/i })).toBeChecked();
+    expect(screen.queryByRole('checkbox', { name: /bills and due-date/i })).not.toBeInTheDocument();
+  });
+  it('email checklist: not shown when email notifications are off', async () => {
+    renderPage({ ...USERS.tenant, emailNotificationsConfirmed: true, notificationPreferences: { email: false, inApp: true } });
+    expect(screen.queryByRole('checkbox', { name: /bills and due-date/i })).not.toBeInTheDocument();
+  });
   it('email policy: delivery errors remain visible without enabling notifications', async () => {
     AuthApi.requestNotificationEmail.mockRejectedValue(new Error('Unable to send verification code. Please try again.'));
     const person = userEvent.setup();

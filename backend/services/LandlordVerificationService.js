@@ -111,8 +111,8 @@ class LandlordVerificationService {
       });
       // The decision is already saved, logged and notified in-app; email trouble must not turn it into an error.
       try {
-        if (approve) await EmailNotificationService.deliver(landlord, 'sendBusinessVerificationApprovedEmail', [landlord.fullName]);
-        else await EmailNotificationService.deliver(landlord, 'sendBusinessVerificationRejectedEmail', [landlord.fullName, updated.rejectionReason]);
+        if (approve) await EmailNotificationService.deliver(landlord, 'sendBusinessVerificationApprovedEmail', [landlord.fullName], { category: 'verification' });
+        else await EmailNotificationService.deliver(landlord, 'sendBusinessVerificationRejectedEmail', [landlord.fullName, updated.rejectionReason], { category: 'verification' });
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[LandlordVerificationService] verification result email failed:', err.message);

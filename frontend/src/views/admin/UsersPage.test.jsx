@@ -9,7 +9,7 @@ import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.j
 const { useAuthMock, useNotificationsMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), useNotificationsMock: vi.fn() }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
-vi.mock('../../services/AdminApi.js', () => ({ default: { listUsers: vi.fn(), setUserStatus: vi.fn(), deactivateInactive: vi.fn(), issueResetCode: vi.fn(), createAdmin: vi.fn() } }));
+vi.mock('../../services/AdminApi.js', () => ({ default: { listUsers: vi.fn(), setUserStatus: vi.fn(), deactivateInactive: vi.fn(), issueResetCode: vi.fn(), createAdmin: vi.fn(), archiveUser: vi.fn(), restoreUser: vi.fn(), deleteUser: vi.fn() } }));
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ago = (ms) => new Date(Date.now() - ms).toISOString();
@@ -259,6 +259,60 @@ describe('UsersPage reset codes', () => {
       expect(AdminApi.createAdmin).toHaveBeenCalledWith({ firstName: 'Bea', lastName: 'Santos', email: 'bea@gmail.com', phone: '09175550101' });
       expect(await screen.findByTestId('setup-code')).toHaveTextContent('WXYZ-2345');
       expect(AdminApi.listUsers).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('archive', () => {
+    const inArchive = (scheduledInDays) => ({
+      users: [{
+        _id: 'x1', fullName: 'Gone Tenant', role: 'tenant', email: 'gone@gmail.com', accountStatus: 'pending_deletion', statusReason: 'Duplicate account',
+        deletion: { requestedAt: ago(DAY_MS), scheduledFor: new Date(Date.now() + scheduledInDays * DAY_MS).toISOString() },
+      }],
+    });
+
+    it('moves an account to the archive after a reason is chosen', async () => {
+      AdminApi.archiveUser.mockResolvedValue({});
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(within(await waitFor(() => cardOf('Juan Tenant'))).getByRole('button', { name: 'Move to archive' }));
+      const dialog = screen.getByRole('dialog');
+      await user.click(within(dialog).getByLabelText('Duplicate account'));
+      await user.click(within(dialog).getByRole('button', { name: 'Move to archive' }));
+      await waitFor(() => expect(AdminApi.archiveUser).toHaveBeenCalledWith('u1', 'Duplicate account'));
+      expect(await screen.findByText(/moved to the archive/)).toBeInTheDocument();
+    });
+
+    it('a regular admin sees archived accounts with days left and can restore, but not delete', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Juan Tenant');
+      AdminApi.listUsers.mockResolvedValue(inArchive(12));
+      AdminApi.restoreUser.mockResolvedValue({});
+      await user.click(screen.getByRole('tab', { name: 'Archive' }));
+      expect(AdminApi.listUsers).toHaveBeenLastCalledWith({ accountStatus: 'pending_deletion' });
+      expect(await screen.findByText('Gone Tenant')).toBeInTheDocument();
+      expect(screen.getByText('12 days left')).toBeInTheDocument();
+      expect(screen.getByText('Reason: Duplicate account')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Delete now' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Restore' }));
+      expect(AdminApi.restoreUser).toHaveBeenCalledWith('x1');
+      expect(await screen.findByText('Gone Tenant has been restored.')).toBeInTheDocument();
+    });
+
+    it('the main admin can delete an archived account now, after confirming', async () => {
+      const user = userEvent.setup();
+      useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 'm1', fullName: 'Main Admin', role: 'admin', isMainAdmin: true } }));
+      AdminApi.listUsers.mockResolvedValue(inArchive(30));
+      AdminApi.deleteUser.mockResolvedValue({ deleted: true });
+      renderPage();
+      await user.click(screen.getByRole('tab', { name: 'Archive' }));
+      await user.click(await screen.findByRole('button', { name: 'Delete now' }));
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByText(/can't be undone/)).toBeInTheDocument();
+      expect(AdminApi.deleteUser).not.toHaveBeenCalled();
+      await user.click(within(dialog).getByRole('button', { name: 'Delete permanently' }));
+      expect(AdminApi.deleteUser).toHaveBeenCalledWith('x1');
+      expect(await screen.findByText("Gone Tenant's account has been permanently deleted.")).toBeInTheDocument();
     });
   });
 });

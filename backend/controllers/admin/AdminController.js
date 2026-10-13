@@ -34,6 +34,21 @@ class AdminController {
     sendSuccess(res, { data: { user: sanitizeUser(user) } });
   });
 
+  archiveUser = asyncHandler(async (req, res) => {
+    const user = await AdminService.archiveUser(req.user.id, req.params.id, req.body.reason);
+    sendSuccess(res, { data: { user: sanitizeUser(user) } });
+  });
+
+  restoreUser = asyncHandler(async (req, res) => {
+    const user = await AdminService.restoreUser(req.user.id, req.params.id);
+    sendSuccess(res, { data: { user: sanitizeUser(user) } });
+  });
+
+  deleteUser = asyncHandler(async (req, res) => {
+    await AdminService.deleteUser(req.user.id, req.params.id);
+    sendSuccess(res, { data: { deleted: true } });
+  });
+
   deactivateForInactivity = asyncHandler(async (req, res) => {
     const user = await AdminService.deactivateForInactivity(req.user.id, req.params.id, req.body.reason);
     sendSuccess(res, { data: { user: sanitizeUser(user) } });

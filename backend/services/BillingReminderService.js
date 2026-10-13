@@ -76,7 +76,7 @@ class BillingReminderService {
     });
 
     try {
-      await EmailNotificationService.deliver(tenant, 'sendBillReminderEmail', [tenant.fullName, { periodLabel, amount, dueDateLabel, daysRemaining, reference }]);
+      await EmailNotificationService.deliver(tenant, 'sendBillReminderEmail', [tenant.fullName, { periodLabel, amount, dueDateLabel, daysRemaining, reference }], { category: 'bills' });
     } catch (err) {
       // The in-app reminder already went out; a failed email is logged, not retried.
       // eslint-disable-next-line no-console

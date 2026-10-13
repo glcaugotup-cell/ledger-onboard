@@ -418,7 +418,7 @@ class ReservationService {
         holdUntil: formatDateKey(this._holdUntilKey(reservation)),
         landlord: landlord ? { name: landlord.fullName, email: landlord.email, phone: landlord.phone || '' } : null,
         caretaker: caretaker ? { name: caretaker.fullName, phone: caretaker.phone || '' } : null,
-      }]);
+      }], { category: 'reservations' });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[EmailService] Reservation approval email failed:', err.message);

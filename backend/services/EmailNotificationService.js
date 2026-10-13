@@ -4,9 +4,11 @@ const { unsubscribeUrl } = require('../utils/unsubscribe');
 
 /** Routine mail needs inbox proof and is on unless the user opts out. Security notices ignore routine opt-out. */
 class EmailNotificationService {
-  async deliver(user, method, args = [], { security = false } = {}) {
+  async deliver(user, method, args = [], { security = false, category = null } = {}) {
+    const prefs = user?.notificationPreferences;
     const reason = !user?.emailConfirmedAt ? 'inbox_unconfirmed'
-      : !security && user.notificationPreferences?.email === false ? 'email_disabled' : null;
+      : !security && prefs?.email === false ? 'email_disabled'
+        : !security && category && prefs?.emailCategories?.[category] === false ? 'category_disabled' : null;
     if (reason) {
       if (env.isProduction) console.info('[EmailNotificationService]', { event: 'skipped', reason });
       return { skipped: true };

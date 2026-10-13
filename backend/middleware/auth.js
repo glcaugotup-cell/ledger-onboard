@@ -35,6 +35,9 @@ async function authenticate(req, res, next) {
     if (user.accountStatus === ACCOUNT_STATUS.DEACTIVATED) {
       throw ApiError.forbidden('This account has been deactivated', 'ACCOUNT_DEACTIVATED');
     }
+    if (user.accountStatus === ACCOUNT_STATUS.PENDING_DELETION || user.accountStatus === ACCOUNT_STATUS.DELETED) {
+      throw ApiError.forbidden('This account has been closed by an administrator', 'ACCOUNT_CLOSED');
+    }
 
     req.user = { id: String(user._id), role: user.role, accountStatus: user.accountStatus };
 

@@ -23,6 +23,20 @@ class AdminApi extends BaseApiClient {
     return this.post(`/admin/users/${id}/reset-code`);
   }
 
+  /** Archive: blocked now, erased after 30 days unless restored. */
+  archiveUser(id, reason) {
+    return this.post(`/admin/users/${id}/archive`, { reason });
+  }
+
+  restoreUser(id) {
+    return this.post(`/admin/users/${id}/restore`);
+  }
+
+  /** Main admin only: erase an archived account now. */
+  deleteUser(id) {
+    return this.delete(`/admin/users/${id}`);
+  }
+
   /** Admin-confirmed deactivation of an account inactive for 60+ days. */
   deactivateInactive(id, reason) {
     return this.post(`/admin/users/${id}/deactivate-inactive`, { reason });
