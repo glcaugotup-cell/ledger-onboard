@@ -268,3 +268,40 @@ test('security notices still send with every category off', async () => {
   expect(send).toHaveBeenCalledTimes(1);
   expect(send.mock.calls[0][0].subject).toContain('Your password was changed');
 });
+test('a sign-up whose code cannot be sent leaves no account behind, so the person can simply try again', async () => {
+  env.emailVerificationRequired = true;
+  const form = { firstName: 'Testing', lastName: 'Account', email: 'retry.signup@gmail.com', phone: '09367546849', password: 'Retry1!Password',
+    role: 'tenant', privacyConsent: true, emergencyContact: { name: 'Gaspel Orgas', phone: '09910690508' } };
+  send.mockRejectedValueOnce(new Error('Brevo rejected the email (HTTP 401)'));
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+  const failed = await request(app).post('/api/auth/register').send(form);
+  expect(failed.status).toBe(400);
+  expect(failed.body.error.code).toBe('OTP_EMAIL_DELIVERY_FAILED');
+  expect(await Users.findByEmail('retry.signup@gmail.com')).toBeNull();
+
+  // Email works again: the same details register normally and a code is sent.
+  const retry = await request(app).post('/api/auth/register').send(form);
+  expect(retry.status).toBe(201);
+  expect(retry.body.data.verificationRequired).toBe(true);
+  expect(lastCode()).toMatch(/^\d{6}$/);
+});
+test('an already-stuck unverified sign-up is cleared when its resend fails, then registering works', async () => {
+  env.emailVerificationRequired = true;
+  const stuck = await user({ email: 'stuck.signup@gmail.com', emailVerified: false });
+  send.mockRejectedValueOnce(new Error('Brevo rejected the email (HTTP 401)'));
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+  const form = { firstName: 'Testing', lastName: 'Account', email: 'stuck.signup@gmail.com', phone: '09367546850', password: 'Retry1!Password',
+    role: 'tenant', privacyConsent: true, emergencyContact: { name: 'Gaspel Orgas', phone: '09910690508' } };
+  const failed = await request(app).post('/api/auth/register').send(form);
+  expect(failed.body.error.code).toBe('OTP_EMAIL_DELIVERY_FAILED');
+  expect(await Users.findById(stuck._id)).toBeNull();
+  expect((await request(app).post('/api/auth/register').send(form)).status).toBe(201);
+});
+test('a failed email code send does not start the resend wait', async () => {
+  const u = await user();
+  send.mockRejectedValueOnce(new Error('synthetic outage'));
+  expect((await requestCode(u)).body.error.code).toBe('OTP_EMAIL_DELIVERY_FAILED');
+  const retry = await requestCode(u);
+  expect(retry.status).toBe(200);
+  expect(lastCode()).toMatch(/^\d{6}$/);
+});

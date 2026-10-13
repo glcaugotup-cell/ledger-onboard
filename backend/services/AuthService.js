@@ -62,7 +62,12 @@ class AuthService {
         this._assertResendCooldown(withSecrets);
         await this._issueOtp(withSecrets, 'email_verification');
       } catch (err) {
-        if (err.code !== 'OTP_RESEND_COOLDOWN') throw err; // a real send failure must still surface
+        if (err.code !== 'OTP_RESEND_COOLDOWN') {
+          // The failed send already voided any earlier code, so this pending account can never be
+          // verified: remove it, and the next attempt starts a fresh registration.
+          await UserRepository.model.deleteOne({ _id: withSecrets._id, emailVerified: false }).exec();
+          throw err; // a real send failure must still surface
+        }
       }
       throw ApiError.conflict(
         'This email already has a pending verification. Enter the code we sent, or cancel and start over.',
@@ -90,7 +95,13 @@ class AuthService {
     if (verificationRequired) {
       // Reload with secrets selected so _issueOtp can write otp.* on it directly.
       const withSecrets = await UserRepository.findByEmail(email, { withSecrets: true });
-      await this._issueOtp(withSecrets, 'email_verification');
+      try {
+        await this._issueOtp(withSecrets, 'email_verification');
+      } catch (err) {
+        // No code reached them, so don't leave an account they can't verify (or re-register over).
+        await UserRepository.model.deleteOne({ _id: user._id, emailVerified: false }).exec();
+        throw err;
+      }
     }
 
     return { user: sanitizeUser(user), verificationRequired };

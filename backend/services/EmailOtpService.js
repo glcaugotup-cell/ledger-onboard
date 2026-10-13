@@ -60,7 +60,8 @@ class EmailOtpService {
       if (sent?.skipped) throw new Error('Email was skipped');
     } catch {
       // Clear only this failed send; never erase a newer request or another purpose.
-      await Users.model.updateOne({ _id: user._id, [`${prefix}.codeHash`]: codeHash }, { $set: { [`${prefix}.codeHash`]: null, [`${prefix}.expiresAt`]: null } }).exec();
+      // Nothing arrived, so no resend wait applies either (issuedAt starts the 45-second cooldown).
+      await Users.model.updateOne({ _id: user._id, [`${prefix}.codeHash`]: codeHash }, { $set: { [`${prefix}.codeHash`]: null, [`${prefix}.expiresAt`]: null, [`${prefix}.issuedAt`]: null } }).exec();
       throw ApiError.badRequest('Unable to send verification code. Please try again.', 'OTP_EMAIL_DELIVERY_FAILED');
     }
     return { message: 'Check your email for a verification code.', resendAfterSeconds: COOLDOWN_SECONDS };
