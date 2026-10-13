@@ -23,6 +23,11 @@ class AdminApi extends BaseApiClient {
     return this.post(`/admin/users/${id}/reset-code`);
   }
 
+  /** Main admin only: test email to yourself; resolves to { status, reason, advice, ...settings }. */
+  sendTestEmail() {
+    return this.post('/admin/email-test');
+  }
+
   /** Archive: blocked now, erased after 30 days unless restored. */
   archiveUser(id, reason) {
     return this.post(`/admin/users/${id}/archive`, { reason });

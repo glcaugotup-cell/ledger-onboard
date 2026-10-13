@@ -44,7 +44,7 @@ test('an invalid sender or missing key is reported before making a request', asy
 });
 test('production console mode is a skipped send, never logs private contents', async () => {
   env.emailTransport = 'console'; const log = jest.spyOn(console, 'log').mockImplementation(() => {});
-  expect(await Email.send(mail)).toEqual({ skipped: true });
+  expect(await Email.send(mail)).toEqual({ skipped: true, reason: 'console_in_production' });
   expect(log).not.toHaveBeenCalled();
 });
 test('malformed Brevo success responses are not reported as accepted mail', async () => {

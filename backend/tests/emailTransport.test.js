@@ -98,8 +98,8 @@ test('the none transport returns at once without sending, connecting or logging 
   const result = await EmailService.send({ to: 'a@gmail.com', subject: 'S', text: 'Your code is 482913' });
   const otpResult = await EmailService.sendOtpEmail('new.user@gmail.com', '482913', 'email_verification', 'Andrae');
 
-  expect(result).toEqual({ skipped: true });
-  expect(otpResult).toEqual({ skipped: true });
+  expect(result).toEqual({ skipped: true, reason: 'transport_disabled' });
+  expect(otpResult).toEqual({ skipped: true, reason: 'transport_disabled' });
   expect(Date.now() - started).toBeLessThan(1000);
   expect(global.fetch).not.toHaveBeenCalled();
   expect(EmailService._transporter).toBeNull(); // no SMTP connection was set up

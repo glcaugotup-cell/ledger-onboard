@@ -38,6 +38,19 @@ class EmailService {
     this._transporter = null;
   }
 
+  /** Settings that decide whether email can go out. No secrets: only whether the key is set. */
+  configurationSummary() {
+    const sender = parseSender(env.emailFrom);
+    return {
+      transport: env.emailTransport,
+      apiKeyConfigured: Boolean(env.brevoApiKey),
+      senderEmail: sender.email,
+      senderFormatValid: /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(sender.email) && !/[\r\n]/.test(env.emailFrom),
+      registrationVerificationRequired: env.emailVerificationRequired,
+      accountFlowsEnabled: env.emailAccountFlowsEnabled,
+    };
+  }
+
   reportConfiguration() {
     const sender = parseSender(env.emailFrom);
     console.info('[EmailService] configuration', {
@@ -65,6 +78,7 @@ class EmailService {
     this._diagnostic('failed', { reason, ...(httpStatus ? { httpStatus } : {}) });
     const error = new Error(message);
     error.emailReason = reason;
+    if (httpStatus) error.httpStatus = httpStatus;
     return error;
   }
 
@@ -93,13 +107,13 @@ class EmailService {
     const headers = unsubscribeUrl ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : undefined;
     if (env.emailTransport === 'none') {
       this._diagnostic('skipped', { reason: 'transport_disabled' });
-      return { skipped: true };
+      return { skipped: true, reason: 'transport_disabled' };
     }
 
     if (env.emailTransport === 'console') {
       if (env.isProduction) {
         this._diagnostic('skipped', { reason: 'console_in_production' });
-        return { skipped: true };
+        return { skipped: true, reason: 'console_in_production' };
       }
       // eslint-disable-next-line no-console
       console.log(`\n[EmailService] ---- (console transport, not actually sent) ----`);
@@ -241,6 +255,14 @@ class EmailService {
       paragraphs: [message],
       action: { label: 'Open in Ledger OnBoard', url: this._appLink(link || '/') },
       note: 'You can turn off email notifications in Profile. In-app notifications stay on.',
+    });
+  }
+
+  sendTestEmail(to, fullName) {
+    return this._sendMessage(to, 'Ledger OnBoard — test email', {
+      category: 'Email check', title: 'Email is working', greeting: fullName ? `Hi ${fullName},` : 'Hello,',
+      paragraphs: ['This test was sent from the admin Profile page. If you can read it, Ledger OnBoard can send emails such as sign-up codes.'],
+      action: { label: 'Open Ledger OnBoard', url: this._appLink('/') },
     });
   }
 

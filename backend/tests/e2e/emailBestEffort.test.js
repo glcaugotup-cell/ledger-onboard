@@ -238,7 +238,7 @@ describe('EMAIL_TRANSPORT=none across the app', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.reservation.status).toBe('approved');
     expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({ to: tenant.email })); // the approval email was attempted
-    await expect(sendSpy.mock.results[0].value).resolves.toEqual({ skipped: true }); // and skipped
+    await expect(sendSpy.mock.results[0].value).resolves.toEqual({ skipped: true, reason: 'transport_disabled' }); // and skipped
     expect(await Notification.exists({ userId: tenant._id, type: 'RESERVATION_APPROVED' })).toBeTruthy();
     expect(logSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();

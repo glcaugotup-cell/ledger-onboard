@@ -6,6 +6,9 @@ const { unusablePasswordHash } = require('../utils/password');
 const { deriveFullName } = require('../utils/name');
 const { isMainAdmin } = require('../utils/mainAdmin');
 const AccountDeletionService = require('./AccountDeletionService');
+const EmailService = require('./EmailService');
+const env = require('../config/env');
+const { EMAIL_ADVICE } = require('../utils/emailAdvice');
 const { randomCode, normalizeCode } = require('../utils/oneTimeCodes');
 const { ACCOUNT_STATUS, PASSWORD_RESET_CODE, ROLES } = require('../utils/constants');
 
@@ -95,6 +98,28 @@ class AdminService {
     }
     const user = await this._loadManageable(adminId, userId, { allowArchived: true });
     await AccountDeletionService.erase(adminId, user);
+  }
+
+  /**
+   * Main admin only: sends a test email to the main admin's own address and reports what
+   * happened (accepted, skipped or failed, and why), so delivery problems can be fixed without
+   * reading server logs. Only setting names and whether the key is set are returned, never secrets.
+   */
+  async sendTestEmail(adminId) {
+    const admin = await UserRepository.findById(adminId);
+    if (!isMainAdmin(admin)) throw ApiError.forbidden('Only the main admin can run the email check', 'MAIN_ADMIN_REQUIRED');
+    let status;
+    let reason;
+    try {
+      const delivery = await EmailService.sendTestEmail(admin.email, admin.firstName || admin.fullName);
+      status = delivery?.skipped ? 'skipped' : 'accepted';
+      reason = delivery?.skipped ? delivery.reason || 'transport_disabled' : 'accepted';
+    } catch (err) {
+      status = 'failed';
+      reason = err.emailReason || (env.emailTransport === 'smtp' ? 'smtp_error' : 'provider_rejected');
+    }
+    await AuditLogRepository.record({ action: 'EMAIL_TEST_SENT', actorId: adminId, actorRole: ROLES.ADMIN, metadata: { status, reason } });
+    return { ...EmailService.configurationSummary(), to: admin.email, status, reason, advice: EMAIL_ADVICE[reason] || EMAIL_ADVICE.provider_rejected };
   }
 
   async listAuditLogs(filters) {

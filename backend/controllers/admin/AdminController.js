@@ -34,6 +34,10 @@ class AdminController {
     sendSuccess(res, { data: { user: sanitizeUser(user) } });
   });
 
+  sendTestEmail = asyncHandler(async (req, res) => {
+    sendSuccess(res, { data: await AdminService.sendTestEmail(req.user.id) });
+  });
+
   archiveUser = asyncHandler(async (req, res) => {
     const user = await AdminService.archiveUser(req.user.id, req.params.id, req.body.reason);
     sendSuccess(res, { data: { user: sanitizeUser(user) } });

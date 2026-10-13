@@ -17,6 +17,7 @@ import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import { ReviewForm } from '../../components/ReviewForm.jsx';
 import TwoFactorCard from '../../components/TwoFactorCard.jsx';
 import EmailNotificationSettings from '../../components/EmailNotificationSettings.jsx';
+import EmailDeliveryCheck from '../../components/EmailDeliveryCheck.jsx';
 import { MFA_CODE_PROMPT, cleanMfaCode } from '../../utils/mfa.js';
 import EmailCodeRequestButton from '../../components/EmailCodeRequestButton.jsx';
 import { describeApiError } from '../../utils/errors.js';
@@ -451,6 +452,7 @@ export default function ProfilePage() {
       </div>
 
       {role === 'landlord' && <PaymentQrSettings hasQr={Boolean(user?.hasPaymentQr)} />}
+      {user?.isMainAdmin && <EmailDeliveryCheck />}
 
       {role !== 'admin' && (
         <Card title="Delete account" className="mt-6">

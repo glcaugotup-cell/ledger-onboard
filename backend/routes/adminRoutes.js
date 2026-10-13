@@ -25,6 +25,9 @@ router.post('/users/:id/reset-code', objectIdParam('id'), validate, AdminControl
 // Manual, admin-confirmed deactivation of accounts inactive for 60+ days (never automatic).
 router.post('/users/:id/deactivate-inactive', objectIdParam('id'), deactivateInactiveValidators, validate, AdminController.deactivateForInactivity);
 
+// Main admin only (checked in AdminService): send a test email and report why it failed, if it did.
+router.post('/email-test', AdminController.sendTestEmail);
+
 // Archive: any admin moves an account there (restorable for 30 days); only the main admin deletes now.
 router.post('/users/:id/archive', objectIdParam('id'), archiveUserValidators, validate, AdminController.archiveUser);
 router.post('/users/:id/restore', objectIdParam('id'), validate, AdminController.restoreUser);
