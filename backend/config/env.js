@@ -62,6 +62,8 @@ const env = {
   clientOrigins,
   clientOrigin: clientOrigins[0],
   emailAppUrl: emailAppUrl.origin,
+  // This backend's public URL, for one-click unsubscribe links in email. Render sets RENDER_EXTERNAL_URL itself.
+  publicApiUrl: (process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || '').trim() || null,
   // Behind a hosting proxy (Render), trust one hop so req.ip is the real client IP for rate limiting.
   trustProxy: process.env.TRUST_PROXY !== undefined ? Number(process.env.TRUST_PROXY) : process.env.NODE_ENV === 'production' ? 1 : 0,
 

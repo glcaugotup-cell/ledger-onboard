@@ -18,6 +18,9 @@ userRouter.patch('/me/payment-qr', requireRole(ROLES.LANDLORD), uploadRateLimite
 
 // /api/notifications is a top-level resource that shares UserController (mounted in routes/index.js).
 const notificationsRouter = express.Router();
+// Signed links from emails; they work without signing in.
+notificationsRouter.get('/unsubscribe', UserController.showUnsubscribe);
+notificationsRouter.post('/unsubscribe', UserController.unsubscribe);
 notificationsRouter.use(authenticate);
 notificationsRouter.get('/', UserController.listNotifications);
 notificationsRouter.patch('/read-all', UserController.markAllNotificationsRead);

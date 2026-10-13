@@ -87,8 +87,10 @@ class EmailService {
     return this._transporter;
   }
 
-  async send({ to, subject, text, html }) {
+  async send({ to, subject, text, html, unsubscribeUrl }) {
     // Nothing about the message is logged: it may hold a one-time code.
+    // One-click unsubscribe (RFC 8058), which Gmail and Yahoo expect on routine mail.
+    const headers = unsubscribeUrl ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : undefined;
     if (env.emailTransport === 'none') {
       this._diagnostic('skipped', { reason: 'transport_disabled' });
       return { skipped: true };
@@ -108,14 +110,14 @@ class EmailService {
       return { accepted: [to], messageId: 'console-transport' };
     }
 
-    if (env.emailTransport === 'brevo') return this._sendViaBrevo({ to, subject, text, html });
+    if (env.emailTransport === 'brevo') return this._sendViaBrevo({ to, subject, text, html, headers });
 
     const transporter = this._getTransporter();
-    return transporter.sendMail({ from: env.emailFrom, to, subject, text, html });
+    return transporter.sendMail({ from: env.emailFrom, to, subject, text, html, headers });
   }
 
   /** Brevo transactional email over HTTPS (port 443), which hosting providers don't block. */
-  async _sendViaBrevo({ to, subject, text, html }) {
+  async _sendViaBrevo({ to, subject, text, html, headers }) {
     if (!env.brevoApiKey) throw this._failure('missing_api_key', 'EMAIL_TRANSPORT is "brevo" but BREVO_API_KEY is not set');
     const sender = parseSender(env.emailFrom);
     if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(sender.email) || /[\r\n]/.test(env.emailFrom)) {
@@ -124,6 +126,7 @@ class EmailService {
     const body = { sender, to: [{ email: to }], subject };
     if (html) body.htmlContent = html;
     if (text) body.textContent = text;
+    if (headers) body.headers = headers;
 
     let res;
     this._diagnostic('attempt');
@@ -152,8 +155,10 @@ class EmailService {
     return { accepted: [to], messageId: data.messageId };
   }
 
+  /** `to` is an address, or { email, unsubscribeUrl } for routine mail the recipient can opt out of. */
   _sendMessage(to, subject, content) {
-    return this.send({ to, subject, ...buildEmail({ appUrl: env.emailAppUrl, ...content }) });
+    const { email, unsubscribeUrl } = typeof to === 'string' ? { email: to } : to;
+    return this.send({ to: email, subject, unsubscribeUrl, ...buildEmail({ appUrl: env.emailAppUrl, ...content, unsubscribeUrl }) });
   }
 
   _appLink(path) {

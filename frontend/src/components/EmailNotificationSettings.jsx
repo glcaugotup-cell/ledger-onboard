@@ -52,7 +52,7 @@ export default function EmailNotificationSettings({ user, onChanged }) {
   });
   return (
     <Card title="Email notifications">
-      <p className="mb-3 text-sm text-gray-500">Get a copy of every notification by email, including reservations, payments, bill reminders, maintenance, and account updates. Confirm your inbox once to start. In-app notifications stay available.</p>
+      <p className="mb-3 text-sm text-gray-500">Get important updates by email: reservations, move-out requests, new bills and reminders, payments, verification results, and account warnings. Everything else stays in-app. Confirm your inbox once to start. Every email has an unsubscribe link.</p>
       <ErrorBanner message={error} /><SuccessBanner message={message} />
       {step === 'idle' && <div className="space-y-3">
         <p className="text-sm text-gray-600">{enabled ? 'Email notifications are on.' : 'Email notifications are off.'}</p>

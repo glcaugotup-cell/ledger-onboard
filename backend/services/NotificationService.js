@@ -2,24 +2,28 @@ const NotificationRepository = require('../repositories/NotificationRepository')
 const UserRepository = require('../repositories/UserRepository');
 const EmailNotificationService = require('./EmailNotificationService');
 const { ROLES, ACCOUNT_STATUS } = require('../utils/constants');
+const { verifyUnsubscribeToken } = require('../utils/unsubscribe');
 
-// These events already send their own, more detailed email from the service that raises them.
-const DEDICATED_EMAIL_TYPES = new Set([
-  'RESERVATION_APPROVED', 'PAYMENT_VERIFIED', 'PAYMENT_REJECTED',
-  'BUSINESS_VERIFICATION_APPROVED', 'BUSINESS_VERIFICATION_REJECTED',
-  'BILL_DUE_IN_7_DAYS', 'BILL_DUE_IN_3_DAYS',
+// Important events that are also emailed as a copy of the notification. Everything else stays
+// in-app only, keeping email volume low so it is less likely to be treated as spam. Reservation
+// approvals, payment results, bill reminders and business verification results are not listed:
+// the services that raise them send their own, more detailed email.
+const EMAILED_TYPES = new Set([
+  'RESERVATION_REQUESTED', 'RESERVATION_REJECTED', 'RESERVATION_CANCELLED', 'RESERVATION_AUTO_CANCELLED', 'RESERVATION_NO_SHOW',
+  'LEAVE_REQUESTED', 'LEAVE_APPROVED', 'LEAVE_DECLINED',
+  'BILL_CREATED', 'PAYMENT_SUBMITTED', 'PROPERTY_ASSIGNED',
 ]);
 const NO_EMAIL_STATUSES = new Set([ACCOUNT_STATUS.DEACTIVATED, ACCOUNT_STATUS.ARCHIVED]);
 
 /**
- * In-app notifications, each also emailed to a confirmed inbox unless the user
- * turned email off. Other services call notify() when a workflow event happens
+ * In-app notifications; important ones are also emailed to a confirmed inbox unless the
+ * user turned email off. Other services call notify() when a workflow event happens
  * (reservation approved, payment verified, etc.).
  */
 class NotificationService {
   async notify({ userId, type, title, message, relatedType = null, relatedId = null, link = null }) {
     const notification = await NotificationRepository.create({ userId, type, title, message, relatedType, relatedId, link });
-    if (!DEDICATED_EMAIL_TYPES.has(type)) await this._email(userId, { title, message, link });
+    if (EMAILED_TYPES.has(type)) await this._email(userId, { title, message, link });
     return notification;
   }
 
@@ -32,6 +36,17 @@ class NotificationService {
     } catch (err) {
       console.error('[NotificationService] notification email failed:', err.message);
     }
+  }
+
+  verifyUnsubscribeLink(userId, token) {
+    return verifyUnsubscribeToken(userId, token);
+  }
+
+  /** Turns routine email off from a signed unsubscribe link; false when the link is not genuine. */
+  async unsubscribeEmail(userId, token) {
+    if (!verifyUnsubscribeToken(userId, token)) return false;
+    await UserRepository.updateById(userId, { 'notificationPreferences.email': false });
+    return true;
   }
 
   async notifyAdmins(notification) {

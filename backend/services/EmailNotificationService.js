@@ -1,5 +1,6 @@
 const EmailService = require('./EmailService');
 const env = require('../config/env');
+const { unsubscribeUrl } = require('../utils/unsubscribe');
 
 /** Routine mail needs inbox proof and is on unless the user opts out. Security notices ignore routine opt-out. */
 class EmailNotificationService {
@@ -10,7 +11,9 @@ class EmailNotificationService {
       if (env.isProduction) console.info('[EmailNotificationService]', { event: 'skipped', reason });
       return { skipped: true };
     }
-    return EmailService[method](user.email, ...args);
+    // Security notices carry no unsubscribe link: they are not routine mail.
+    const to = security ? user.email : { email: user.email, unsubscribeUrl: unsubscribeUrl(user._id) };
+    return EmailService[method](to, ...args);
   }
 
   async securityNotice(user, event) {

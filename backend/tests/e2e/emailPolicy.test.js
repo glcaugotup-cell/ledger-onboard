@@ -175,3 +175,63 @@ test('clients cannot forge the mailbox-confirmation marker through profile updat
     .send({ emailConfirmedAt: new Date().toISOString(), notificationPreferences: { email: true } });
   expect(result.status).toBe(400); expect((await Users.findById(u._id)).emailConfirmedAt).toBeFalsy();
 });
+test('only important notifications are emailed; the rest stay in-app', async () => {
+  const Notifications = require('../../services/NotificationService'); const Notification = require('../../models/Notification');
+  const u = await user({ emailConfirmedAt: new Date() });
+  await Notifications.notify({ userId: u._id, type: 'MAINTENANCE_ISSUE_UPDATED', title: 'Issue updated', message: 'An update.' });
+  expect(send).not.toHaveBeenCalled();
+  await Notifications.notify({ userId: u._id, type: 'BILL_CREATED', title: 'New bill', message: 'Your bill is ready.', link: '/tenant/apartment' });
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(send.mock.calls[0][0]).toMatchObject({ to: u.email, subject: 'Ledger OnBoard — New bill' });
+  expect(await Notification.countDocuments({ userId: u._id })).toBe(2);
+});
+test('routine email carries a signed one-click unsubscribe link; security notices do not', async () => {
+  env.publicApiUrl = 'https://api.example.test';
+  try {
+    const Notifications = require('../../services/NotificationService');
+    const u = await user({ emailConfirmedAt: new Date() });
+    await Notifications.notify({ userId: u._id, type: 'BILL_CREATED', title: 'New bill', message: 'Your bill is ready.' });
+    const { unsubscribeUrl, text, html } = send.mock.calls[0][0];
+    const parsed = new URL(unsubscribeUrl);
+    expect(`${parsed.origin}${parsed.pathname}`).toBe('https://api.example.test/api/notifications/unsubscribe');
+    expect(parsed.searchParams.get('u')).toBe(String(u._id)); expect(parsed.searchParams.get('t')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(text).toContain(unsubscribeUrl); expect(html).toContain('Unsubscribe from these emails');
+    send.mockClear();
+    await request(app).patch('/api/auth/change-password').set('Authorization', `Bearer ${signAccessToken(u)}`)
+      .send({ currentPassword: password, newPassword: 'Other1!Password' });
+    expect(send).toHaveBeenCalledTimes(1); expect(send.mock.calls[0][0].unsubscribeUrl).toBeUndefined();
+  } finally { env.publicApiUrl = null; }
+});
+test('Brevo receives the List-Unsubscribe headers', async () => {
+  const previousFetch = global.fetch;
+  send.mockRestore(); env.emailTransport = 'brevo'; env.brevoApiKey = 'mock-private-key'; env.emailFrom = 'Ledger OnBoard <sender@gmail.com>';
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ messageId: 'mock-id' }) });
+  try {
+    await Email.send({ to: 'someone@gmail.com', subject: 'Hi', text: 'Hi', unsubscribeUrl: 'https://api.example.test/u' });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body).headers).toEqual({
+      'List-Unsubscribe': '<https://api.example.test/u>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    });
+    await Email.send({ to: 'someone@gmail.com', subject: 'Code', text: 'Code' });
+    expect(JSON.parse(global.fetch.mock.calls[1][1].body).headers).toBeUndefined();
+  } finally { global.fetch = previousFetch; }
+});
+test('unsubscribe links: GET only confirms, POST turns email off, forged links do nothing', async () => {
+  env.publicApiUrl = 'https://api.example.test';
+  try {
+    const { unsubscribeUrl } = require('../../utils/unsubscribe');
+    const u = await user({ emailConfirmedAt: new Date(), notificationPreferences: { email: true, inApp: true } });
+    const other = await user({ emailConfirmedAt: new Date(), notificationPreferences: { email: true, inApp: true } });
+    const path = new URL(unsubscribeUrl(u._id)); const link = `${path.pathname}${path.search}`;
+    const shown = await request(app).get(link);
+    expect(shown.status).toBe(200); expect(shown.text).toContain('Stop email notifications?');
+    expect((await Users.findById(u._id)).notificationPreferences.email).toBe(true);
+    const forged = link.replace(String(u._id), String(other._id));
+    expect((await request(app).post(forged).type('form').send('List-Unsubscribe=One-Click')).status).toBe(400);
+    expect((await request(app).get(`/api/notifications/unsubscribe?u=${other._id}&t=x`)).status).toBe(400);
+    expect((await Users.findById(other._id)).notificationPreferences.email).toBe(true);
+    const done = await request(app).post(link).type('form').send('List-Unsubscribe=One-Click');
+    expect(done.status).toBe(200); expect(done.text).toContain('You are unsubscribed');
+    const after = await Users.findById(u._id);
+    expect(after.notificationPreferences).toMatchObject({ email: false, inApp: true }); expect(after.emailConfirmedAt).toBeTruthy();
+  } finally { env.publicApiUrl = null; }
+});

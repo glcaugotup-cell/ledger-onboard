@@ -13,9 +13,10 @@ function webUrl(value) {
   return url.href;
 }
 
-function buildEmail({ appUrl, category, title, greeting, paragraphs = [], highlight, details = [], action, note }) {
+function buildEmail({ appUrl, category, title, greeting, paragraphs = [], highlight, details = [], action, note, unsubscribeUrl }) {
   const homeUrl = webUrl(appUrl);
   const actionUrl = action ? webUrl(action.url) : null;
+  const optOutUrl = unsubscribeUrl ? webUrl(unsubscribeUrl) : null;
   const text = [
     greeting,
     ...paragraphs,
@@ -24,6 +25,7 @@ function buildEmail({ appUrl, category, title, greeting, paragraphs = [], highli
     action && `${action.label}:\n${actionUrl}`,
     note,
     `Regards,\nLedger OnBoard\n${homeUrl}`,
+    optOutUrl && `Stop these emails:\n${optOutUrl}`,
   ].filter(Boolean).join('\n\n');
 
   const paragraphHtml = paragraphs.map((paragraph) =>
@@ -75,6 +77,7 @@ function buildEmail({ appUrl, category, title, greeting, paragraphs = [], highli
         <tr><td style="padding:20px 24px;border-top:1px solid #e2e8f0;border-radius:0 0 15px 15px;background-color:#f8faf9;text-align:center;">
           <p style="margin:0;color:#64748b;font-size:12px;line-height:1.7;">An account notification from Ledger OnBoard.</p>
           <a href="${escapeHtml(homeUrl)}" style="color:#2c654a;font-size:12px;line-height:1.7;text-decoration:underline;">${escapeHtml(new URL(homeUrl).hostname)}</a>
+          ${optOutUrl ? `<p style="margin:8px 0 0;color:#64748b;font-size:12px;line-height:1.7;"><a href="${escapeHtml(optOutUrl)}" style="color:#64748b;text-decoration:underline;">Unsubscribe from these emails</a></p>` : ''}
         </td></tr>
       </table>
     </td></tr>
