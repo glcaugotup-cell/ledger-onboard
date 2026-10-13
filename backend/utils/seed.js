@@ -49,9 +49,9 @@ async function main() {
   });
 
   let landlord = await upsertUser({
-    firstName: 'Demo',
+    firstName: 'Gladdiel',
     lastName: 'Landlord',
-    fullName: 'Demo Landlord',
+    fullName: 'Gladdiel Landlord',
     email: 'demo.landlord@gmail.com',
     phone: '09170000002',
     role: ROLES.LANDLORD,
@@ -63,9 +63,9 @@ async function main() {
   }
 
   const tenant = await upsertUser({
-    firstName: 'Demo',
+    firstName: 'Paula',
     lastName: 'Tenant',
-    fullName: 'Demo Tenant',
+    fullName: 'Paula Tenant',
     email: 'demo.tenant@gmail.com',
     phone: '09170000003',
     role: ROLES.TENANT,
@@ -73,9 +73,9 @@ async function main() {
   });
 
   const caretaker = await upsertUser({
-    firstName: 'Demo',
+    firstName: 'Paul',
     lastName: 'Caretaker',
-    fullName: 'Demo Caretaker',
+    fullName: 'Paul Caretaker',
     email: 'demo.caretaker@gmail.com',
     phone: '09170000004',
     role: ROLES.CARETAKER,

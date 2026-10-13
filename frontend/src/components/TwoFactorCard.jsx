@@ -146,12 +146,21 @@ export default function TwoFactorCard({ user, onChanged }) {
 
       {step === 'idle' && !enrolled && (
         <div className="space-y-3">
-          <p className="text-sm text-gray-500">
-            Add a second step to signing in: after your password, enter a 6-digit code from an authenticator app such as Google
-            Authenticator or Microsoft Authenticator. No code is ever sent to you.
-          </p>
-          <Button onClick={() => { setMessage(''); reset('setup-password'); }}>Set up two-factor</Button>
-          {user?.emailMfaEnrollmentAvailable && <Button variant="secondary" onClick={() => { setMessage(''); reset('email-setup'); }}>Set up email codes</Button>}
+          {user?.emailMfaEnrollmentAvailable ? (
+            <p className="text-sm text-gray-500">
+              Add a second step to signing in: after your password, enter a 6-digit code from an authenticator app such as Google
+              Authenticator or Microsoft Authenticator, or a code we email to you.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-500">
+              Add a second step to signing in: after your password, enter a 6-digit code from an authenticator app such as Google
+              Authenticator or Microsoft Authenticator. No code is ever sent to you.
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => { setMessage(''); reset('setup-password'); }}>Set up two-factor</Button>
+            {user?.emailMfaEnrollmentAvailable && <Button variant="secondary" onClick={() => { setMessage(''); reset('email-setup'); }}>Set up email codes</Button>}
+          </div>
         </div>
       )}
 

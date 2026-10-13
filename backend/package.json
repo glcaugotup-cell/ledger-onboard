@@ -14,6 +14,7 @@
     "index:payment-references": "node utils/createPaymentReferenceIndex.js",
     "reservations:confirm-move-ins": "node utils/confirmExistingMoveIns.js",
     "password:reset": "node scripts/resetUserPassword.js",
+    "demo:rename": "node scripts/renameDemoAccounts.js",
     "migrate:retire-email-otp": "node scripts/retireEmailOtp.js"
   },
   "jest": {
