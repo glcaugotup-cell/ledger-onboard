@@ -8,6 +8,7 @@ const { toNameCase } = require('../utils/nameCase');
 const LOCKED_PROFILE_FIELDS = [
   'email', 'role', 'accountStatus', 'fullName', 'assignedLandlordId', 'createdByLandlordId',
   'businessVerificationStatus', 'createdAt', 'updatedAt', '_id', 'id',
+  'emailConfirmedAt', 'emailVerified', 'emailMfaEnabledAt', 'emailCodes',
 ];
 
 const nameChain = (field, label) =>

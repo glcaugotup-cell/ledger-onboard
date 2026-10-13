@@ -2,7 +2,7 @@ const LandlordVerificationRepository = require('../repositories/LandlordVerifica
 const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const NotificationService = require('./NotificationService');
-const EmailService = require('./EmailService');
+const EmailNotificationService = require('./EmailNotificationService');
 const FileStorageService = require('./FileStorageService');
 const { FILE_CATEGORIES } = require('./FileStorageService');
 const ApiError = require('../utils/ApiError');
@@ -111,8 +111,8 @@ class LandlordVerificationService {
       });
       // The decision is already saved, logged and notified in-app; email trouble must not turn it into an error.
       try {
-        if (approve) await EmailService.sendBusinessVerificationApprovedEmail(landlord.email, landlord.fullName);
-        else await EmailService.sendBusinessVerificationRejectedEmail(landlord.email, landlord.fullName, updated.rejectionReason);
+        if (approve) await EmailNotificationService.deliver(landlord, 'sendBusinessVerificationApprovedEmail', [landlord.fullName]);
+        else await EmailNotificationService.deliver(landlord, 'sendBusinessVerificationRejectedEmail', [landlord.fullName, updated.rejectionReason]);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[LandlordVerificationService] verification result email failed:', err.message);

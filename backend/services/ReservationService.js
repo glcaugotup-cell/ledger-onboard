@@ -6,7 +6,7 @@ const AuditLogRepository = require('../repositories/AuditLogRepository');
 const BillingSOARepository = require('../repositories/BillingSOARepository');
 const RoomService = require('./RoomService');
 const NotificationService = require('./NotificationService');
-const EmailService = require('./EmailService');
+const EmailNotificationService = require('./EmailNotificationService');
 const env = require('../config/env');
 const ApiError = require('../utils/ApiError');
 const { roundMoney } = require('../utils/money');
@@ -405,8 +405,11 @@ class ReservationService {
         UserRepository.findById(property.landlordId),
         reservation.caretakerAssignedId ? UserRepository.findById(reservation.caretakerAssignedId) : null,
       ]);
-      if (!tenant) return;
-      await EmailService.sendReservationApprovedEmail(tenant.email, {
+      if (!tenant) {
+        if (env.isProduction) console.info('[ReservationService] Approval email skipped: tenant missing.');
+        return;
+      }
+      await EmailNotificationService.deliver(tenant, 'sendReservationApprovedEmail', [{
         tenantName: tenant.firstName || tenant.fullName,
         propertyName: property.propertyName,
         location: [property.address?.street, property.address?.barangay, property.address?.city].filter(Boolean).join(', '),
@@ -415,7 +418,7 @@ class ReservationService {
         holdUntil: formatDateKey(this._holdUntilKey(reservation)),
         landlord: landlord ? { name: landlord.fullName, email: landlord.email, phone: landlord.phone || '' } : null,
         caretaker: caretaker ? { name: caretaker.fullName, phone: caretaker.phone || '' } : null,
-      });
+      }]);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[EmailService] Reservation approval email failed:', err.message);

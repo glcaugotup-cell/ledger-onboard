@@ -106,6 +106,12 @@ const env = {
     if (!['true', 'false'].includes(value)) throw new Error('EMAIL_ACCOUNT_FLOWS_ENABLED must be true or false');
     return value === 'true';
   })(),
+  // Closed by default; existing email enrollments still verify login/settings codes.
+  emailMfaEnrollmentEnabled: (() => {
+    const value = (process.env.EMAIL_MFA_ENROLLMENT_ENABLED || 'false').trim().toLowerCase();
+    if (!['true', 'false'].includes(value)) throw new Error('EMAIL_MFA_ENROLLMENT_ENABLED must be true or false');
+    return value === 'true';
+  })(),
   // Buffer (32 bytes) or null when unset outside production. Never logged.
   mfaEncryptionKey,
 

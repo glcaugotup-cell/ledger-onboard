@@ -13,6 +13,16 @@ function parseSender(from) {
   return name ? { name, email: match[2].trim() } : { email: match[2].trim() };
 }
 
+// Classify provider responses without echoing their body (which may contain private data).
+function rejectionReason(status, detail) {
+  if (/\bip\b|ip address/i.test(detail) && /unauthori|not authori|unrecogni|unknown|block/i.test(detail)) return ['ip_not_authorized', 'Authorize the Render outbound IP ranges in Brevo'];
+  if (/sender/i.test(detail) && /valid|verif|authori/i.test(detail)) return ['sender_invalid', 'sender not valid; verify EMAIL_FROM in the new Brevo account'];
+  if (/suspend|activat|transactional.*(enable|disable)|sending.*(enable|disable)/i.test(detail)) return ['sending_not_enabled', 'Ask Brevo support to activate transactional sending'];
+  if (status === 429 || /quota|credit|limit.*reach/i.test(detail)) return ['quota_exceeded', 'Check the Brevo sending quota'];
+  if (status === 401) return ['authentication_failed', 'Check the new account BREVO_API_KEY (API key, not SMTP key)'];
+  return ['provider_rejected', 'Check Brevo sending permissions and account status'];
+}
+
 /**
  * Sends transactional email (OTP, caretaker activation, archive warnings,
  * verification notices) through one of four transports (EMAIL_TRANSPORT, checked at boot):
@@ -26,6 +36,36 @@ function parseSender(from) {
 class EmailService {
   constructor() {
     this._transporter = null;
+  }
+
+  reportConfiguration() {
+    const sender = parseSender(env.emailFrom);
+    console.info('[EmailService] configuration', {
+      transport: env.emailTransport, production: env.isProduction,
+      apiKeyConfigured: Boolean(env.brevoApiKey), senderFormatValid: /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(sender.email) && !/[\r\n]/.test(env.emailFrom),
+      registrationVerificationRequired: env.emailVerificationRequired,
+      accountFlowsEnabled: env.emailAccountFlowsEnabled,
+      emailMfaEnrollmentEnabled: env.emailMfaEnrollmentEnabled,
+    });
+    if (env.emailTransport === 'none' || (env.isProduction && env.emailTransport === 'console')) {
+      console.warn('[EmailService] Real email sending is disabled on this server.');
+    }
+    if (env.emailTransport === 'brevo' && !env.brevoApiKey) {
+      console.warn('[EmailService] BREVO_API_KEY is missing; add the new account API key in Render.');
+    }
+  }
+
+  _diagnostic(event, details = {}) {
+    if (!env.isProduction) return;
+    const log = event === 'failed' ? console.error : console.info;
+    log('[EmailService]', { event, transport: env.emailTransport, ...details });
+  }
+
+  _failure(reason, message, httpStatus) {
+    this._diagnostic('failed', { reason, ...(httpStatus ? { httpStatus } : {}) });
+    const error = new Error(message);
+    error.emailReason = reason;
+    return error;
   }
 
   _getTransporter() {
@@ -49,9 +89,16 @@ class EmailService {
 
   async send({ to, subject, text, html }) {
     // Nothing about the message is logged: it may hold a one-time code.
-    if (env.emailTransport === 'none') return { skipped: true };
+    if (env.emailTransport === 'none') {
+      this._diagnostic('skipped', { reason: 'transport_disabled' });
+      return { skipped: true };
+    }
 
     if (env.emailTransport === 'console') {
+      if (env.isProduction) {
+        this._diagnostic('skipped', { reason: 'console_in_production' });
+        return { skipped: true };
+      }
       // eslint-disable-next-line no-console
       console.log(`\n[EmailService] ---- (console transport, not actually sent) ----`);
       // Never print real one-time codes in production logs (this transport is meant for development).
@@ -69,12 +116,17 @@ class EmailService {
 
   /** Brevo transactional email over HTTPS (port 443), which hosting providers don't block. */
   async _sendViaBrevo({ to, subject, text, html }) {
-    if (!env.brevoApiKey) throw new Error('EMAIL_TRANSPORT is "brevo" but BREVO_API_KEY is not set');
-    const body = { sender: parseSender(env.emailFrom), to: [{ email: to }], subject };
+    if (!env.brevoApiKey) throw this._failure('missing_api_key', 'EMAIL_TRANSPORT is "brevo" but BREVO_API_KEY is not set');
+    const sender = parseSender(env.emailFrom);
+    if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(sender.email) || /[\r\n]/.test(env.emailFrom)) {
+      throw this._failure('sender_invalid', 'Set EMAIL_FROM to the verified Brevo sender');
+    }
+    const body = { sender, to: [{ email: to }], subject };
     if (html) body.htmlContent = html;
     if (text) body.textContent = text;
 
     let res;
+    this._diagnostic('attempt');
     try {
       res = await fetch(BREVO_SEND_URL, {
         method: 'POST',
@@ -83,16 +135,21 @@ class EmailService {
         signal: AbortSignal.timeout(env.emailTimeoutMs),
       });
     } catch (err) {
-      if (err.name === 'TimeoutError' || err.name === 'AbortError') throw new Error(`Brevo did not respond within ${env.emailTimeoutMs} ms`);
-      throw err;
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') throw this._failure('timeout', `Brevo did not respond within ${env.emailTimeoutMs} ms`);
+      throw this._failure('network_error', 'Unable to reach Brevo over HTTPS');
     }
     if (!res.ok) {
-      // Brevo explains the problem (e.g. unverified sender) in the body; it never echoes the API key.
+      // Read only for classification; the raw provider response never enters logs or client errors.
       const detail = (await res.text().catch(() => '')).slice(0, 300);
-      throw new Error(`Brevo rejected the email (HTTP ${res.status}): ${detail}`);
+      const [reason, advice] = rejectionReason(res.status, detail);
+      throw this._failure(reason, `Brevo rejected the email (HTTP ${res.status}): ${advice}`, res.status);
     }
     const data = await res.json().catch(() => ({}));
-    return { accepted: [to], messageId: data.messageId || 'brevo' };
+    if (typeof data.messageId !== 'string' || !data.messageId.trim()) {
+      throw this._failure('invalid_response', 'Brevo did not return a message ID; acceptance could not be confirmed');
+    }
+    this._diagnostic('accepted');
+    return { accepted: [to], messageId: data.messageId };
   }
 
   _sendMessage(to, subject, content) {
@@ -106,7 +163,8 @@ class EmailService {
   sendOtpEmail(to, code, purpose, firstName) {
     const purposeLabel =
       purpose === 'login_mfa' ? 'Login verification' : purpose === 'email_verification' ? 'Email verification'
-        : purpose === 'email_mfa_setup' ? 'Email two-factor setup' : purpose === 'email_mfa_settings' ? 'Security settings verification' : 'Password reset';
+        : purpose === 'email_mfa_setup' ? 'Email two-factor setup' : purpose === 'email_mfa_settings' ? 'Security settings verification'
+          : purpose === 'notification_confirmation' ? 'Email notification confirmation' : 'Password reset';
     const subject =
       purpose === 'email_verification' ? 'Verify your Ledger OnBoard account' : `Ledger OnBoard — ${purposeLabel} code`;
     return this._sendMessage(to, subject, {
@@ -130,6 +188,16 @@ class EmailService {
       details: [['Invitation expires', 'In 3 days']],
       action: { label: 'Activate my account', url: this._appLink('/activate-caretaker') },
       note: 'This code works once. If the invitation was unexpected, ignore it. Your landlord can issue a new code if needed.',
+    });
+  }
+
+  sendSecurityNoticeEmail(to, fullName, event) {
+    const title = event === 'mfa_disabled' ? 'Two-factor sign-in was turned off' : 'Your password was changed';
+    return this._sendMessage(to, `Ledger OnBoard — ${title}`, {
+      category: 'Account security', title, greeting: fullName ? `Hi ${fullName},` : 'Hello,',
+      paragraphs: [`${title} on your Ledger OnBoard account.`, 'If you made this change, no action is needed.'],
+      action: { label: 'Open Ledger OnBoard', url: this._appLink('/') },
+      note: 'If you did not make this change, use password recovery or contact an administrator immediately.',
     });
   }
 

@@ -35,11 +35,17 @@ async function goToScanStep(user) {
 }
 
 describe('TwoFactorCard', () => {
+  it('email policy: hides new email enrollment while keeping authenticator setup', () => {
+    renderCard({ ...OFF, emailAccountFlowsAvailable: true, emailMfaEnrollmentAvailable: false });
+    expect(screen.queryByRole('button', { name: /set up email codes/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /set up two-factor/i })).toBeInTheDocument();
+  });
   it('email restoration: verifies a mailed code before enabling email two-factor without a QR', async () => {
     AuthApi.mfaEmailSetup.mockResolvedValue({ message: 'Check your email for a verification code.' });
     AuthApi.mfaEmailEnable.mockResolvedValue({ user: { ...OFF, mfaEnabled: true, mfaMethod: 'email', emailMfaEnrolled: true } });
     const person = userEvent.setup();
-    const { onChanged } = renderCard({ ...OFF, emailAccountFlowsAvailable: true });
+    // New policy: exercise the retained compatibility flow only when explicitly allowed.
+    const { onChanged } = renderCard({ ...OFF, emailAccountFlowsAvailable: true, emailMfaEnrollmentAvailable: true });
     await person.click(screen.getByRole('button', { name: /set up email codes/i }));
     await person.type(screen.getByLabelText(/current password/i), 'Str0ng!Pass');
     await person.click(screen.getByRole('button', { name: /^continue$/i }));

@@ -60,6 +60,8 @@ async function makeUser(role, name, extra = {}) {
     passwordHash: await hashPassword(PASSWORD),
     role,
     accountStatus: 'active',
+    // New rule: routine notifications require real inbox proof and email opt-in.
+    emailConfirmedAt: new Date(), notificationPreferences: { email: true, inApp: true },
     ...(role === 'tenant' ? { emergencyContact: { name: 'Emergency Contact', phone: '09170000099' } } : {}),
     ...extra,
   });
@@ -99,7 +101,8 @@ function makeBill(tenant, room, { dueInDays = 10 } = {}) {
 const failingEmail = () => jest.spyOn(EmailService, 'send').mockRejectedValue(new Error('Brevo rejected the email (HTTP 401): account suspended'));
 
 describe('Payment results: email is best-effort', () => {
-  test('a failing email does not fail a completed payment; the audit entry and in-app notification exist', async () => {
+  // CHANGED RULE: successful-payment mail is removed; all payment side-effect assertions remain.
+  test('a completed payment sends no email; the audit entry and in-app notification exist', async () => {
     const landlord = await makeUser('landlord', 'Paula');
     const tenant = await makeUser('tenant', 'Pedro');
     const { room } = await makeRoom(landlord, 'Paula');
@@ -113,13 +116,13 @@ describe('Payment results: email is best-effort', () => {
     const res = await request(app).patch(`/api/payments/${payment._id}/verify`).set('Authorization', `Bearer ${token}`).send({ decision: 'COMPLETE' });
 
     expect(res.status).toBe(200);
-    expect(sendSpy).toHaveBeenCalled(); // the email really was attempted, and it really failed
+    expect(sendSpy).not.toHaveBeenCalled();
     expect((await PaymentTransaction.findById(payment._id)).verificationStatus).toBe('VERIFIED');
     expect((await BillingSOA.findById(soa._id)).paymentStatus).toBe('PAID');
     const audit = await AuditLogRepository.findRecent({ action: 'PAYMENT_VERIFIED' });
     expect(audit.some((l) => String(l.targetId) === String(payment._id))).toBe(true);
     expect(await Notification.exists({ userId: tenant._id, type: 'PAYMENT_VERIFIED' })).toBeTruthy();
-    expect(errorSpy).toHaveBeenCalledWith('[PaymentService] payment result email failed:', expect.stringContaining('account suspended'));
+    expect(errorSpy).not.toHaveBeenCalled();
   }, 30000);
 
   test('a failing email does not fail a rejected payment either', async () => {

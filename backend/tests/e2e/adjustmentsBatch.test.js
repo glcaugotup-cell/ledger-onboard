@@ -256,7 +256,8 @@ describe('R1-R5: reservation and tenancy lifecycle', () => {
 describe('R7/R8: approval email and contact privacy', () => {
   test('the approval email names the property, room, dates, landlord and caretaker contacts', async () => {
     const setup = await makeSetup();
-    const tenant = await makeUser('tenant');
+    // New policy: this retained email-content check uses a confirmed, opted-in recipient.
+    const tenant = await makeUser('tenant', { emailConfirmedAt: new Date(), notificationPreferences: { email: true } });
     const id = await reserve(tenant.token, setup.room._id, dateOnly(10));
     const sendSpy = jest.spyOn(EmailService, 'send');
     await setStatus(setup.landlord.token, id, { status: 'approved', caretakerAssignedId: String(setup.caretaker.user._id) });

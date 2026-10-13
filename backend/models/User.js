@@ -108,13 +108,15 @@ const userSchema = new Schema(
     // Explicit confirmation marker; retired email flags alone never reactivate two-factor.
     emailMfaEnabledAt: { type: Date, default: null },
     emailCodes: {
-      type: new Schema({ setup: emailCodeSchema, login: emailCodeSchema, reset: emailCodeSchema, settings: emailCodeSchema }, { _id: false }),
+      type: new Schema({ setup: emailCodeSchema, login: emailCodeSchema, reset: emailCodeSchema, settings: emailCodeSchema, notifications: emailCodeSchema }, { _id: false }),
       default: () => ({}),
       select: false,
     },
     // Registration email verification (separate from caretaker PENDING_ACTIVATION).
     // Only AuthService.register() sets this to false, and only when EMAIL_VERIFICATION_REQUIRED=true.
     emailVerified: { type: Boolean, default: true },
+    // Mailbox proof is separate from the login eligibility flag changed by the legacy migration.
+    emailConfirmedAt: { type: Date, default: null },
     // Landlords only: mirrors the latest LandlordVerification submission (null if none yet).
     businessVerificationStatus: {
       type: String,
@@ -168,7 +170,7 @@ const userSchema = new Schema(
     // Landlord-only private GridFS URL; exposed to tenants only through an owned SOA route.
     paymentQrUrl: { type: String, default: null },
     notificationPreferences: {
-      email: { type: Boolean, default: true },
+      email: { type: Boolean, default: false },
       inApp: { type: Boolean, default: true },
     },
     // Privacy Policy consent captured at registration; `at` records when it was given.

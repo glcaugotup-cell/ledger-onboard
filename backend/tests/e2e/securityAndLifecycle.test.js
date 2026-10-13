@@ -117,7 +117,9 @@ describe('Security — password reset with two-factor codes', () => {
     expect(byBackup.status).toBe(200);
     const spent = await request(app).post('/api/auth/reset-password').send({ email: 'reset.twofactor@gmail.com', code: backupCodes[0], newPassword: 'Thr33!Pass' });
     expect(spent.body.error.code).toBe('INVALID_OTP');
-    expect(sendSpy).not.toHaveBeenCalled();
+    // CHANGED RULE: completed resets send security notices to confirmed inboxes, never reset codes here.
+    expect(sendSpy).toHaveBeenCalledTimes(2);
+    expect(sendSpy.mock.calls.every(([mail]) => mail.text.includes('Your password was changed'))).toBe(true);
     sendSpy.mockRestore();
 
     // The newest password works, and sign-in still asks for the second step.
@@ -147,7 +149,8 @@ describe('Account inactivity lifecycle (Section 7)', () => {
     const userId = reg.body.data.user._id;
 
     const twentySixDaysAgo = new Date(Date.now() - 26 * 24 * 60 * 60 * 1000);
-    await UserRepository.updateById(userId, { lastActivityAt: twentySixDaysAgo });
+    // New policy: the warning fixture explicitly opts into routine email after inbox verification.
+    await UserRepository.updateById(userId, { lastActivityAt: twentySixDaysAgo, 'notificationPreferences.email': true });
 
     const sendSpy = jest.spyOn(EmailService, 'send');
     const results = await AccountLifecycleService.runDailySweep();

@@ -5,7 +5,7 @@ const PropertyRepository = require('../repositories/PropertyRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const BillingService = require('./BillingService');
 const NotificationService = require('./NotificationService');
-const EmailService = require('./EmailService');
+const EmailNotificationService = require('./EmailNotificationService');
 const FileStorageService = require('./FileStorageService');
 const { FILE_CATEGORIES } = require('./FileStorageService');
 const UserRepository = require('../repositories/UserRepository');
@@ -215,10 +215,7 @@ class PaymentService {
     // The review is already saved, logged and notified in-app; email trouble must not turn it into an error.
     try {
       const tenant = await UserRepository.findById(payment.tenantId);
-      if (tenant) {
-        if (isApproved) await EmailService.sendPaymentVerifiedEmail(tenant.email, tenant.fullName, verifiedAmount);
-        else await EmailService.sendPaymentRejectedEmail(tenant.email, tenant.fullName, updated.rejectionReason);
-      }
+      if (tenant && !isApproved) await EmailNotificationService.deliver(tenant, 'sendPaymentRejectedEmail', [tenant.fullName, updated.rejectionReason]);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[PaymentService] payment result email failed:', err.message);

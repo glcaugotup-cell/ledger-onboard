@@ -67,6 +67,8 @@ const sensitiveAuthRateLimiters = {
   mfaEmailSetup: sensitiveAuthLimiter({ failuresOnly: false }),
   mfaEmailCode: sensitiveAuthLimiter({ failuresOnly: false }),
   mfaEmailResend: sensitiveAuthLimiter({ failuresOnly: false }),
+  notificationEmailRequest: sensitiveAuthLimiter({ failuresOnly: false }),
+  notificationEmailConfirm: sensitiveAuthLimiter({ failuresOnly: true }),
   resendOtp: sensitiveAuthLimiter({ failuresOnly: false }),
   forgotPassword: sensitiveAuthLimiter({ failuresOnly: false }),
   resendCaretakerInvitation: sensitiveAuthLimiter({ failuresOnly: false }),

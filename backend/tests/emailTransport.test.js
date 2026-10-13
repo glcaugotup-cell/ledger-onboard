@@ -47,7 +47,8 @@ test('Brevo sends the message over HTTPS with the parsed sender, recipient, subj
 });
 
 test('the real OTP email goes through Brevo with the code in it', async () => {
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+  // New rule: a successful send must carry Brevo's actual messageId.
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ messageId: 'mock-otp-id' }) });
   await EmailService.sendOtpEmail('new.user@gmail.com', '482913', 'email_verification', 'Andrae');
   const body = JSON.parse(global.fetch.mock.calls[0][1].body);
   expect(body.subject).toBe('Verify your Ledger OnBoard account');

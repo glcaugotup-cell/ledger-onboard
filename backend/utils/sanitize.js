@@ -6,6 +6,9 @@ function sanitizeUser(userDoc) {
   delete obj.otp;
   obj.emailMfaEnrolled = Boolean(obj.mfaEnabled && obj.mfaMethod === 'email' && obj.emailMfaEnabledAt);
   obj.emailAccountFlowsAvailable = require('../config/env').emailAccountFlowsEnabled;
+  obj.emailMfaEnrollmentAvailable = Boolean(obj.emailAccountFlowsAvailable && require('../config/env').emailMfaEnrollmentEnabled);
+  obj.emailNotificationsConfirmed = Boolean(obj.emailConfirmedAt);
+  delete obj.emailConfirmedAt;
   delete obj.emailMfaEnabledAt;
   delete obj.emailCodes;
   delete obj.mfaTotp;

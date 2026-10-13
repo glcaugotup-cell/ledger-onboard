@@ -18,7 +18,7 @@ vi.mock('../../services/AuthApi.js', () => ({
   default: {
     updateMe: vi.fn(), forgotPassword: vi.fn(), resetPassword: vi.fn(), deactivateAccount: vi.fn(),
     mfaSetup: vi.fn(), mfaEnable: vi.fn(), mfaDisable: vi.fn(), mfaRegenerateBackupCodes: vi.fn(),
-    mfaEmailCode: vi.fn(),
+    mfaEmailCode: vi.fn(), requestNotificationEmail: vi.fn(), confirmNotificationEmail: vi.fn(),
   },
 }));
 vi.mock('../../services/ReviewApi.js', () => ({ default: { listEligible: vi.fn(), submit: vi.fn() } }));
@@ -52,6 +52,37 @@ function renderPage(user = USERS.tenant) {
 }
 
 describe('ProfilePage', () => {
+  it('email policy: requires mailbox confirmation before enabling notifications', async () => {
+    AuthApi.requestNotificationEmail.mockResolvedValue({ resendAfterSeconds: 45 });
+    AuthApi.confirmNotificationEmail.mockResolvedValue({ user: { emailNotificationsConfirmed: true } });
+    const person = userEvent.setup();
+    const { refreshProfile } = renderPage({ ...USERS.tenant, emailAccountFlowsAvailable: true, emailNotificationsConfirmed: false });
+    await person.click(screen.getByRole('button', { name: /enable email notifications/i }));
+    await person.type(screen.getByLabelText('Password to confirm your inbox'), 'Current1!Pass');
+    await person.click(screen.getByRole('button', { name: /send confirmation code/i }));
+    expect(AuthApi.requestNotificationEmail).toHaveBeenCalledWith({ password: 'Current1!Pass' });
+    await person.type(await screen.findByLabelText('Inbox confirmation code'), '123456');
+    await person.click(screen.getByRole('button', { name: /confirm and enable/i }));
+    expect(AuthApi.confirmNotificationEmail).toHaveBeenCalledWith({ code: '123456' });
+    expect(refreshProfile).toHaveBeenCalled();
+  });
+  it('email policy: turning email off does not change in-app settings', async () => {
+    AuthApi.updateMe.mockResolvedValue({});
+    const person = userEvent.setup();
+    renderPage({ ...USERS.tenant, emailNotificationsConfirmed: true, notificationPreferences: { email: true, inApp: true } });
+    await person.click(screen.getByRole('button', { name: /turn off email notifications/i }));
+    expect(AuthApi.updateMe).toHaveBeenCalledWith({ notificationPreferences: { email: false } });
+  });
+  it('email policy: delivery errors remain visible without enabling notifications', async () => {
+    AuthApi.requestNotificationEmail.mockRejectedValue(new Error('Unable to send verification code. Please try again.'));
+    const person = userEvent.setup();
+    renderPage({ ...USERS.tenant, emailAccountFlowsAvailable: true });
+    await person.click(screen.getByRole('button', { name: /enable email notifications/i }));
+    await person.type(screen.getByLabelText('Password to confirm your inbox'), 'Current1!Pass');
+    await person.click(screen.getByRole('button', { name: /send confirmation code/i }));
+    expect(await screen.findByText(/unable to send verification code/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Inbox confirmation code')).not.toBeInTheDocument();
+  });
   it('email restoration: sends a settings code and requires it when changing an email-two-factor password', async () => {
     AuthApi.mfaEmailCode.mockResolvedValue({ message: 'Check your email for a verification code.' });
     const person = userEvent.setup();

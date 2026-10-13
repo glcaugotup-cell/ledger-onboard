@@ -1,6 +1,6 @@
 const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
-const EmailService = require('./EmailService');
+const EmailNotificationService = require('./EmailNotificationService');
 const ResetCodeService = require('./ResetCodeService');
 const ApiError = require('../utils/ApiError');
 const { hashPassword } = require('../utils/password');
@@ -90,7 +90,7 @@ class AccountLifecycleService {
       archiveWarningSentAt: now,
       scheduledArchiveAt,
     });
-    const delivery = await EmailService.sendArchiveWarningEmail(user.email, user.fullName, env.archiveDays - env.archiveWarningDays);
+    const delivery = await EmailNotificationService.deliver(user, 'sendArchiveWarningEmail', [user.fullName, env.archiveDays - env.archiveWarningDays]);
     await AuditLogRepository.record({
       action: 'ACCOUNT_ARCHIVE_WARNING_SENT',
       targetType: 'User',
@@ -107,12 +107,11 @@ class AccountLifecycleService {
       refreshTokenHash: null,
       $inc: { tokenVersion: 1 }, // ends every session; recovery starts fresh
     });
-    const delivery = await EmailService.sendArchivedNoticeEmail(user.email, user.fullName);
     await AuditLogRepository.record({
       action: 'ACCOUNT_ARCHIVED',
       targetType: 'User',
       targetId: user._id,
-      metadata: { reason: 'INACTIVITY', emailStatus: emailStatusOf(delivery) },
+      metadata: { reason: 'INACTIVITY', emailStatus: 'skipped' },
     });
   }
 

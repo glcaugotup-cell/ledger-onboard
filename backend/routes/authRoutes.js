@@ -50,5 +50,7 @@ router.post('/mfa/email/setup', authenticate, limit.mfaEmailSetup, mfaSetupValid
 router.post('/mfa/email/enable', authenticate, limit.mfa, mfaEmailEnableValidators, validate, AuthController.mfaEmailEnable);
 router.post('/mfa/email/code', authenticate, limit.mfaEmailCode, mfaSetupValidators, validate, AuthController.mfaEmailCode);
 router.post('/mfa/email/resend', limit.mfaEmailResend, mfaEmailResendValidators, validate, AuthController.mfaEmailResend);
+router.post('/notifications/email/request', authenticate, limit.notificationEmailRequest, mfaSetupValidators, validate, AuthController.requestNotificationEmail);
+router.post('/notifications/email/confirm', authenticate, limit.notificationEmailConfirm, mfaEmailEnableValidators, validate, AuthController.confirmNotificationEmail);
 
 module.exports = router;

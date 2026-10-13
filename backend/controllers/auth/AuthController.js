@@ -95,6 +95,12 @@ class AuthController {
     const result = await MfaService.setup(req.user.id, req.body);
     sendSuccess(res, { data: result });
   });
+  requestNotificationEmail = asyncHandler(async (req, res) => {
+    sendSuccess(res, { data: await AuthService.requestNotificationEmail(req.user.id, req.body) });
+  });
+  confirmNotificationEmail = asyncHandler(async (req, res) => {
+    sendSuccess(res, { data: await AuthService.confirmNotificationEmail(req.user.id, req.body) });
+  });
 
   mfaEmailSetup = asyncHandler(async (req, res) => {
     sendSuccess(res, { data: await MfaService.emailSetup(req.user.id, req.body) });

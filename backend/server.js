@@ -4,6 +4,7 @@ const { connectDB } = require('./config/db');
 const { startAccountLifecycleJob } = require('./jobs/AccountLifecycleJob');
 
 async function main() {
+  require('./services/EmailService').reportConfiguration();
   await connectDB();
 
   const server = app.listen(env.port, () => {

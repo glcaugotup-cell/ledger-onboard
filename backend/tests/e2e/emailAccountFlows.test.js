@@ -19,6 +19,9 @@ beforeAll(async () => {
 }, 60000);
 beforeEach(() => {
   env.emailAccountFlowsEnabled = true;
+  // New policy closes enrollment by default. Opt in only in this isolated compatibility suite
+  // to retain all existing enrollment, replay, lockout and concurrency checks.
+  env.emailMfaEnrollmentEnabled = true;
   env.emailTransport = 'console';
   env.emailAppUrl = 'https://ledger-onboard.vercel.app';
   env.mfaEncryptionKey = crypto.randomBytes(32);

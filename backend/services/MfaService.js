@@ -11,6 +11,7 @@ const { sanitizeUser } = require('../utils/sanitize');
 const { MFA_METHOD } = require('../utils/constants');
 const env = require('../config/env');
 const EmailOtpService = require('./EmailOtpService');
+const EmailNotificationService = require('./EmailNotificationService');
 
 /** Shown in the authenticator app next to the code. */
 const MFA_ISSUER = 'Ledger OnBoard';
@@ -103,22 +104,25 @@ class MfaService {
     const updated = await UserRepository.updateById(user._id, { mfaEnabled: false, mfaMethod: MFA_METHOD.NONE,
       emailMfaEnabledAt: null, emailCodes: {}, ...CLEARED_TOTP_STATE });
     await AuditLogRepository.record({ action: 'MFA_DISABLED', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id });
+    if (this.isEnrolled(user) || EmailOtpService.isEnrolled(user)) await EmailNotificationService.securityNotice(user, 'mfa_disabled');
     return { user: sanitizeUser(updated) };
   }
 
   async emailSetup(userId, { password }) {
+    if (!env.emailMfaEnrollmentEnabled) throw new ApiError(410, 'EMAIL_MFA_ENROLLMENT_CLOSED', 'Use an authenticator app to set up two-factor sign-in.');
     const user = await this._loadWithPassword(userId, password);
     if (this.isEnrolled(user) || EmailOtpService.isEnrolled(user)) throw ApiError.conflict('Turn off your current two-factor method before choosing another.', 'MFA_ALREADY_ENABLED');
     return EmailOtpService.issue(user, 'setup');
   }
 
   async emailEnable(userId, { code }) {
+    if (!env.emailMfaEnrollmentEnabled) throw new ApiError(410, 'EMAIL_MFA_ENROLLMENT_CLOSED', 'Use an authenticator app to set up two-factor sign-in.');
     EmailOtpService.assertAvailable();
     const user = await this._load(userId);
     if (this.isEnrolled(user) || EmailOtpService.isEnrolled(user)) throw ApiError.conflict('Two-factor sign-in is already on.', 'MFA_ALREADY_ENABLED');
     if (!(await EmailOtpService.consume(user, 'setup', code))) throw invalidCode();
     const updated = await UserRepository.model.findOneAndUpdate({ _id: user._id, emailMfaEnabledAt: null, 'mfaTotp.secretEnc': null },
-      { $set: { mfaEnabled: true, mfaMethod: MFA_METHOD.EMAIL, emailMfaEnabledAt: new Date(), ...CLEARED_TOTP_STATE } }, { new: true }).exec();
+      { $set: { mfaEnabled: true, mfaMethod: MFA_METHOD.EMAIL, emailMfaEnabledAt: new Date(), emailConfirmedAt: new Date(), ...CLEARED_TOTP_STATE } }, { new: true }).exec();
     if (!updated) throw ApiError.conflict('Two-factor settings changed. Start again.', 'MFA_ALREADY_ENABLED');
     await AuditLogRepository.record({ action: 'MFA_ENABLED', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id, metadata: { method: 'email' } });
     return { user: sanitizeUser(updated) };

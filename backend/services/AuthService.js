@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const EmailService = require('./EmailService');
+const EmailNotificationService = require('./EmailNotificationService');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, comparePassword, unusablePasswordHash } = require('../utils/password');
 const { generateOtp, hashOtp, compareOtp } = require('../utils/otp');
@@ -103,7 +104,7 @@ class AuthService {
     if (user.emailVerified) throw ApiError.conflict('This account is already verified', 'ALREADY_VERIFIED');
 
     await this._consumeOtp(user, code, 'email_verification');
-    await UserRepository.updateById(user._id, { emailVerified: true });
+    await UserRepository.updateById(user._id, { emailVerified: true, emailConfirmedAt: new Date() });
 
     return { message: 'Email verified. You can now log in.' };
   }
@@ -373,6 +374,7 @@ class AuthService {
     });
     await AuditLogRepository.record({ action: 'PASSWORD_RESET', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id, metadata: { method } });
     if (archived) await AccountLifecycleService.recordRecovery(user, method);
+    await EmailNotificationService.securityNotice(user, 'password_changed');
     return { message: 'Password has been reset. You can now log in.' };
   }
 
@@ -395,6 +397,7 @@ class AuthService {
     const updated = await UserRepository.updateById(userId, { passwordHash, $inc: { tokenVersion: 1 } });
     const { accessToken, refreshToken } = await this._issueTokens(updated);
     await AuditLogRepository.record({ action: 'PASSWORD_CHANGED', actorId: user._id, actorRole: user.role, targetType: 'User', targetId: user._id });
+    await EmailNotificationService.securityNotice(user, 'password_changed');
     return { message: 'Password updated. Other devices have been signed out.', user: sanitizeUser(updated), accessToken, refreshToken };
   }
 
@@ -410,9 +413,13 @@ class AuthService {
     });
 
     try {
-      await EmailService.sendOtpEmail(user.email, code, purpose, user.firstName);
+      const delivery = await EmailService.sendOtpEmail(user.email, code, purpose, user.firstName);
+      if (delivery?.skipped) throw new Error('Verification email was skipped; check EMAIL_TRANSPORT');
     } catch (err) {
       // Log the real cause server-side; return only a generic message to the client.
+      await UserRepository.model.updateOne({ _id: user._id, 'otp.codeHash': codeHash }, {
+        $set: { 'otp.codeHash': null, 'otp.expiresAt': null },
+      }).exec();
       // eslint-disable-next-line no-console
       console.error('[AuthService] Failed to send OTP email:', err.message);
       throw ApiError.badRequest('Unable to send verification code. Please try again.', 'OTP_EMAIL_DELIVERY_FAILED');
@@ -460,8 +467,15 @@ class AuthService {
     const allowed = ['phone', 'profilePhotoUrl', 'notificationPreferences'];
     if (user.role !== ROLES.ADMIN) allowed.push('firstName', 'lastName');
     const safeUpdates = {};
+    if (updates.notificationPreferences?.email === true && !user.emailConfirmedAt) {
+      throw ApiError.badRequest('Confirm your inbox before enabling email notifications.', 'EMAIL_CONFIRMATION_REQUIRED');
+    }
     for (const key of allowed) {
+      if (key === 'notificationPreferences') continue;
       if (updates[key] !== undefined) safeUpdates[key] = updates[key];
+    }
+    for (const key of ['email', 'inApp']) {
+      if (typeof updates.notificationPreferences?.[key] === 'boolean') safeUpdates[`notificationPreferences.${key}`] = updates.notificationPreferences[key];
     }
     if (user.role !== ROLES.ADMIN && updates.emergencyContact && typeof updates.emergencyContact === 'object') {
       if (updates.emergencyContact.name !== undefined) safeUpdates['emergencyContact.name'] = updates.emergencyContact.name;
@@ -474,6 +488,20 @@ class AuthService {
     const updated = await UserRepository.updateById(userId, safeUpdates);
     if (!updated) throw ApiError.notFound('User not found', 'USER_NOT_FOUND');
     return sanitizeUser(updated);
+  }
+
+  async requestNotificationEmail(userId, { password }) {
+    const user = await UserRepository.findByIdWithSecrets(userId);
+    if (!user || !(await comparePassword(password, user.passwordHash))) throw ApiError.badRequest('Current password is incorrect', 'INVALID_CURRENT_PASSWORD');
+    return EmailOtpService.issue(user, 'notifications');
+  }
+
+  async confirmNotificationEmail(userId, { code }) {
+    const user = await UserRepository.findByIdWithSecrets(userId);
+    if (!user || !(await EmailOtpService.consume(user, 'notifications', code, { successUpdates: {
+      emailConfirmedAt: new Date(), 'notificationPreferences.email': true,
+    } }))) throw ApiError.badRequest('Invalid or expired code', 'INVALID_OTP');
+    return { user: sanitizeUser(await UserRepository.findById(userId)) };
   }
 
   /**

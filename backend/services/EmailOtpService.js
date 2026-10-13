@@ -8,7 +8,7 @@ const env = require('../config/env');
 const COOLDOWN_SECONDS = 45;
 const MAX_ATTEMPTS = 5;
 const LOCK_MINUTES = 15;
-const PURPOSES = Object.freeze({ setup: 'email_mfa_setup', login: 'login_mfa', reset: 'password_reset', settings: 'email_mfa_settings' });
+const PURPOSES = Object.freeze({ setup: 'email_mfa_setup', login: 'login_mfa', reset: 'password_reset', settings: 'email_mfa_settings', notifications: 'notification_confirmation' });
 const versionCondition = (user) => tokenVersionOf(user.tokenVersion) === 0
   ? { $or: [{ tokenVersion: 0 }, { tokenVersion: { $exists: false } }] }
   : { tokenVersion: user.tokenVersion };
@@ -66,7 +66,7 @@ class EmailOtpService {
     return { message: 'Check your email for a verification code.', resendAfterSeconds: COOLDOWN_SECONDS };
   }
 
-  async consume(user, purpose, code, { context, countFailures = true } = {}) {
+  async consume(user, purpose, code, { context, countFailures = true, successUpdates = {} } = {}) {
     const record = user.emailCodes?.[purpose];
     const prefix = `emailCodes.${purpose}`;
     if (countFailures) this.assertNotLocked(record);
@@ -91,6 +91,7 @@ class EmailOtpService {
       filter.$and.push({ $or: [{ [`${prefix}.lockedUntil`]: null }, { [`${prefix}.lockedUntil`]: { $lte: now } }] });
     }
     const claimed = await Users.model.findOneAndUpdate(filter, { $set: {
+      ...successUpdates,
       [`${prefix}.codeHash`]: null, [`${prefix}.expiresAt`]: null, [`${prefix}.issuedAt`]: null,
       [`${prefix}.failedAttempts`]: 0, [`${prefix}.lockedUntil`]: null,
     } }).exec();

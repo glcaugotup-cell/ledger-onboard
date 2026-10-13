@@ -16,6 +16,7 @@ import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndic
 import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import { ReviewForm } from '../../components/ReviewForm.jsx';
 import TwoFactorCard from '../../components/TwoFactorCard.jsx';
+import EmailNotificationSettings from '../../components/EmailNotificationSettings.jsx';
 import { MFA_CODE_PROMPT, cleanMfaCode } from '../../utils/mfa.js';
 import EmailCodeRequestButton from '../../components/EmailCodeRequestButton.jsx';
 import { describeApiError } from '../../utils/errors.js';
@@ -446,6 +447,7 @@ export default function ProfilePage() {
         </Card>
 
         <TwoFactorCard user={user} onChanged={refreshProfile} />
+        <EmailNotificationSettings key={user?._id} user={user} onChanged={refreshProfile} />
       </div>
 
       {role === 'landlord' && <PaymentQrSettings hasQr={Boolean(user?.hasPaymentQr)} />}

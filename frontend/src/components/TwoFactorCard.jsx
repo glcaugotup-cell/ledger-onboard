@@ -151,7 +151,7 @@ export default function TwoFactorCard({ user, onChanged }) {
             Authenticator or Microsoft Authenticator. No code is ever sent to you.
           </p>
           <Button onClick={() => { setMessage(''); reset('setup-password'); }}>Set up two-factor</Button>
-          {user?.emailAccountFlowsAvailable && <Button variant="secondary" onClick={() => { setMessage(''); reset('email-setup'); }}>Set up email codes</Button>}
+          {user?.emailMfaEnrollmentAvailable && <Button variant="secondary" onClick={() => { setMessage(''); reset('email-setup'); }}>Set up email codes</Button>}
         </div>
       )}
 
