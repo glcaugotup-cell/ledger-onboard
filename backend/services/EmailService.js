@@ -1,8 +1,11 @@
 const nodemailer = require('nodemailer');
+const MailComposer = require('nodemailer/lib/mail-composer');
 const env = require('../config/env');
 const { buildEmail } = require('../utils/emailTemplate');
 
 const BREVO_SEND_URL = 'https://api.brevo.com/v3/smtp/email';
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const GMAIL_SEND_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
 
 /** 'Ledger OnBoard <team@gmail.com>' (quotes optional) -> { name, email }; a bare address -> { email }. */
 function parseSender(from) {
@@ -44,6 +47,7 @@ class EmailService {
     return {
       transport: env.emailTransport,
       apiKeyConfigured: Boolean(env.brevoApiKey),
+      gmailConfigured: Boolean(env.gmail.clientId && env.gmail.clientSecret && env.gmail.refreshToken),
       senderEmail: sender.email,
       senderFormatValid: /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(sender.email) && !/[\r\n]/.test(env.emailFrom),
       registrationVerificationRequired: env.emailVerificationRequired,
@@ -62,6 +66,9 @@ class EmailService {
     });
     if (env.emailTransport === 'none' || (env.isProduction && env.emailTransport === 'console')) {
       console.warn('[EmailService] Real email sending is disabled on this server.');
+    }
+    if (env.emailTransport === 'gmail' && !(env.gmail.clientId && env.gmail.clientSecret && env.gmail.refreshToken)) {
+      console.warn('[EmailService] GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN are needed for EMAIL_TRANSPORT=gmail.');
     }
     if (env.emailTransport === 'brevo' && !env.brevoApiKey) {
       console.warn('[EmailService] BREVO_API_KEY is missing; add the new account API key in Render.');
@@ -125,6 +132,7 @@ class EmailService {
     }
 
     if (env.emailTransport === 'brevo') return this._sendViaBrevo({ to, subject, text, html, headers });
+    if (env.emailTransport === 'gmail') return this._sendViaGmail({ to, subject, text, html, headers });
 
     const transporter = this._getTransporter();
     return transporter.sendMail({ from: env.emailFrom, to, subject, text, html, headers });
@@ -170,6 +178,62 @@ class EmailService {
   }
 
   /** `to` is an address, or { email, unsubscribeUrl } for routine mail the recipient can opt out of. */
+  /** Short-lived Gmail access token from the refresh token, reused until a minute before it expires. */
+  async _gmailAccessToken() {
+    if (this._gmailToken && this._gmailToken.expiresAt > Date.now() + 60000) return this._gmailToken.value;
+    const { clientId, clientSecret, refreshToken } = env.gmail;
+    let res;
+    try {
+      res = await fetch(GOOGLE_TOKEN_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: 'refresh_token' }),
+        signal: AbortSignal.timeout(env.emailTimeoutMs),
+      });
+    } catch (err) {
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') throw this._failure('timeout', `Google did not respond within ${env.emailTimeoutMs} ms`);
+      throw this._failure('network_error', 'Unable to reach Google over HTTPS');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || typeof data.access_token !== 'string') {
+      // invalid_grant: the refresh token was revoked or expired; invalid_client: wrong client ID or secret.
+      throw this._failure('gmail_auth_failed', `Google refused the Gmail credentials (${data.error || `HTTP ${res.status}`})`, res.status);
+    }
+    this._gmailToken = { value: data.access_token, expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000 };
+    return this._gmailToken.value;
+  }
+
+  /** Gmail API over HTTPS (port 443): sends as the Gmail account that granted the refresh token. */
+  async _sendViaGmail({ to, subject, text, html, headers }) {
+    const { clientId, clientSecret, refreshToken } = env.gmail;
+    if (!clientId || !clientSecret || !refreshToken) {
+      throw this._failure('missing_gmail_credentials', 'EMAIL_TRANSPORT is "gmail" but GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET or GMAIL_REFRESH_TOKEN is not set');
+    }
+    const raw = await new MailComposer({ from: env.emailFrom, to, subject, text, html, headers }).compile().build();
+    this._diagnostic('attempt');
+    const token = await this._gmailAccessToken();
+    let res;
+    try {
+      res = await fetch(GMAIL_SEND_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ raw: raw.toString('base64url') }),
+        signal: AbortSignal.timeout(env.emailTimeoutMs),
+      });
+    } catch (err) {
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') throw this._failure('timeout', `Gmail did not respond within ${env.emailTimeoutMs} ms`);
+      throw this._failure('network_error', 'Unable to reach Gmail over HTTPS');
+    }
+    if (!res.ok) {
+      if (res.status === 401) this._gmailToken = null; // try a fresh token next time
+      const reason = res.status === 403 ? 'gmail_permission' : res.status === 429 ? 'quota_exceeded' : res.status === 401 ? 'gmail_auth_failed' : 'provider_rejected';
+      throw this._failure(reason, `Gmail rejected the email (HTTP ${res.status})`, res.status);
+    }
+    const data = await res.json().catch(() => ({}));
+    this._diagnostic('accepted');
+    return { accepted: [to], messageId: data.id || 'gmail' };
+  }
+
   _sendMessage(to, subject, content) {
     const { email, unsubscribeUrl } = typeof to === 'string' ? { email: to } : to;
     return this.send({ to: email, subject, unsubscribeUrl, ...buildEmail({ appUrl: env.emailAppUrl, ...content, unsubscribeUrl }) });

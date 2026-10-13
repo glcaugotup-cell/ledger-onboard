@@ -23,7 +23,7 @@ if (!['http:', 'https:'].includes(emailAppUrl.protocol) || emailAppUrl.username 
 }
 
 // A typo (e.g. "smpt") must stop the server at boot, not silently fall back to SMTP and time out on every send.
-const EMAIL_TRANSPORTS = ['console', 'brevo', 'smtp', 'none'];
+const EMAIL_TRANSPORTS = ['console', 'brevo', 'gmail', 'smtp', 'none'];
 const configuredEmailTransport = (process.env.EMAIL_TRANSPORT || 'console').trim().toLowerCase();
 if (!EMAIL_TRANSPORTS.includes(configuredEmailTransport)) {
   throw new Error(`EMAIL_TRANSPORT must be one of: ${EMAIL_TRANSPORTS.join(', ')} (got "${configuredEmailTransport}")`);
@@ -84,11 +84,18 @@ const env = {
   noShowGraceDays: /^\d+$/.test((process.env.NO_SHOW_GRACE_DAYS || '').trim()) ? Number(process.env.NO_SHOW_GRACE_DAYS) : 5,
 
   // 'console' prints emails to the log, 'smtp' sends through the SMTP_* server, 'brevo'
-  // sends through Brevo's HTTPS API (for hosts that block outgoing SMTP, like Render's free plan),
-  // and 'none' sends nothing at all. Tests always use the console transport so they never send real email.
+  // sends through Brevo's HTTPS API and 'gmail' through the Gmail API (both HTTPS, for hosts that block
+  // outgoing SMTP, like Render's free plan and Railway's trial/Hobby), and 'none' sends nothing at all. Tests always use the console transport so they never send real email.
   emailTransport: process.env.NODE_ENV === 'test' ? 'console' : configuredEmailTransport,
   emailFrom: process.env.EMAIL_FROM || 'Ledger OnBoard <no-reply@ledgeronboard.local>',
   brevoApiKey: (process.env.BREVO_API_KEY || '').trim(),
+  // Only for EMAIL_TRANSPORT=gmail: the Gmail API over HTTPS (works where SMTP ports are blocked).
+  // An OAuth client from Google Cloud plus a refresh token for the sending Gmail account (scope gmail.send).
+  gmail: {
+    clientId: (process.env.GMAIL_CLIENT_ID || '').trim(),
+    clientSecret: (process.env.GMAIL_CLIENT_SECRET || '').trim(),
+    refreshToken: (process.env.GMAIL_REFRESH_TOKEN || '').trim(),
+  },
   // Longest any single email send may take, so a blocked mail server can't hang a request (e.g. registration).
   emailTimeoutMs: Number(process.env.EMAIL_TIMEOUT_MS) || 10000,
   smtp: {

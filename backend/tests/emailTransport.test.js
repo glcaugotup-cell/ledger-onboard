@@ -121,7 +121,7 @@ function bootEnvWith(transport) {
 }
 
 test('an unknown EMAIL_TRANSPORT (a typo like "smpt") stops the server from starting', () => {
-  expect(() => bootEnvWith('smpt')).toThrow('EMAIL_TRANSPORT must be one of: console, brevo, smtp, none (got "smpt")');
+  expect(() => bootEnvWith('smpt')).toThrow('EMAIL_TRANSPORT must be one of: console, brevo, gmail, smtp, none (got "smpt")');
   // The app loads config/env before anything else, so the same typo keeps the whole app from loading.
   jest.resetModules();
   expect(() => require('../app')).toThrow(/EMAIL_TRANSPORT must be one of/);

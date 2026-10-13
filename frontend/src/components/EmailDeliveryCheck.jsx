@@ -37,7 +37,7 @@ export default function EmailDeliveryCheck() {
   return (
     <Card title="Email delivery check" className="mt-6">
       <p className="mb-3 text-sm text-gray-500">
-        Sends a test email to your own address and shows whether it went out. If it didn&apos;t, it tells you which setting to fix on Render or in Brevo.
+        Sends a test email to your own address and shows whether it went out. If it didn&apos;t, it tells you which setting to fix on the server, in Brevo or in Google Cloud.
       </p>
       <ErrorBanner message={error} />
       <Button variant="secondary" loading={busy} onClick={run}>Send test email</Button>
@@ -51,7 +51,9 @@ export default function EmailDeliveryCheck() {
           <p className="font-medium text-gray-900">{result.advice}</p>
           <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-xs text-gray-600">
             <dt>EMAIL_TRANSPORT</dt><dd className="font-mono">{result.transport}</dd>
-            <dt>BREVO_API_KEY set</dt><dd>{yesNo(result.apiKeyConfigured)}</dd>
+            {result.transport === 'gmail'
+              ? <><dt>Gmail credentials set</dt><dd>{yesNo(result.gmailConfigured)}</dd></>
+              : <><dt>BREVO_API_KEY set</dt><dd>{yesNo(result.apiKeyConfigured)}</dd></>}
             <dt>EMAIL_FROM</dt><dd className="break-all font-mono">{result.senderEmail || '—'}{result.senderFormatValid ? '' : ' (not a valid address)'}</dd>
             <dt>Sign-up codes required</dt><dd>{yesNo(result.registrationVerificationRequired)}</dd>
             <dt>Email reset codes and invites</dt><dd>{yesNo(result.accountFlowsEnabled)}</dd>

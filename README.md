@@ -55,6 +55,7 @@ npm install
 | `EMAIL_TRANSPORT` | `none` sends nothing (what the deployed app uses; no account flow needs email); `console` prints emails in the backend terminal; `smtp` sends real email using the `SMTP_*` settings; `brevo` sends through Brevo's HTTPS API. Any other value stops the server at startup |
 | `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | Outgoing email settings, only for `smtp` (for Gmail, use an App Password) |
 | `BREVO_API_KEY` | Brevo API key, used only when `EMAIL_TRANSPORT=brevo` |
+| `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` | Used only when `EMAIL_TRANSPORT=gmail`: sends through the Gmail API over HTTPS (works on Render free and Railway trial/Hobby, which block SMTP). `EMAIL_FROM` must be the same Gmail address. Setup is under "Email (optional)" |
 | `MFA_ENCRYPTION_KEY` | 32 random bytes, base64 (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`). Encrypts two-factor secrets and keys the backup-code hashes; required in production, where the server refuses to start without it. Losing or changing it breaks every authenticator setup and makes every backup code useless, so everyone must set up two-factor again |
 | `EMAIL_VERIFICATION_REQUIRED` | `false` (default): no sign-up code is sent, and new accounts can sign in as soon as they are created; `true`: a code is emailed and sign-in waits until it is entered, so never use `true` together with `EMAIL_TRANSPORT=none`. Any other value stops the server at startup |
 | `EMAIL_ACCOUNT_FLOWS_ENABLED` | `true`: password-reset codes, email two-factor codes, inbox confirmation and caretaker invitations are emailed; `false` (default): those flows use only authenticator, backup and administrator codes |
@@ -84,6 +85,13 @@ npm run preview:emails
 Open any of the generated HTML files in `backend/.email-previews/` in a browser. Browser previews show the layout; Gmail may adjust colors in dark mode.
 
 The frontend needs no environment file for local development: the Vite dev server proxies `/api` and `/uploads` to `http://localhost:5000`. For a deployed build, set `VITE_API_URL` to the backend origin (see `frontend/.env.example`), e.g. `https://ledger-onboard-backend.onrender.com`.
+
+**Sending through Gmail without SMTP (`EMAIL_TRANSPORT=gmail`):**
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Gmail API**.
+2. **OAuth consent screen:** External; add the Gmail address as a test user, then **Publish app** (In production). Unpublished apps' refresh tokens expire after 7 days.
+3. **Credentials → Create credentials → OAuth client ID → Web application**, with the authorized redirect URI `https://developers.google.com/oauthplayground`. Copy the client ID and secret.
+4. Open the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground), click the gear, tick **Use your own OAuth credentials** and paste them. In step 1 enter the scope `https://www.googleapis.com/auth/gmail.send`, authorize with the sending Gmail account (accept the "unverified app" warning; it is your own app), then **Exchange authorization code for tokens** and copy the refresh token.
+5. Set `EMAIL_TRANSPORT=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` and `EMAIL_FROM=Ledger OnBoard <that Gmail address>` on the server, then use **Profile → Email delivery check** (main admin) to confirm. Gmail allows about 500 emails a day.
 
 ## How accounts work (no email)
 

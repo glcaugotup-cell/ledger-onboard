@@ -1,6 +1,9 @@
 /** Plain-language fix for each email delivery result, shown to the main admin by the test email check. */
 const EMAIL_ADVICE = Object.freeze({
-  accepted: 'Brevo accepted the email. Check your inbox and spam folder; it also appears in Brevo → Transactional → Logs.',
+  accepted: 'The email was accepted for delivery. Check your inbox and spam folder (with Brevo it also appears in Brevo → Transactional → Logs; with Gmail, in the Sent folder of the sending account).',
+  missing_gmail_credentials: 'EMAIL_TRANSPORT is gmail but GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET or GMAIL_REFRESH_TOKEN is empty. Add all three on the server.',
+  gmail_auth_failed: 'Google refused the Gmail credentials. Check the client ID and secret, and make a new refresh token in the OAuth Playground (the Google Cloud app must be In production, or tokens expire after 7 days).',
+  gmail_permission: 'Gmail refused to send. Make sure the Gmail API is enabled in Google Cloud, the refresh token was made with the gmail.send scope, and EMAIL_FROM is the same Gmail address.',
   transport_disabled: 'Sending is switched off: EMAIL_TRANSPORT is "none" on Render. Set EMAIL_TRANSPORT=brevo and save.',
   console_in_production: 'Sending is switched off: EMAIL_TRANSPORT is missing (or "console") on Render. Set EMAIL_TRANSPORT=brevo and save.',
   missing_api_key: 'BREVO_API_KEY is empty on Render. Paste the API key from Brevo → SMTP & API → API keys (it starts with xkeysib-).',
