@@ -22,6 +22,12 @@ class AdminController {
     sendSuccess(res, { statusCode: 201, data: result });
   });
 
+  // Main admin only. The setup code is returned once, like a reset code.
+  createAdmin = asyncHandler(async (req, res) => {
+    const { user, code, expiresAt } = await AdminService.createAdmin(req.user.id, req.body);
+    sendSuccess(res, { statusCode: 201, data: { user: sanitizeUser(user), code, expiresAt } });
+  });
+
   setUserStatus = asyncHandler(async (req, res) => {
     const { status, reason } = req.body;
     const user = await AdminService.setUserStatus(req.user.id, req.params.id, status, reason);

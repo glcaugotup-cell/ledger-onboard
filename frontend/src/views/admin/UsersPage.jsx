@@ -5,6 +5,8 @@ import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import ReasonDialog from '../../components/ReasonDialog.jsx';
 import ResetCodeDialog from '../../components/ResetCodeDialog.jsx';
+import AddAdminDialog from '../../components/AddAdminDialog.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import PageHeader from '../../components/layout/PageHeader.jsx';
 import { Select, TextInput } from '../../components/ui/Field.jsx';
@@ -46,7 +48,9 @@ const ACTIONS = {
 };
 
 export default function UsersPage() {
+  const { user: me } = useAuth();
   const [users, setUsers] = useState([]);
+  const [addingAdmin, setAddingAdmin] = useState(false);
   const [roleFilter, setRoleFilter] = useState('');
   const [inactiveOnly, setInactiveOnly] = useState(false);
   const [query, setQuery] = useState('');
@@ -122,7 +126,11 @@ export default function UsersPage() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="Users" description="Every account on the platform, its status and when it was last active." />
+      <PageHeader
+        title="Users"
+        description="Every account on the platform, its status and when it was last active."
+        actions={me?.isMainAdmin && <Button onClick={() => { setSuccess(''); setAddingAdmin(true); }}>Add admin</Button>}
+      />
       <div className="mb-5 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="relative sm:w-72">
           <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
@@ -162,6 +170,7 @@ export default function UsersPage() {
                 <div className="min-w-0">
                   <p className="font-medium text-gray-900">
                     {u.fullName} <span className="ml-1 text-xs font-normal capitalize text-gray-500">({u.role})</span>
+                    {u.isMainAdmin && <span className="ml-2 align-middle"><Badge tone="green">Main admin</Badge></span>}
                   </p>
                   <p className="break-all text-sm text-gray-500">{u.email}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
@@ -175,7 +184,8 @@ export default function UsersPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={u.accountStatus} tones={STATUS_TONE} />
-                  {u.role !== 'admin' && (
+                  {/* Admins are managed only by the main admin, and the main admin by no one. */}
+                  {(u.role !== 'admin' || (me?.isMainAdmin && !u.isMainAdmin)) && (
                     <>
                       {u.accountStatus !== 'pending_activation' && (
                         <Button variant="ghost" onClick={() => { setSuccess(''); setResetFor(u); }}>
@@ -212,6 +222,8 @@ export default function UsersPage() {
           );
         })}
       </div>
+
+      {addingAdmin && <AddAdminDialog onClose={() => setAddingAdmin(false)} onCreated={load} />}
 
       {resetFor && <ResetCodeDialog key={resetFor._id} user={resetFor} onClose={() => setResetFor(null)} />}
 

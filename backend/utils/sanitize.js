@@ -1,3 +1,5 @@
+const { isMainAdmin } = require('./mainAdmin');
+
 /** Strips fields that must never reach a client (password hash, OTP, tokens). */
 function sanitizeUser(userDoc) {
   if (!userDoc) return null;
@@ -8,6 +10,7 @@ function sanitizeUser(userDoc) {
   obj.emailAccountFlowsAvailable = require('../config/env').emailAccountFlowsEnabled;
   obj.emailMfaEnrollmentAvailable = Boolean(obj.emailAccountFlowsAvailable && require('../config/env').emailMfaEnrollmentEnabled);
   obj.emailNotificationsConfirmed = Boolean(obj.emailConfirmedAt);
+  obj.isMainAdmin = isMainAdmin(obj);
   delete obj.emailConfirmedAt;
   delete obj.emailMfaEnabledAt;
   delete obj.emailCodes;

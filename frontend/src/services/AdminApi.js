@@ -13,6 +13,11 @@ class AdminApi extends BaseApiClient {
     return this.patch(`/admin/users/${id}/status`, payload);
   }
 
+  /** Main admin only: resolves to { user, code, expiresAt }, the code being a one-time setup code. */
+  createAdmin(payload) {
+    return this.post('/admin/admins', payload);
+  }
+
   /** One-time password reset code (shown once): resolves to { code, expiresAt }. */
   issueResetCode(id) {
     return this.post(`/admin/users/${id}/reset-code`);

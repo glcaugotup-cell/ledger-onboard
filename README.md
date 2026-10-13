@@ -59,6 +59,7 @@ npm install
 | `EMAIL_VERIFICATION_REQUIRED` | `false` (default): no sign-up code is sent, and new accounts can sign in as soon as they are created; `true`: a code is emailed and sign-in waits until it is entered, so never use `true` together with `EMAIL_TRANSPORT=none`. Any other value stops the server at startup |
 | `EMAIL_ACCOUNT_FLOWS_ENABLED` | `true`: password-reset codes, email two-factor codes, inbox confirmation and caretaker invitations are emailed; `false` (default): those flows use only authenticator, backup and administrator codes |
 | `EMAIL_MFA_ENROLLMENT_ENABLED` | `true` (default): users may turn on email two-factor (also needs `EMAIL_ACCOUNT_FLOWS_ENABLED=true`); `false`: new enrollments are closed, existing ones keep working |
+| `MAIN_ADMIN_EMAIL` | The main admin account (default `ledgeronboard@gmail.com`; it must have the admin role). Only the main admin can add admins and suspend, deactivate, reactivate or issue reset codes for other admins; no one can change the main admin through the admin pages |
 | `EMAIL_TIMEOUT_MS` | How long a single email send may take before it fails with an error (default 10000), so a blocked mail server can't hang registration |
 | `ACCOUNT_ARCHIVE_WARNING_DAYS`, `ACCOUNT_ARCHIVE_DAYS`, `ACCOUNT_LIFECYCLE_CRON` | Inactivity warning/archive thresholds and the daily job schedule |
 | `MAX_UPLOAD_MB`, `MAX_VIDEO_UPLOAD_MB` | Upload size limits (photos/documents, video) |

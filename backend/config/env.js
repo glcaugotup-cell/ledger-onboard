@@ -114,6 +114,8 @@ const env = {
     if (!['true', 'false'].includes(value)) throw new Error('EMAIL_MFA_ENROLLMENT_ENABLED must be true or false');
     return value === 'true';
   })(),
+  // The one admin account that manages the other admins (only while its role is admin).
+  mainAdminEmail: (process.env.MAIN_ADMIN_EMAIL || 'ledgeronboard@gmail.com').trim().toLowerCase(),
   // Buffer (32 bytes) or null when unset outside production. Never logged.
   mfaEncryptionKey,
 

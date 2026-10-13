@@ -139,6 +139,9 @@ const caretakerNameChain = (field, maxLength) =>
 const createCaretakerValidators = [caretakerNameChain('firstName', 15), caretakerNameChain('lastName', 20), emailChain, phoneChain, buildServiceBarangayChain()];
 
 // Landlords may update a caretaker's contact number and service area; the name and email are their identity and stay fixed.
+// Main admin adding another admin: the same name, email and phone rules as a caretaker invite.
+const createAdminValidators = [caretakerNameChain('firstName', 15), caretakerNameChain('lastName', 20), emailChain, phoneChain];
+
 const updateCaretakerValidators = [
   body(['firstName', 'lastName', 'fullName', 'email']).not().exists().withMessage("A caretaker's name and email cannot be changed"),
   buildPhoneChain().optional(),
@@ -182,6 +185,7 @@ module.exports = {
   resetPasswordValidators,
   changePasswordValidators,
   createCaretakerValidators,
+  createAdminValidators,
   updateCaretakerValidators,
   activateCaretakerValidators,
   accountRecoveryValidators,

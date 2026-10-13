@@ -9,6 +9,7 @@ const { objectIdParam } = require('../validators/commonValidators');
 const { listUsersValidators, setUserStatusValidators, deactivateInactiveValidators } = require('../validators/adminValidators');
 const { moderatePropertyValidators } = require('../validators/propertyValidators');
 const { reviewLandlordVerificationValidators } = require('../validators/landlordVerificationValidators');
+const { createAdminValidators } = require('../validators/authValidators');
 const { ROLES } = require('../utils/constants');
 
 const router = express.Router();
@@ -16,6 +17,8 @@ router.use(authenticate, requireRole(ROLES.ADMIN));
 
 router.get('/users', listUsersValidators, validate, AdminController.listUsers);
 router.get('/logs', AdminController.listAuditLogs);
+// Main admin only (checked in AdminService): adds another admin and returns a one-time setup code.
+router.post('/admins', createAdminValidators, validate, AdminController.createAdmin);
 router.patch('/users/:id/status', objectIdParam('id'), setUserStatusValidators, validate, AdminController.setUserStatus);
 // One-time password reset code (8 characters, 30 minutes), shown once to the admin to hand over in person.
 router.post('/users/:id/reset-code', objectIdParam('id'), validate, AdminController.issuePasswordResetCode);

@@ -9,7 +9,7 @@ import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.j
 const { useAuthMock, useNotificationsMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), useNotificationsMock: vi.fn() }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
-vi.mock('../../services/AdminApi.js', () => ({ default: { listUsers: vi.fn(), setUserStatus: vi.fn(), deactivateInactive: vi.fn(), issueResetCode: vi.fn() } }));
+vi.mock('../../services/AdminApi.js', () => ({ default: { listUsers: vi.fn(), setUserStatus: vi.fn(), deactivateInactive: vi.fn(), issueResetCode: vi.fn(), createAdmin: vi.fn() } }));
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ago = (ms) => new Date(Date.now() - ms).toISOString();
@@ -216,5 +216,49 @@ describe('UsersPage reset codes', () => {
     expect(await screen.findByText('ABCD-EFGH')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^done$/i }));
     expect(screen.queryByText('ABCD-EFGH')).not.toBeInTheDocument();
+  });
+
+  describe('main admin', () => {
+    const admins = {
+      users: [
+        { _id: 'm1', fullName: 'Ledger Admin', role: 'admin', email: 'ledgeronboard@gmail.com', accountStatus: 'active', isMainAdmin: true, lastActivityAt: ago(60 * 1000) },
+        { _id: 'a2', fullName: 'Second Admin', role: 'admin', email: 'second@gmail.com', accountStatus: 'active', isMainAdmin: false, lastActivityAt: ago(60 * 1000) },
+      ],
+    };
+
+    it('a regular admin sees the badge but no Add admin button and no actions on admin accounts', async () => {
+      AdminApi.listUsers.mockResolvedValue(admins);
+      renderPage();
+      expect(await screen.findByText('Main admin')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /add admin/i })).not.toBeInTheDocument();
+      expect(within(cardOf('Second Admin')).queryByRole('button', { name: /suspend/i })).not.toBeInTheDocument();
+    });
+
+    it('the main admin can manage other admins but not the main admin account', async () => {
+      useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 'm1', fullName: 'Main Admin', role: 'admin', isMainAdmin: true } }));
+      AdminApi.listUsers.mockResolvedValue(admins);
+      renderPage();
+      await screen.findByText('Second Admin');
+      expect(within(cardOf('Second Admin')).getByRole('button', { name: /suspend/i })).toBeInTheDocument();
+      expect(within(cardOf('Second Admin')).getByRole('button', { name: /reset code/i })).toBeInTheDocument();
+      expect(within(cardOf('Ledger Admin')).queryByRole('button', { name: /suspend|reset code|deactivate/i })).not.toBeInTheDocument();
+    });
+
+    it('adds an admin and shows the one-time setup code', async () => {
+      const user = userEvent.setup();
+      useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 'm1', fullName: 'Main Admin', role: 'admin', isMainAdmin: true } }));
+      AdminApi.listUsers.mockResolvedValue(admins);
+      AdminApi.createAdmin.mockResolvedValue({ user: { _id: 'a3', fullName: 'Bea Santos' }, code: 'WXYZ-2345', expiresAt: new Date(Date.now() + 1800000).toISOString() });
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: /add admin/i }));
+      await user.type(screen.getByLabelText(/first name/i), 'Bea');
+      await user.type(screen.getByLabelText(/last name/i), 'Santos');
+      await user.type(screen.getByLabelText(/^email/i), 'bea@gmail.com');
+      await user.type(screen.getByLabelText(/phone/i), '09175550101');
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^add admin$/i }));
+      expect(AdminApi.createAdmin).toHaveBeenCalledWith({ firstName: 'Bea', lastName: 'Santos', email: 'bea@gmail.com', phone: '09175550101' });
+      expect(await screen.findByTestId('setup-code')).toHaveTextContent('WXYZ-2345');
+      expect(AdminApi.listUsers).toHaveBeenCalledTimes(2);
+    });
   });
 });
