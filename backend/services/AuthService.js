@@ -104,7 +104,7 @@ class AuthService {
     if (user.emailVerified) throw ApiError.conflict('This account is already verified', 'ALREADY_VERIFIED');
 
     await this._consumeOtp(user, code, 'email_verification');
-    await UserRepository.updateById(user._id, { emailVerified: true, emailConfirmedAt: new Date() });
+    await UserRepository.updateById(user._id, { emailVerified: true, emailConfirmedAt: new Date(), 'notificationPreferences.email': true });
 
     return { message: 'Email verified. You can now log in.' };
   }

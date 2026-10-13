@@ -215,7 +215,10 @@ class PaymentService {
     // The review is already saved, logged and notified in-app; email trouble must not turn it into an error.
     try {
       const tenant = await UserRepository.findById(payment.tenantId);
-      if (tenant && !isApproved) await EmailNotificationService.deliver(tenant, 'sendPaymentRejectedEmail', [tenant.fullName, updated.rejectionReason]);
+      if (tenant) {
+        if (isApproved) await EmailNotificationService.deliver(tenant, 'sendPaymentVerifiedEmail', [tenant.fullName, verifiedAmount]);
+        else await EmailNotificationService.deliver(tenant, 'sendPaymentRejectedEmail', [tenant.fullName, updated.rejectionReason]);
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[PaymentService] payment result email failed:', err.message);

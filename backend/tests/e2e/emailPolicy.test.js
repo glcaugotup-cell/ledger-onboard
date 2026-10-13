@@ -14,7 +14,7 @@ beforeAll(async () => {
   ({ hashPassword } = require('../../utils/password')); ({ signAccessToken } = require('../../utils/jwt'));
 }, 60000);
 beforeEach(() => {
-  env.emailAccountFlowsEnabled = true; env.emailMfaEnrollmentEnabled = false;
+  env.emailAccountFlowsEnabled = true; env.emailMfaEnrollmentEnabled = true;
   env.emailTransport = 'console'; env.emailVerificationRequired = false;
   env.emailAppUrl = 'https://ledger-onboard.vercel.app';
   send = jest.spyOn(Email, 'send').mockResolvedValue({ accepted: ['mock-only'] });
@@ -83,7 +83,8 @@ test('provider failure and unavailable transport never enable notification email
   env.emailTransport = 'none';
   expect((await requestCode(u)).status).toBe(503);
 });
-test('new email two-factor enrollment is closed without weakening existing sign-in', async () => {
+test('closing email two-factor enrollment does not weaken existing sign-in', async () => {
+  env.emailMfaEnrollmentEnabled = false;
   const u = await user();
   expect((await post('/mfa/email/setup', u, { password })).status).toBe(410);
   expect((await post('/mfa/email/enable', u, { code: '123456' })).status).toBe(410);
@@ -102,12 +103,14 @@ test('turning notifications off preserves in-app preference and mailbox proof', 
   expect(result.body.data.user.notificationPreferences).toEqual({ email: false, inApp: true });
   expect(result.body.data.user.emailNotificationsConfirmed).toBe(true);
 });
-test('inactivity warning reaches confirmed opted-in inboxes; archived notices are removed', async () => {
+test('inactivity warning and archived notice reach confirmed inboxes only', async () => {
   const service = require('../../services/AccountLifecycleService');
   const legacy = await user(); await service._warnUser(legacy, new Date()); expect(send).not.toHaveBeenCalled();
   const confirmed = await user({ emailConfirmedAt: new Date(), notificationPreferences: { email: true } });
   await service._warnUser(confirmed, new Date()); expect(send).toHaveBeenCalledTimes(1);
-  send.mockClear(); await service._archiveUser(confirmed); expect(send).not.toHaveBeenCalled();
+  send.mockClear(); await service._archiveUser(legacy); expect(send).not.toHaveBeenCalled();
+  await service._archiveUser(confirmed); expect(send).toHaveBeenCalledTimes(1);
+  expect(send.mock.calls[0][0].subject).toContain('archived');
   expect((await Users.findById(confirmed._id)).accountStatus).toBe('archived');
 });
 test('password changes notify confirmed inboxes even when routine notifications are off', async () => {
@@ -124,16 +127,16 @@ test('a failed security notice does not undo a password change', async () => {
   expect(result.status).toBe(200); expect(send).toHaveBeenCalledTimes(1);
   expect((await request(app).post('/api/auth/login').send({ email: u.email, password: 'Other1!Password' })).status).toBe(200);
 });
-test('confirmed notification policy retains only the three-day bill email and both in-app stages', async () => {
+test('both bill reminder stages email a confirmed inbox once each', async () => {
   const Billing = require('../../models/BillingSOA'); const Notification = require('../../models/Notification');
   const u = await user({ emailConfirmedAt: new Date(), notificationPreferences: { email: true } });
   const due = new Date('2026-11-15T04:00:00Z');
   const soa = await Billing.create({ tenantId: u._id, roomId: new (require('mongoose').Types.ObjectId)(),
     billingPeriod: new Date('2026-11-01'), baseRent: 2000, totalAmountDue: 2000, remainingBalance: 2000, dueDate: due });
   const service = require('../../services/BillingReminderService');
-  await service.runForTenant(u._id, new Date('2026-11-08T04:00:00Z')); expect(send).not.toHaveBeenCalled();
-  await service.runForTenant(u._id, new Date('2026-11-12T04:00:00Z')); expect(send).toHaveBeenCalledTimes(1);
-  await service.runForTenant(u._id, new Date('2026-11-12T04:00:00Z')); expect(send).toHaveBeenCalledTimes(1);
+  await service.runForTenant(u._id, new Date('2026-11-08T04:00:00Z')); expect(send).toHaveBeenCalledTimes(1);
+  await service.runForTenant(u._id, new Date('2026-11-12T04:00:00Z')); expect(send).toHaveBeenCalledTimes(2);
+  await service.runForTenant(u._id, new Date('2026-11-12T04:00:00Z')); expect(send).toHaveBeenCalledTimes(2);
   expect(await Notification.countDocuments({ userId: u._id, relatedId: soa._id })).toBe(2);
 });
 test('a confirmed reservation approval reaches the Brevo API; legacy unconfirmed inboxes are skipped', async () => {

@@ -170,7 +170,7 @@ const userSchema = new Schema(
     // Landlord-only private GridFS URL; exposed to tenants only through an owned SOA route.
     paymentQrUrl: { type: String, default: null },
     notificationPreferences: {
-      email: { type: Boolean, default: false },
+      email: { type: Boolean, default: true },
       inApp: { type: Boolean, default: true },
     },
     // Privacy Policy consent captured at registration; `at` records when it was given.

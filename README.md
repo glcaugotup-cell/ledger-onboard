@@ -57,6 +57,8 @@ npm install
 | `BREVO_API_KEY` | Brevo API key, used only when `EMAIL_TRANSPORT=brevo` |
 | `MFA_ENCRYPTION_KEY` | 32 random bytes, base64 (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`). Encrypts two-factor secrets and keys the backup-code hashes; required in production, where the server refuses to start without it. Losing or changing it breaks every authenticator setup and makes every backup code useless, so everyone must set up two-factor again |
 | `EMAIL_VERIFICATION_REQUIRED` | `false` (default): no sign-up code is sent, and new accounts can sign in as soon as they are created; `true`: a code is emailed and sign-in waits until it is entered, so never use `true` together with `EMAIL_TRANSPORT=none`. Any other value stops the server at startup |
+| `EMAIL_ACCOUNT_FLOWS_ENABLED` | `true`: password-reset codes, email two-factor codes, inbox confirmation and caretaker invitations are emailed; `false` (default): those flows use only authenticator, backup and administrator codes |
+| `EMAIL_MFA_ENROLLMENT_ENABLED` | `true` (default): users may turn on email two-factor (also needs `EMAIL_ACCOUNT_FLOWS_ENABLED=true`); `false`: new enrollments are closed, existing ones keep working |
 | `EMAIL_TIMEOUT_MS` | How long a single email send may take before it fails with an error (default 10000), so a blocked mail server can't hang registration |
 | `ACCOUNT_ARCHIVE_WARNING_DAYS`, `ACCOUNT_ARCHIVE_DAYS`, `ACCOUNT_LIFECYCLE_CRON` | Inactivity warning/archive thresholds and the daily job schedule |
 | `MAX_UPLOAD_MB`, `MAX_VIDEO_UPLOAD_MB` | Upload size limits (photos/documents, video) |
@@ -67,7 +69,7 @@ Never commit `backend/.env`; it is excluded by `.gitignore`.
 
 ### Email (optional)
 
-The deployed app runs with `EMAIL_TRANSPORT=none`. The remaining emails (payment, reservation, verification and bill-reminder updates, and the inactivity warning) are optional extras: every flow works without them, and all but the inactivity warning and archive notice also send an in-app notification. If you turn email on, set `EMAIL_APP_URL` to the public frontend URL so email buttons point at the deployed app.
+Every flow works without email. With a real transport (`brevo` or `smtp`), every in-app notification is also emailed, along with the inactivity warning and archive notice. Reservation approvals, payment results, business verification results and bill reminders use their own detailed email instead of the generic copy. Email only goes to a confirmed inbox: one where the user has entered an emailed code (sign-up verification, email two-factor, an emailed reset code, or the one-time confirmation in Profile → Email notifications). It is on by default once confirmed, and users can turn it off in Profile. Password-change and two-factor-off notices go to confirmed inboxes even when routine email is off. Set `EMAIL_APP_URL` to the public frontend URL so email buttons point at the deployed app.
 
 Edit wording in `backend/services/EmailService.js` and the shared colors, spacing, and layout in `backend/utils/emailTemplate.js`. Emails include inline HTML styles and a plain-text alternative. Names, reasons, codes, and URLs are escaped before being inserted into HTML.
 

@@ -229,6 +229,16 @@ class EmailService {
     });
   }
 
+  /** Email copy of an in-app notification. */
+  sendNotificationEmail(to, fullName, { title, message, link }) {
+    return this._sendMessage(to, `Ledger OnBoard — ${title}`, {
+      category: 'Notification', title, greeting: fullName ? `Hi ${fullName},` : 'Hello,',
+      paragraphs: [message],
+      action: { label: 'Open in Ledger OnBoard', url: this._appLink(link || '/') },
+      note: 'You can turn off email notifications in Profile. In-app notifications stay on.',
+    });
+  }
+
   sendArchiveWarningEmail(to, fullName, daysRemaining) {
     return this._sendMessage(to, 'Ledger OnBoard — Your account will be archived soon', {
       category: 'Account activity', title: 'Keep your account active', greeting: `Hi ${fullName},`,

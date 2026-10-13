@@ -312,7 +312,7 @@ describe('Objective 5 — bill due-date reminders', () => {
     const BillingReminderService = require('../../services/BillingReminderService');
     const { user: landlord } = await makeUser('landlord', 'remind.landlord@gmail.com');
     const { room } = await makeProperty(landlord._id, 'Mangin');
-    // CHANGED RULE: both in-app stages remain; email is sent only at the three-day stage.
+    // Both stages go out in-app and by email to a confirmed inbox.
     const { user: tenant, token } = await makeUser('tenant', 'remind.tenant@gmail.com', {
       emailConfirmedAt: new Date(), notificationPreferences: { email: true },
     });
@@ -334,7 +334,8 @@ describe('Objective 5 — bill due-date reminders', () => {
     expect(list).toHaveLength(1);
     expect(list[0].type).toBe('BILL_DUE_IN_7_DAYS');
     expect(list[0].message).toMatch(/September 2026 bill \(ref\. [0-9A-F]{6}\) of ₱3,200\.00 is due on September 30, 2026, 7 days from now/);
-    expect(emailSpy).not.toHaveBeenCalled();
+    expect(emailSpy).toHaveBeenCalledTimes(1);
+    expect(emailSpy.mock.calls[0][0].subject).toContain('due in 7 days');
 
     // Running again the same day (or twice at once) does not duplicate it.
     await Promise.all([BillingReminderService.runSweep(new Date('2026-09-23T05:00:00Z')), BillingReminderService.runForTenant(tenant._id, new Date('2026-09-23T05:00:00Z'))]);
@@ -345,8 +346,8 @@ describe('Objective 5 — bill due-date reminders', () => {
     await BillingReminderService.runSweep(new Date('2026-09-28T02:00:00Z'));
     list = await reminders();
     expect(list.map((n) => n.type).sort()).toEqual(['BILL_DUE_IN_3_DAYS', 'BILL_DUE_IN_7_DAYS']);
-    expect(emailSpy).toHaveBeenCalledTimes(1);
-    expect(emailSpy.mock.calls[0][0].subject).toContain('due in 3 days');
+    expect(emailSpy).toHaveBeenCalledTimes(2);
+    expect(emailSpy.mock.calls[1][0].subject).toContain('due in 3 days');
     emailSpy.mockRestore();
 
     // Before the due date the bill is still UNPAID, not OVERDUE.

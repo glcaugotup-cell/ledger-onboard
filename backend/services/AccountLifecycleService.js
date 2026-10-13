@@ -107,11 +107,17 @@ class AccountLifecycleService {
       refreshTokenHash: null,
       $inc: { tokenVersion: 1 }, // ends every session; recovery starts fresh
     });
+    let delivery = { skipped: true };
+    try {
+      delivery = await EmailNotificationService.deliver(user, 'sendArchivedNoticeEmail', [user.fullName]);
+    } catch {
+      // The account is archived either way; recovery does not depend on this notice.
+    }
     await AuditLogRepository.record({
       action: 'ACCOUNT_ARCHIVED',
       targetType: 'User',
       targetId: user._id,
-      metadata: { reason: 'INACTIVITY', emailStatus: 'skipped' },
+      metadata: { reason: 'INACTIVITY', emailStatus: emailStatusOf(delivery) },
     });
   }
 

@@ -1,11 +1,11 @@
 const EmailService = require('./EmailService');
 const env = require('../config/env');
 
-/** Routine mail needs explicit inbox proof and consent. Security notices ignore routine opt-out. */
+/** Routine mail needs inbox proof and is on unless the user opts out. Security notices ignore routine opt-out. */
 class EmailNotificationService {
   async deliver(user, method, args = [], { security = false } = {}) {
     const reason = !user?.emailConfirmedAt ? 'inbox_unconfirmed'
-      : !security && user.notificationPreferences?.email !== true ? 'email_disabled' : null;
+      : !security && user.notificationPreferences?.email === false ? 'email_disabled' : null;
     if (reason) {
       if (env.isProduction) console.info('[EmailNotificationService]', { event: 'skipped', reason });
       return { skipped: true };

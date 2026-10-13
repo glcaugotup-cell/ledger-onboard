@@ -19,8 +19,7 @@ const periodFormat = new Intl.DateTimeFormat('en-PH', { timeZone: 'UTC', month: 
 
 /**
  * Advance reminders for unpaid bills: one 7 days before the due date and one 3
- * days before it (Philippine calendar days). Only the three-day stage also emails
- * confirmed opted-in inboxes. Each in-app stage is sent at most once per
+ * days before it (Philippine calendar days), in-app and by email. Each stage is sent at most once per
  * bill, recorded on the bill itself; if a bill is first seen 3 or fewer days out,
  * only the 3-day reminder goes out. Bills past their due date are left to the
  * existing overdue handling in BillingService.
@@ -76,14 +75,12 @@ class BillingReminderService {
       link: `/tenant/apartment?tab=billing&bill=${soa._id}`,
     });
 
-    if (stage.key === 'threeDay') {
-      try {
-        await EmailNotificationService.deliver(tenant, 'sendBillReminderEmail', [tenant.fullName, { periodLabel, amount, dueDateLabel, daysRemaining, reference }]);
-      } catch (err) {
-        // The in-app reminder already went out; a failed email is logged, not retried.
-        // eslint-disable-next-line no-console
-        console.error('[BillingReminderService] reminder email failed:', err.message);
-      }
+    try {
+      await EmailNotificationService.deliver(tenant, 'sendBillReminderEmail', [tenant.fullName, { periodLabel, amount, dueDateLabel, daysRemaining, reference }]);
+    } catch (err) {
+      // The in-app reminder already went out; a failed email is logged, not retried.
+      // eslint-disable-next-line no-console
+      console.error('[BillingReminderService] reminder email failed:', err.message);
     }
     return true;
   }

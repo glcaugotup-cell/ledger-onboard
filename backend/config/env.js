@@ -106,9 +106,9 @@ const env = {
     if (!['true', 'false'].includes(value)) throw new Error('EMAIL_ACCOUNT_FLOWS_ENABLED must be true or false');
     return value === 'true';
   })(),
-  // Closed by default; existing email enrollments still verify login/settings codes.
+  // Open by default; 'false' closes new email enrollments while existing ones keep working.
   emailMfaEnrollmentEnabled: (() => {
-    const value = (process.env.EMAIL_MFA_ENROLLMENT_ENABLED || 'false').trim().toLowerCase();
+    const value = (process.env.EMAIL_MFA_ENROLLMENT_ENABLED || 'true').trim().toLowerCase();
     if (!['true', 'false'].includes(value)) throw new Error('EMAIL_MFA_ENROLLMENT_ENABLED must be true or false');
     return value === 'true';
   })(),

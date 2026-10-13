@@ -90,8 +90,9 @@ class EmailOtpService {
       filter[`${prefix}.failedAttempts`] = { $lt: MAX_ATTEMPTS };
       filter.$and.push({ $or: [{ [`${prefix}.lockedUntil`]: null }, { [`${prefix}.lockedUntil`]: { $lte: now } }] });
     }
+    // Entering an emailed code proves the inbox, which unlocks email notifications.
     const claimed = await Users.model.findOneAndUpdate(filter, { $set: {
-      ...successUpdates,
+      emailConfirmedAt: now, ...successUpdates,
       [`${prefix}.codeHash`]: null, [`${prefix}.expiresAt`]: null, [`${prefix}.issuedAt`]: null,
       [`${prefix}.failedAttempts`]: 0, [`${prefix}.lockedUntil`]: null,
     } }).exec();

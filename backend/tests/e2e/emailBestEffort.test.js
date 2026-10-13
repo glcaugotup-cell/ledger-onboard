@@ -101,8 +101,7 @@ function makeBill(tenant, room, { dueInDays = 10 } = {}) {
 const failingEmail = () => jest.spyOn(EmailService, 'send').mockRejectedValue(new Error('Brevo rejected the email (HTTP 401): account suspended'));
 
 describe('Payment results: email is best-effort', () => {
-  // CHANGED RULE: successful-payment mail is removed; all payment side-effect assertions remain.
-  test('a completed payment sends no email; the audit entry and in-app notification exist', async () => {
+  test('a failed payment-verified email still completes the payment, audit entry and in-app notification', async () => {
     const landlord = await makeUser('landlord', 'Paula');
     const tenant = await makeUser('tenant', 'Pedro');
     const { room } = await makeRoom(landlord, 'Paula');
@@ -116,13 +115,14 @@ describe('Payment results: email is best-effort', () => {
     const res = await request(app).patch(`/api/payments/${payment._id}/verify`).set('Authorization', `Bearer ${token}`).send({ decision: 'COMPLETE' });
 
     expect(res.status).toBe(200);
-    expect(sendSpy).not.toHaveBeenCalled();
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sendSpy.mock.calls[0][0].subject).toContain('Payment verified');
     expect((await PaymentTransaction.findById(payment._id)).verificationStatus).toBe('VERIFIED');
     expect((await BillingSOA.findById(soa._id)).paymentStatus).toBe('PAID');
     const audit = await AuditLogRepository.findRecent({ action: 'PAYMENT_VERIFIED' });
     expect(audit.some((l) => String(l.targetId) === String(payment._id))).toBe(true);
     expect(await Notification.exists({ userId: tenant._id, type: 'PAYMENT_VERIFIED' })).toBeTruthy();
-    expect(errorSpy).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith('[PaymentService] payment result email failed:', expect.any(String));
   }, 30000);
 
   test('a failing email does not fail a rejected payment either', async () => {

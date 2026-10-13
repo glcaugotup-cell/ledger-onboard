@@ -16,7 +16,7 @@ export default function EmailNotificationSettings({ user, onChanged }) {
   const [message, setMessage] = useState('');
   const [cooldown, setCooldown] = useState(0);
   const confirmed = Boolean(user?.emailNotificationsConfirmed);
-  const enabled = confirmed && user?.notificationPreferences?.email === true;
+  const enabled = confirmed && user?.notificationPreferences?.email !== false;
   useEffect(() => {
     if (!cooldown) return undefined;
     const timer = setTimeout(() => setCooldown(value => Math.max(0, value - 1)), 1000);
@@ -52,7 +52,7 @@ export default function EmailNotificationSettings({ user, onChanged }) {
   });
   return (
     <Card title="Email notifications">
-      <p className="mb-3 text-sm text-gray-500">Get reservation approvals, payment rejections, business verification updates, and inactivity warnings by email. Bill emails are limited to one reminder three days before due. In-app notifications stay available.</p>
+      <p className="mb-3 text-sm text-gray-500">Get a copy of every notification by email, including reservations, payments, bill reminders, maintenance, and account updates. Confirm your inbox once to start. In-app notifications stay available.</p>
       <ErrorBanner message={error} /><SuccessBanner message={message} />
       {step === 'idle' && <div className="space-y-3">
         <p className="text-sm text-gray-600">{enabled ? 'Email notifications are on.' : 'Email notifications are off.'}</p>
