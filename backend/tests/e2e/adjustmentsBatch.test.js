@@ -505,6 +505,35 @@ describe('X1 notifications and M9 property archive', () => {
     expect(listed.body.data.notifications.every((n) => n.link)).toBe(true);
   });
 
+  test('approval also tells the assigned caretaker who is coming and when; the tenant card gets the address, pin and caretaker contact', async () => {
+    const setup = await makeSetup();
+    const tenant = await makeUser('tenant');
+    const moveInDate = dateOnly(5);
+    const id = await reserve(tenant.token, setup.room._id, moveInDate);
+    expect(await NotificationRepository.findOne({ userId: setup.caretaker.user._id, type: 'RESERVATION_APPROVED' })).toBeNull();
+
+    await setStatus(setup.landlord.token, id, { status: 'approved' });
+    const forCaretaker = await NotificationRepository.findOne({ userId: setup.caretaker.user._id, type: 'RESERVATION_APPROVED' });
+    expect(forCaretaker).toMatchObject({ title: 'New tenant reserved', link: '/caretaker/rooms', relatedType: 'Reservation' });
+    expect(forCaretaker.message).toMatch(new RegExp(`^${tenant.user.fullName} reserved ${setup.property.propertyName}, Room ${setup.room.roomNumber}\\. Move-in on `));
+    expect(String(forCaretaker.relatedId)).toBe(id);
+
+    const card = (await request(app).get('/api/reservations').set(auth(tenant.token))).body.data.reservations.find((r) => r._id === id);
+    expect(card.propertyId).toMatchObject({ address: { street: '1 Main St', barangay: 'Lucao' }, locationCoordinates: { lat: 16.04, lng: 120.33 } });
+    expect(card.caretakerContact).toEqual({ fullName: setup.caretaker.user.fullName, phone: setup.caretaker.user.phone });
+    expect(card.landlordContact).toMatchObject({ email: setup.landlord.user.email, phone: setup.landlord.user.phone });
+  });
+
+  test('a property without a caretaker: approval notifies only the tenant', async () => {
+    const landlord = await makeUser('landlord');
+    const { room } = await makeProperty(landlord.user._id);
+    const tenant = await makeUser('tenant');
+    const id = await reserve(tenant.token, room._id);
+    await setStatus(landlord.token, id, { status: 'approved' });
+    const sent = await NotificationRepository.model.find({ relatedId: id, type: 'RESERVATION_APPROVED' }).lean();
+    expect(sent.map((n) => String(n.userId))).toEqual([String(tenant.user._id)]);
+  });
+
   test('a hidden property appears in the landlord archive and can be restored', async () => {
     const setup = await makeSetup();
     expect((await request(app).delete(`/api/properties/${setup.property._id}`).set(auth(setup.landlord.token))).status).toBe(200);

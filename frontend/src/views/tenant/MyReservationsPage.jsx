@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CalendarDaysIcon, EnvelopeIcon, MapPinIcon, PhoneIcon, UserIcon } from '@heroicons/react/24/outline';
+import { ArrowTopRightOnSquareIcon, CalendarDaysIcon, EnvelopeIcon, MapIcon, MapPinIcon, PhoneIcon, UserIcon } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import PageHeader from '../../components/layout/PageHeader.jsx';
 import PropertyImage from '../../components/PropertyImage.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { ReviewPrompt } from '../../components/ReviewForm.jsx';
+import PropertyMap from '../../components/map/PropertyMap.jsx';
 import ReservationApi from '../../services/ReservationApi.js';
 import Button from '../../components/ui/Button.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
@@ -36,21 +37,67 @@ function ContactLine({ icon: Icon, children, href }) {
   );
 }
 
-/** R8: the landlord's name on every card; email and phone only once the reservation is approved. */
+function ContactPerson({ title, person }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</p>
+      <div className="mt-1 flex flex-col gap-1">
+        <ContactLine icon={UserIcon}>{person.fullName}</ContactLine>
+        {person.phone && <ContactLine icon={PhoneIcon} href={`tel:${person.phone}`}>{person.phone}</ContactLine>}
+        {person.email && <ContactLine icon={EnvelopeIcon} href={`mailto:${person.email}`}>{person.email}</ContactLine>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * R8: the landlord's name on every card; their phone and email, and the assigned caretaker,
+ * only once the reservation is approved (the server leaves them out before that).
+ */
 function Contacts({ reservation }) {
   const landlord = reservation.landlordContact;
   const caretaker = reservation.caretakerContact;
   if (!landlord) return null;
   return (
-    <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700">
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Landlord</p>
-      <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:gap-x-4">
-        <ContactLine icon={UserIcon}>{landlord.fullName}</ContactLine>
-        {landlord.phone && <ContactLine icon={PhoneIcon} href={`tel:${landlord.phone}`}>{landlord.phone}</ContactLine>}
-        {landlord.email && <ContactLine icon={EnvelopeIcon} href={`mailto:${landlord.email}`}>{landlord.email}</ContactLine>}
-      </div>
-      {caretaker && (
-        <p className="mt-1.5 text-xs text-gray-500">Caretaker: {caretaker.fullName}{caretaker.phone ? ` · ${caretaker.phone}` : ''}</p>
+    <div className={`grid gap-3 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700 ${caretaker ? 'sm:grid-cols-2' : ''}`}>
+      <ContactPerson title="Landlord" person={landlord} />
+      {caretaker && <ContactPerson title="Caretaker" person={caretaker} />}
+    </div>
+  );
+}
+
+const hasCoords = (property) => Boolean(property.locationCoordinates?.lat && property.locationCoordinates?.lng);
+const fullAddress = ({ address = {} }) => [address.street, address.barangay, address.city, address.province].filter(Boolean).join(', ');
+// Opens the phone's map app (or Google Maps in the browser) with directions to the saved pin; no account or key needed.
+const directionsUrl = ({ locationCoordinates: { lat, lng } }) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+
+/** Reserved and current stays: the full address, the pin on a map, and directions. */
+function Location({ property, onShowMap }) {
+  const address = fullAddress(property);
+  if (!address && !hasCoords(property)) return null;
+  return (
+    <div className="flex flex-col gap-2 text-sm text-gray-700 sm:flex-row sm:items-center sm:justify-between">
+      {address && (
+        <p className="inline-flex min-w-0 items-start gap-1.5">
+          <MapPinIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
+          <span>{address}</span>
+        </p>
+      )}
+      {hasCoords(property) && (
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button type="button" variant="secondary" className="gap-1.5 text-xs" onClick={onShowMap}>
+            <MapIcon className="h-4 w-4" aria-hidden="true" /> Show on map
+          </Button>
+          <a
+            href={directionsUrl(property)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-brand-700 hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
+            Get directions <ArrowTopRightOnSquareIcon className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">(opens in a new tab)</span>
+          </a>
+        </div>
       )}
     </div>
   );
@@ -67,6 +114,7 @@ export default function MyReservationsPage() {
   const [cancelling, setCancelling] = useState(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  const [mapFor, setMapFor] = useState(null); // property shown in the map dialog
 
   const load = () =>
     ReservationApi.list()
@@ -123,7 +171,8 @@ export default function MyReservationsPage() {
               <CalendarDaysIcon className="h-4 w-4" aria-hidden="true" />
               Move-in {formatDate(r.moveInDate)}
             </span>
-            {property.address?.barangay && (
+            {/* Reserved and current stays show the full address below instead. */}
+            {property.address?.barangay && !HELD_STATUSES.includes(r.status) && (
               <span className="inline-flex items-center gap-1">
                 <MapPinIcon className="h-4 w-4" aria-hidden="true" />
                 {property.address.barangay}
@@ -136,6 +185,10 @@ export default function MyReservationsPage() {
             note && <p className={`text-sm ${isPinned ? 'font-medium text-brand-800' : 'text-gray-500'}`}>{note}</p>
           )}
           {r.status === 'cancelled' && r.cancellationReason && <p className="text-xs text-gray-500">{r.cancellationReason}</p>}
+          {r.status === 'approved' && (
+            <p className="text-sm text-gray-600">Visit or move in {r.holdUntil ? `by ${formatDate(`${r.holdUntil}T00:00:00`)}` : 'on your move-in date'}. Contact your landlord{r.caretakerContact ? ' or caretaker' : ''} to arrange it.</p>
+          )}
+          {HELD_STATUSES.includes(r.status) && <Location property={property} onShowMap={() => setMapFor(property)} />}
           <Contacts reservation={r} />
           <div className="mt-auto flex flex-wrap items-center gap-3">
             {property._id && (
@@ -203,6 +256,21 @@ export default function MyReservationsPage() {
         onConfirm={confirmCancel}
         onCancel={() => setCancelling(null)}
       />
+      <ConfirmDialog
+        open={Boolean(mapFor)}
+        title={mapFor?.propertyName || ''}
+        message={mapFor ? fullAddress(mapFor) : ''}
+        confirmLabel="Get directions"
+        cancelLabel="Close map"
+        onConfirm={() => window.open(directionsUrl(mapFor), '_blank', 'noopener,noreferrer')}
+        onCancel={() => setMapFor(null)}
+      >
+        {mapFor && (
+          <div className="mt-3">
+            <PropertyMap properties={[mapFor]} center={[mapFor.locationCoordinates.lat, mapFor.locationCoordinates.lng]} height={320} />
+          </div>
+        )}
+      </ConfirmDialog>
       <ReviewPrompt focusReservationId={reviewId} />
     </DashboardLayout>
   );

@@ -365,6 +365,17 @@ class ReservationService {
           message: `Your reservation for ${place} is approved. You may move in on ${formatDateKey(inputDateKey(reservation.moveInDate))}.`,
           link: tenantLink,
         });
+        // The tenant's card shows the caretaker's phone, so the caretaker learns who may call and when they arrive.
+        if (reservation.caretakerAssignedId) {
+          const tenant = await UserRepository.findById(reservation.tenantId, { select: 'fullName' });
+          await notify({
+            userId: reservation.caretakerAssignedId,
+            type: 'RESERVATION_APPROVED',
+            title: 'New tenant reserved',
+            message: `${tenant?.fullName || 'A tenant'} reserved ${place}. Move-in on ${formatDateKey(inputDateKey(reservation.moveInDate))}.`,
+            link: links.caretakerRooms(),
+          });
+        }
         break;
       case RESERVATION_STATUS.REJECTED:
         await notify({ userId: reservation.tenantId, type: 'RESERVATION_REJECTED', title: 'Reservation rejected', message: `Your reservation for ${place} was rejected: ${reservation.rejectionReason}`, link: tenantLink });
