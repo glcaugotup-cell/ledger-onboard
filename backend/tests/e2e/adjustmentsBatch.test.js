@@ -575,6 +575,19 @@ describe('X1 notifications and M9 property archive', () => {
     expect(card.landlordContact).toMatchObject({ email: setup.landlord.user.email, phone: setup.landlord.user.phone });
   });
 
+  test("public listings and the property page show the landlord's name, never their email or phone", async () => {
+    const setup = await makeSetup();
+    const listed = (await request(app).get('/api/properties')).body.data.properties.find((p) => p._id === String(setup.property._id));
+    expect(listed.landlordName).toBe(setup.landlord.user.fullName);
+    const detail = (await request(app).get(`/api/properties/${setup.property._id}`)).body.data.property;
+    expect(detail.landlordName).toBe(setup.landlord.user.fullName);
+    for (const body of [listed, detail]) {
+      const json = JSON.stringify(body);
+      expect(json).not.toContain(setup.landlord.user.email);
+      expect(json).not.toContain(setup.landlord.user.phone);
+    }
+  });
+
   test('a property without a caretaker: approval notifies only the tenant', async () => {
     const landlord = await makeUser('landlord');
     const { room } = await makeProperty(landlord.user._id);

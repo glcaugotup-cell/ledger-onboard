@@ -58,13 +58,20 @@ class PropertyService {
 
     const landlordIds = [...new Set(list.map((p) => String(p.landlordId?._id || p.landlordId)).filter(Boolean))];
     if (landlordIds.length > 0) {
-      const landlords = await UserRepository.find({ _id: { $in: landlordIds } }, { select: '_id businessVerificationStatus' });
+      const landlords = await UserRepository.find({ _id: { $in: landlordIds } }, { select: '_id fullName businessVerificationStatus' });
       const verifiedSet = new Set(landlords.filter((l) => l.businessVerificationStatus === VERIFICATION_STATUS.VERIFIED).map((l) => String(l._id)));
+      // Only the landlord's name is shown on listings; their contact details stay on approved reservations.
+      const nameById = new Map(landlords.map((l) => [String(l._id), l.fullName]));
       for (const p of list) {
-        p.landlordVerified = verifiedSet.has(String(p.landlordId?._id || p.landlordId));
+        const id = String(p.landlordId?._id || p.landlordId);
+        p.landlordVerified = verifiedSet.has(id);
+        p.landlordName = nameById.get(id) || null;
       }
     } else {
-      for (const p of list) p.landlordVerified = false;
+      for (const p of list) {
+        p.landlordVerified = false;
+        p.landlordName = null;
+      }
     }
 
     return isArray ? list : list[0];

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { CheckBadgeIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { CheckBadgeIcon, MapPinIcon, UserIcon } from '@heroicons/react/24/outline';
 import { Badge } from './ui/Feedback.jsx';
 import PropertyImage from './PropertyImage.jsx';
 import { formatPeso, formatRatingSummary } from '../utils/format.js';
@@ -31,6 +31,13 @@ export default function PropertyCard({ property, linkPrefix = '/tenant/propertie
             <MapPinIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
             {property.address?.barangay}, {property.address?.city}
           </p>
+          {property.landlordName && (
+            <p className="mt-0.5 flex min-w-0 items-center gap-1 text-sm text-gray-500">
+              <UserIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="sr-only">Landlord: </span>
+              <span className="truncate">{property.landlordName}</span>
+            </p>
+          )}
           <p className={`mt-1 text-sm ${rating ? 'font-medium text-amber-600' : 'text-gray-400'}`}>{rating || 'No reviews yet'}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Badge tone="gray">{property.tenantGenderPolicy}</Badge>

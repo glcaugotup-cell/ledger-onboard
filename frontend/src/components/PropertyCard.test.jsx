@@ -33,6 +33,24 @@ describe('PropertyCard', () => {
     expect(screen.getByText('Bonuan, Dagupan')).toBeInTheDocument();
   });
 
+  it("shows the landlord's name under the location, and nothing when it is unknown", () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <PropertyCard property={{ ...property, landlordName: 'Gladdiel Ugot' }} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Gladdiel Ugot')).toBeInTheDocument();
+    expect(screen.getByRole('link')).toHaveTextContent('Landlord: Gladdiel Ugot');
+    unmount();
+
+    render(
+      <MemoryRouter>
+        <PropertyCard property={property} />
+      </MemoryRouter>
+    );
+    expect(screen.queryByText(/Landlord:/)).not.toBeInTheDocument();
+  });
+
   it('shows a placeholder when the property has no images', () => {
     render(
       <MemoryRouter>
