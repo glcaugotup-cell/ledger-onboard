@@ -11,7 +11,7 @@ const propertyReviewSchema = new Schema(
     reservationId: { type: Schema.Types.ObjectId, ref: 'Reservation', required: true },
     rating: { type: Number, required: true, min: 1, max: 5 },
     comment: { type: String, trim: true, maxlength: 2000, default: '' },
-    // New reviews are published right away (APPROVED). PENDING only remains on reviews made before that change.
+    // New reviews are published right away (APPROVED). PENDING only remains on reviews made before that change; they are shown too.
     status: {
       type: String,
       enum: Object.values(REVIEW_STATUS),

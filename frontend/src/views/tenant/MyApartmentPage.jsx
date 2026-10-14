@@ -107,7 +107,7 @@ function CurrentStay({ stay, onChanged }) {
 
 const REVIEW_STATE = {
   APPROVED: { tone: 'green', label: 'Shown on the property page' },
-  PENDING: { tone: 'yellow', label: 'Waiting for an admin' },
+  PENDING: { tone: 'green', label: 'Shown on the property page' }, // older reviews, shown like new ones
   HIDDEN: { tone: 'red', label: 'Hidden by an admin' },
   REJECTED: { tone: 'red', label: 'Hidden by an admin' },
 };

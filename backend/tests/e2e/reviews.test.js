@@ -199,15 +199,22 @@ describe('Admin can hide a published review and restore it', () => {
     expect(await NotificationRepository.findOne({ userId: stay.tenant.user._id, type: 'REVIEW_PUBLISHED' })).toBeTruthy();
   });
 
-  test('an older review still waiting for approval stays off the page until an admin publishes it; deleted reviews leave the admin list', async () => {
+  // Rule from the user (2026-10-14): older reviews saved as PENDING are shown without an admin publishing them.
+  test('an older review saved as waiting is shown and counted right away, and an admin can still hide it; deleted reviews leave the admin list', async () => {
     const stay = await completedStay();
     const admin = await makeUser('admin');
     const legacy = await PropertyReviewRepository.create({
       propertyId: stay.property._id, roomId: stay.room._id, tenantId: stay.tenant.user._id, reservationId: stay.reservationId, rating: 5, comment: 'From before', status: 'PENDING',
     });
-    expect(await publicReviews(stay)).toHaveLength(0);
+    expect(await publicReviews(stay)).toEqual([expect.objectContaining({ rating: 5, comment: 'From before' })]);
+    expect(await searchEntry(stay)).toMatchObject({ averageRating: 5, reviewCount: 1 });
     const list = await request(app).get('/api/reviews').set(auth(admin.token));
     expect(list.body.data.reviews.find((r) => r._id === String(legacy._id)).status).toBe('PENDING');
+
+    const hide = await request(app).patch(`/api/reviews/${legacy._id}/moderate`).set(auth(admin.token)).send({ status: 'HIDDEN' });
+    expect(hide.status).toBe(200);
+    expect(await publicReviews(stay)).toHaveLength(0);
+    expect(await searchEntry(stay)).toMatchObject({ averageRating: null, reviewCount: 0 });
 
     await request(app).patch(`/api/reviews/${legacy._id}/moderate`).set(auth(admin.token)).send({ status: 'APPROVED' });
     expect(await publicReviews(stay)).toHaveLength(1);

@@ -1,15 +1,18 @@
 const BaseRepository = require('./BaseRepository');
 const PropertyReview = require('../models/PropertyReview');
 
+// Shown on property pages: published reviews, plus older ones saved as PENDING before reviews were published right away.
+const SHOWN = { $in: ['APPROVED', 'PENDING'] };
+
 class PropertyReviewRepository extends BaseRepository {
   constructor() {
     super(PropertyReview);
   }
 
-  /** Public display: approved reviews for a property that the tenant hasn't deleted, newest first. */
+  /** Public display: shown reviews for a property that the tenant hasn't deleted, newest first. */
   findApprovedByProperty(propertyId) {
     return this.model
-      .find({ propertyId, status: 'APPROVED', deletedAt: null })
+      .find({ propertyId, status: SHOWN, deletedAt: null })
       .populate({ path: 'tenantId', select: 'fullName' })
       .sort({ createdAt: -1 })
       .exec();
@@ -43,10 +46,10 @@ class PropertyReviewRepository extends BaseRepository {
       .exec();
   }
 
-  /** Average rating and count of published reviews for each property (only properties that have any). */
+  /** Average rating and count of shown reviews for each property (only properties that have any). */
   ratingSummaryByProperty(propertyIds) {
     return this.model.aggregate([
-      { $match: { propertyId: { $in: propertyIds }, status: 'APPROVED', deletedAt: null } },
+      { $match: { propertyId: { $in: propertyIds }, status: SHOWN, deletedAt: null } },
       { $group: { _id: '$propertyId', averageRating: { $avg: '$rating' }, reviewCount: { $sum: 1 } } },
     ]);
   }

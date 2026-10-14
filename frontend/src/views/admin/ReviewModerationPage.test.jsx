@@ -71,8 +71,9 @@ describe('ReviewModerationPage', () => {
     });
   });
 
-  it('restores a hidden review and publishes an older waiting one, with no reason prompt', async () => {
-    ReviewApi.listAll.mockResolvedValue({ reviews: [hidden, waiting] });
+  // Rule from the user (2026-10-14): reviews are never waiting for approval; the admin only hides or restores.
+  it('restores a hidden review with no reason prompt', async () => {
+    ReviewApi.listAll.mockResolvedValue({ reviews: [hidden] });
     ReviewApi.moderate.mockResolvedValue({});
     const user = userEvent.setup();
     renderPage();
@@ -81,20 +82,41 @@ describe('ReviewModerationPage', () => {
     expect(within(cardOf('Ana Reyes')).getByText('Hidden: Contains a phone number')).toBeInTheDocument();
     await user.click(within(cardOf('Ana Reyes')).getByRole('button', { name: 'Restore' }));
     await waitFor(() => expect(ReviewApi.moderate).toHaveBeenCalledWith('rev2', { status: 'APPROVED', reason: undefined }));
-
-    await user.click(within(cardOf('Lito Santos')).getByRole('button', { name: 'Publish' }));
-    await waitFor(() => expect(ReviewApi.moderate).toHaveBeenCalledWith('rev3', { status: 'APPROVED', reason: undefined }));
   });
 
-  it('filters by status', async () => {
+  it('shows an older review saved as waiting like any published one: no Publish button, and it can be hidden', async () => {
+    ReviewApi.listAll.mockResolvedValue({ reviews: [waiting] });
+    ReviewApi.moderate.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText(/^Lito Santos —/);
+    const card = cardOf('Lito Santos');
+    expect(within(card).getByText('Shown')).toBeInTheDocument();
+    expect(within(card).queryByText(/waiting/i)).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: 'Publish' })).not.toBeInTheDocument();
+
+    await user.click(within(card).getByRole('button', { name: /^hide$/i }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Hide review' }));
+    await waitFor(() => expect(ReviewApi.moderate).toHaveBeenCalledWith('rev3', { status: 'HIDDEN', reason: undefined }));
+  });
+
+  it('filters by status, with no Waiting tab; older reviews count as shown', async () => {
     ReviewApi.listAll.mockResolvedValue({ reviews: [shown, hidden, waiting] });
     const user = userEvent.setup();
     renderPage();
 
     await screen.findByText(/^Juan Dela Cruz —/);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['All', 'Shown', 'Hidden']);
+
     await user.click(screen.getByRole('tab', { name: 'Hidden' }));
     expect(screen.getByText(/^Ana Reyes —/)).toBeInTheDocument();
     expect(screen.queryByText(/^Juan Dela Cruz —/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Lito Santos —/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Shown' }));
+    expect(screen.getByText(/^Juan Dela Cruz —/)).toBeInTheDocument();
+    expect(screen.getByText(/^Lito Santos —/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Ana Reyes —/)).not.toBeInTheDocument();
   });
 });

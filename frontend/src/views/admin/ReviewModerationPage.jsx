@@ -11,22 +11,22 @@ import { formatDate } from '../../utils/format.js';
 
 const STATUS = {
   APPROVED: { tone: 'green', label: 'Shown' },
-  PENDING: { tone: 'yellow', label: 'Waiting (older review)' },
+  PENDING: { tone: 'green', label: 'Shown' }, // older reviews, shown like new ones
   HIDDEN: { tone: 'red', label: 'Hidden' },
   REJECTED: { tone: 'red', label: 'Hidden' },
 };
 
+const isHiddenReview = (r) => ['HIDDEN', 'REJECTED'].includes(r.status);
+
 const FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'shown', label: 'Shown', match: (r) => r.status === 'APPROVED' },
-  { key: 'hidden', label: 'Hidden', match: (r) => ['HIDDEN', 'REJECTED'].includes(r.status) },
-  { key: 'waiting', label: 'Waiting', match: (r) => r.status === 'PENDING' },
+  { key: 'shown', label: 'Shown', match: (r) => !isHiddenReview(r) },
+  { key: 'hidden', label: 'Hidden', match: isHiddenReview },
 ];
 
 /**
- * Tenant reviews are published right away. The admin can hide one that breaks the rules
- * (the tenant and landlord are told), restore it later, and publish older reviews that
- * were still waiting for approval.
+ * Tenant reviews are published right away; nothing waits for approval. The admin can hide
+ * one that breaks the rules (the tenant and landlord are told) and restore it later.
  */
 export default function ReviewModerationPage() {
   const [reviews, setReviews] = useState([]);
@@ -87,7 +87,7 @@ export default function ReviewModerationPage() {
       <div className="space-y-3">
         {shown.map((r) => {
           const state = STATUS[r.status] || STATUS.APPROVED;
-          const isHidden = ['HIDDEN', 'REJECTED'].includes(r.status);
+          const isHidden = isHiddenReview(r);
           return (
             <Card key={r._id}>
               <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
@@ -107,9 +107,6 @@ export default function ReviewModerationPage() {
               {r.comment && <blockquote className="mb-3 border-l-2 border-gray-200 pl-3 text-sm text-gray-700">{r.comment}</blockquote>}
               {isHidden && r.moderationReason && <p className="mb-3 text-xs text-red-700">Hidden: {r.moderationReason}</p>}
               <div className="flex flex-wrap gap-2">
-                {r.status === 'PENDING' && (
-                  <Button loading={busyId === r._id} onClick={() => act(r._id, 'APPROVED')}>Publish</Button>
-                )}
                 {isHidden ? (
                   <Button variant="secondary" loading={busyId === r._id} onClick={() => act(r._id, 'APPROVED')}>Restore</Button>
                 ) : (

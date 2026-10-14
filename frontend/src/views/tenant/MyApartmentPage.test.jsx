@@ -160,5 +160,14 @@ describe('MyApartmentPage', () => {
       await user.click(screen.getByRole('button', { name: 'Submit review' }));
       await waitFor(() => expect(ReviewApi.submit).toHaveBeenCalledWith('p1', { reservationId: 'old', rating: 5, comment: '' }));
     });
+
+    it('an older review saved before reviews were published right away is shown, not waiting for an admin', async () => {
+      ReservationApi.list.mockResolvedValue({ reservations: [past] });
+      ReviewApi.listMine.mockResolvedValue({ reviews: [{ ...review, status: 'PENDING' }] });
+      renderPage();
+
+      expect(await screen.findByText('Shown on the property page')).toBeInTheDocument();
+      expect(screen.queryByText(/waiting for an admin/i)).not.toBeInTheDocument();
+    });
   });
 });
