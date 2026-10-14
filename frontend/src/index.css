@@ -143,6 +143,13 @@ body {
   .auth-hero .auth-form-panel {
     min-height: 0;
     overflow-y: auto;
+    /* The tall register form still scrolls (wheel, touch, keyboard), but without a scrollbar
+       showing in the middle of the page next to the green panel. */
+    scrollbar-width: none;
+  }
+
+  .auth-hero .auth-form-panel::-webkit-scrollbar {
+    display: none;
   }
 
   .auth-hero .auth-form-shell {
