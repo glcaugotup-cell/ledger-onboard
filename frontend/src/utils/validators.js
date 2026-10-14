@@ -26,6 +26,18 @@ export function validateGmail(value) {
   return null;
 }
 
+// Caretaker invites and new admins: the same name limits as the backend (caretakerNameChain).
+export const INVITE_FIRST_NAME_MAX = 15;
+export const INVITE_LAST_NAME_MAX = 20;
+
+export function validateInviteName(value, maxLength) {
+  if (!value) return 'This field is required';
+  if ((value.match(/[A-Za-z]/g) || []).length < 2) return 'Must contain at least 2 letters';
+  if (value.length > maxLength) return `Must be ${maxLength} characters or fewer`;
+  if (!/^[A-Za-z][A-Za-z ']*$/.test(value)) return 'Use letters, spaces and apostrophes only';
+  return null;
+}
+
 /** Same Gmail rule as registration, with login-specific wording. */
 export function validateLoginEmail(value) {
   if (!value) return 'Email is required.';

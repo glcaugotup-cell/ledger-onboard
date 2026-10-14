@@ -4,6 +4,7 @@ const { findBarangayByName } = require('../utils/dagupanBarangays');
 const { ROLES } = require('../utils/constants');
 const { toNameCase } = require('../utils/nameCase');
 const { normalizePhToE164 } = require('../utils/phoneFormat');
+const { normalizeAdminPhone, isValidAdminPhone, ADMIN_PHONE_MESSAGE } = require('../utils/adminPhone');
 
 // customSanitizer runs before .matches() and writes back to req.body, so "angelo" or
 // "09171234567" becomes "Angelo" / "+639171234567", matching the frontend's normalization.
@@ -31,6 +32,14 @@ const buildPhoneChain = () =>
     .withMessage('Phone must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX)');
 
 const phoneChain = buildPhoneChain();
+
+/** Admin phones: a mobile number from one of ADMIN_PHONE_COUNTRIES, saved as +<country code><number>. */
+const adminPhoneChain = (field = 'phone') =>
+  body(field)
+    .trim()
+    .customSanitizer(normalizeAdminPhone)
+    .custom(isValidAdminPhone)
+    .withMessage(ADMIN_PHONE_MESSAGE);
 
 // Spaces are rejected first with their own message, then the strength rules apply.
 const strongPasswordChain = (field = 'password') =>
@@ -138,10 +147,10 @@ const caretakerNameChain = (field, maxLength) =>
 
 const createCaretakerValidators = [caretakerNameChain('firstName', 15), caretakerNameChain('lastName', 20), emailChain, phoneChain, buildServiceBarangayChain()];
 
-// Landlords may update a caretaker's contact number and service area; the name and email are their identity and stay fixed.
-// Main admin adding another admin: the same name, email and phone rules as a caretaker invite.
-const createAdminValidators = [caretakerNameChain('firstName', 15), caretakerNameChain('lastName', 20), emailChain, phoneChain];
+// Main admin adding another admin: the same name and email rules as a caretaker invite; the phone may be from another listed country.
+const createAdminValidators = [caretakerNameChain('firstName', 15), caretakerNameChain('lastName', 20), emailChain, adminPhoneChain()];
 
+// Landlords may update a caretaker's contact number and service area; the name and email are their identity and stay fixed.
 const updateCaretakerValidators = [
   body(['firstName', 'lastName', 'fullName', 'email']).not().exists().withMessage("A caretaker's name and email cannot be changed"),
   buildPhoneChain().optional(),

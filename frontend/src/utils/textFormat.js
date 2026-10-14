@@ -33,3 +33,11 @@ export function capitalizeFirst(value) {
   if (!value) return value;
   return value.replace(/^(\s*)([a-z])/, (_, ws, ch) => ws + ch.toUpperCase());
 }
+
+/**
+ * Live filter for names typed when inviting a caretaker or adding an admin: keeps letters,
+ * spaces and apostrophes (a curly ’ from phone keyboards becomes ') and raises the first letter.
+ */
+export function inviteNameInput(value) {
+  return capitalizeFirst(value.replace(/[‘’]/g, "'").replace(/[^A-Za-z ']/g, ''));
+}

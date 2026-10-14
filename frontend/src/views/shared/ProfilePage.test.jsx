@@ -159,17 +159,45 @@ describe('ProfilePage', () => {
     expect(screen.getByText('Bonuan Gueset')).toBeInTheDocument();
   });
 
+  // Rule from the user (2026-10-14): an admin's phone has a country dropdown and is sent as +<country code><number>.
   it('admin: saves only the phone number', async () => {
     AuthApi.updateMe.mockResolvedValue({});
     const user = userEvent.setup();
     renderPage(USERS.admin);
-    // The +63 badge is aria-hidden, so the field's accessible name is just "Phone".
+    // The country dropdown has its own name, so the number box's accessible name is just "Phone".
     const phone = screen.getByRole('textbox', { name: 'Phone' });
     await user.clear(phone);
     await user.type(phone, '09991234567');
     await user.click(screen.getByRole('button', { name: /save phone number/i }));
-    await waitFor(() => expect(AuthApi.updateMe).toHaveBeenCalledWith({ phone: '09991234567' }));
+    await waitFor(() => expect(AuthApi.updateMe).toHaveBeenCalledWith({ phone: '+639991234567' }));
     expect(await screen.findByText('Phone number updated.')).toBeInTheDocument();
+  });
+
+  it('admin: can pick another country for their phone, and a foreign number on file shows its country', async () => {
+    AuthApi.updateMe.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage({ ...USERS.admin, phone: '+447400123456' });
+    const country = screen.getByRole('combobox', { name: 'Country code' });
+    const phone = screen.getByRole('textbox', { name: 'Phone' });
+    expect(country).toHaveValue('GB');
+    expect(phone).toHaveValue('7400123456');
+
+    await user.selectOptions(country, 'SG');
+    await user.clear(phone);
+    await user.type(phone, '8123');
+    await user.click(screen.getByRole('button', { name: /save phone number/i }));
+    expect(AuthApi.updateMe).not.toHaveBeenCalled();
+    expect(screen.getByText(/valid Singapore mobile number/)).toBeInTheDocument();
+
+    await user.type(phone, '4567');
+    expect(screen.queryByText(/valid Singapore mobile number/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /save phone number/i }));
+    await waitFor(() => expect(AuthApi.updateMe).toHaveBeenCalledWith({ phone: '+6581234567' }));
+  });
+
+  it('non-admins keep the fixed +63 phone box with no country dropdown', () => {
+    renderPage();
+    expect(screen.queryByRole('combobox', { name: 'Country code' })).not.toBeInTheDocument();
   });
 
   it('rejects an invalid phone number before sending', async () => {

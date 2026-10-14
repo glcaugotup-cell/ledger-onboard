@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { ROLES, ACCOUNT_STATUS, MFA_METHOD, VERIFICATION_STATUS } = require('../utils/constants');
+const { isValidAdminPhone } = require('../utils/adminPhone');
 
 const { Schema } = mongoose;
 const emailCodeSchema = new Schema({
@@ -14,6 +15,16 @@ const emailCodeSchema = new Schema({
 
 const GMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
 const PH_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
+
+/**
+ * Philippine mobile numbers for everyone; admins may also use another listed country.
+ * Updates can't see the role here, so the request validators enforce "admins only" too.
+ */
+function isAllowedPhone(value) {
+  if (!value || PH_PHONE_REGEX.test(value)) return true;
+  if (!isValidAdminPhone(value)) return false;
+  return !(this instanceof mongoose.Document) || this.role === ROLES.ADMIN;
+}
 // Min 2 chars, starts uppercase, letters/spaces/hyphens/periods/apostrophes only.
 const { FULL_NAME: NAME_REGEX } = require('../validators/patterns');
 const { DAGUPAN_BARANGAYS } = require('../utils/dagupanBarangays');
@@ -60,7 +71,7 @@ const userSchema = new Schema(
       type: String,
       trim: true,
       maxlength: 13,
-      match: [PH_PHONE_REGEX, 'Phone must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX)'],
+      validate: { validator: isAllowedPhone, message: 'Phone must be a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX)' },
     },
     role: {
       type: String,

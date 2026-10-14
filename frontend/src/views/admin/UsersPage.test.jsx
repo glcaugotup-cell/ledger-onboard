@@ -251,12 +251,14 @@ describe('UsersPage reset codes', () => {
       AdminApi.createAdmin.mockResolvedValue({ user: { _id: 'a3', fullName: 'Bea Santos' }, code: 'WXYZ-2345', expiresAt: new Date(Date.now() + 1800000).toISOString() });
       renderPage();
       await user.click(await screen.findByRole('button', { name: /add admin/i }));
+      // Rule from the user (2026-10-14): the email box takes the Gmail username (fixed "@gmail.com"),
+      // and the phone is sent as +<country code><number>.
       await user.type(screen.getByLabelText(/first name/i), 'Bea');
       await user.type(screen.getByLabelText(/last name/i), 'Santos');
-      await user.type(screen.getByLabelText(/^email/i), 'bea@gmail.com');
-      await user.type(screen.getByLabelText(/phone/i), '09175550101');
+      await user.type(screen.getByRole('textbox', { name: 'Gmail username' }), 'bea');
+      await user.type(screen.getByRole('textbox', { name: 'Phone' }), '09175550101');
       await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^add admin$/i }));
-      expect(AdminApi.createAdmin).toHaveBeenCalledWith({ firstName: 'Bea', lastName: 'Santos', email: 'bea@gmail.com', phone: '09175550101' });
+      expect(AdminApi.createAdmin).toHaveBeenCalledWith({ firstName: 'Bea', lastName: 'Santos', email: 'bea@gmail.com', phone: '+639175550101' });
       expect(await screen.findByTestId('setup-code')).toHaveTextContent('WXYZ-2345');
       expect(AdminApi.listUsers).toHaveBeenCalledTimes(2);
     });

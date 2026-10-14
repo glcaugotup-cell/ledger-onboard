@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import ConfirmDialog from './ui/ConfirmDialog.jsx';
 import Button from './ui/Button.jsx';
 import { Field, TextInput } from './ui/Field.jsx';
+import GmailUsernameInput from './ui/GmailUsernameInput.jsx';
+import CountryPhoneInput from './ui/CountryPhoneInput.jsx';
 import AdminApi from '../services/AdminApi.js';
 import { describeApiError } from '../utils/errors.js';
+import { inviteNameInput, toNameCase } from '../utils/textFormat.js';
+import { INVITE_FIRST_NAME_MAX, INVITE_LAST_NAME_MAX, validateGmail, validateInviteName } from '../utils/validators.js';
+import { validateAdminPhone } from '../data/adminPhoneCountries.js';
 
 const EMPTY = { firstName: '', lastName: '', email: '', phone: '' };
 const formatTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -11,6 +16,7 @@ const formatTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeri
 /**
  * Main admin: add another admin. No password is chosen here; step 2 shows a one-time setup code
  * (30 minutes) that the new admin enters under "Forgot password?" to set their own password.
+ * Name and email work like a caretaker invite; the phone may be from another listed country.
  */
 export default function AddAdminDialog({ onClose, onCreated }) {
   const [form, setForm] = useState(EMPTY);
@@ -20,14 +26,36 @@ export default function AddAdminDialog({ onClose, onCreated }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const phoneId = useId();
+
+  // Editing a field clears its error, so a fixed value doesn't keep showing the old message.
+  const set = (key, value) => {
+    setForm((f) => ({ ...f, [key]: value }));
+    setFieldErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
+  };
 
   const create = async () => {
-    setBusy(true);
     setError('');
-    setFieldErrors({});
+    const payload = {
+      firstName: toNameCase(form.firstName.trim()),
+      lastName: toNameCase(form.lastName.trim()),
+      email: `${form.email.trim().toLowerCase()}@gmail.com`,
+      phone: form.phone,
+    };
+    // Show the names the way they will be saved (e.g. "o'connor" -> "O'Connor").
+    setForm((f) => ({ ...f, firstName: payload.firstName, lastName: payload.lastName }));
+    const errors = Object.fromEntries(Object.entries({
+      firstName: validateInviteName(payload.firstName, INVITE_FIRST_NAME_MAX),
+      lastName: validateInviteName(payload.lastName, INVITE_LAST_NAME_MAX),
+      email: validateGmail(payload.email),
+      phone: validateAdminPhone(payload.phone),
+    }).filter(([, msg]) => msg));
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
+
+    setBusy(true);
     try {
-      const created = await AdminApi.createAdmin({ ...form, email: form.email.trim() });
+      const created = await AdminApi.createAdmin(payload);
       setResult(created);
       onCreated?.(created.user);
     } catch (err) {
@@ -62,10 +90,18 @@ export default function AddAdminDialog({ onClose, onCreated }) {
         onCancel={onClose}
       >
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Field label="First name" required error={fieldErrors.firstName}><TextInput value={form.firstName} onChange={set('firstName')} maxLength={15} autoComplete="off" /></Field>
-          <Field label="Last name" required error={fieldErrors.lastName}><TextInput value={form.lastName} onChange={set('lastName')} maxLength={20} autoComplete="off" /></Field>
-          <Field label="Email" required error={fieldErrors.email}><TextInput type="email" value={form.email} onChange={set('email')} maxLength={254} autoComplete="off" /></Field>
-          <Field label="Phone" required error={fieldErrors.phone}><TextInput type="tel" value={form.phone} onChange={set('phone')} maxLength={16} placeholder="09XXXXXXXXX" autoComplete="off" /></Field>
+          <Field label="First name" required error={fieldErrors.firstName}>
+            <TextInput value={form.firstName} onChange={(e) => set('firstName', inviteNameInput(e.target.value))} maxLength={INVITE_FIRST_NAME_MAX} autoComplete="off" error={fieldErrors.firstName} />
+          </Field>
+          <Field label="Last name" required error={fieldErrors.lastName}>
+            <TextInput value={form.lastName} onChange={(e) => set('lastName', inviteNameInput(e.target.value))} maxLength={INVITE_LAST_NAME_MAX} autoComplete="off" error={fieldErrors.lastName} />
+          </Field>
+          <Field label="Email (Gmail only)" required error={fieldErrors.email} className="sm:col-span-2">
+            <GmailUsernameInput value={form.email} onChange={(value) => set('email', value)} autoComplete="off" error={fieldErrors.email} />
+          </Field>
+          <Field label="Phone" required error={fieldErrors.phone} htmlFor={phoneId} className="sm:col-span-2">
+            <CountryPhoneInput id={phoneId} value={form.phone} onChange={(value) => set('phone', value)} autoComplete="off" error={fieldErrors.phone} />
+          </Field>
         </div>
       </ConfirmDialog>
     );

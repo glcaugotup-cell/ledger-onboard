@@ -9,11 +9,12 @@ import { Field, Select, TextArea, TextInput } from '../../components/ui/Field.js
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import ActivationCodeDialog from '../../components/ActivationCodeDialog.jsx';
 import PhoneInput from '../../components/ui/PhoneInput.jsx';
+import GmailUsernameInput from '../../components/ui/GmailUsernameInput.jsx';
 import { EmptyState, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { DAGUPAN_BARANGAYS } from '../../data/dagupanBarangays.js';
 import { describeApiError } from '../../utils/errors.js';
-import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
-import { validateGmail, validatePhone } from '../../utils/validators.js';
+import { inviteNameInput, toNameCase } from '../../utils/textFormat.js';
+import { INVITE_FIRST_NAME_MAX, INVITE_LAST_NAME_MAX, validateGmail, validateInviteName, validatePhone } from '../../utils/validators.js';
 import { formatDate, formatDateTime, initials } from '../../utils/format.js';
 
 const STATUS_TONE = { active: 'green', pending_activation: 'yellow', suspended: 'red', deactivated: 'gray', archived: 'gray' };
@@ -21,21 +22,6 @@ const EMPTY_FORM = { firstName: '', lastName: '', email: '', phone: '', serviceB
 const STATUS_ORDER = { pending_activation: 0, active: 1 };
 // Caretakers activated before the date was recorded fall back to when they were invited.
 const caretakerSince = (c) => new Date(c.activatedAt || c.createdAt || 0).getTime();
-const FIRST_NAME_MAX_LENGTH = 15;
-const LAST_NAME_MAX_LENGTH = 20;
-
-/** Keeps letters, spaces and apostrophes as the landlord types (curly ’ from phone keyboards becomes '). */
-function caretakerNameInput(value) {
-  return value.replace(/[‘’]/g, "'").replace(/[^A-Za-z ']/g, '');
-}
-
-function validateCaretakerName(value, maxLength) {
-  if (!value) return 'This field is required';
-  if ((value.match(/[A-Za-z]/g) || []).length < 2) return 'Must contain at least 2 letters';
-  if (value.length > maxLength) return `Must be ${maxLength} characters or fewer`;
-  if (!/^[A-Za-z][A-Za-z ']*$/.test(value)) return 'Use letters, spaces and apostrophes only';
-  return null;
-}
 
 function BarangayOptions() {
   return DAGUPAN_BARANGAYS.map((b) => (
@@ -173,8 +159,8 @@ export default function CaretakersPage() {
     setForm((f) => ({ ...f, firstName: payload.firstName, lastName: payload.lastName }));
     // Validate each field before the request goes out.
     const errors = {
-      firstName: validateCaretakerName(payload.firstName, FIRST_NAME_MAX_LENGTH),
-      lastName: validateCaretakerName(payload.lastName, LAST_NAME_MAX_LENGTH),
+      firstName: validateInviteName(payload.firstName, INVITE_FIRST_NAME_MAX),
+      lastName: validateInviteName(payload.lastName, INVITE_LAST_NAME_MAX),
       email: validateGmail(payload.email),
       phone: validatePhone(payload.phone),
       serviceBarangay: payload.serviceBarangay ? null : 'Select the barangay this caretaker works in',
@@ -214,17 +200,14 @@ export default function CaretakersPage() {
             <SuccessBanner message={successMsg} />
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field required label="First name" error={formErrors.firstName}>
-                <TextInput maxLength={FIRST_NAME_MAX_LENGTH} value={form.firstName} onChange={(e) => setField('firstName', capitalizeFirst(caretakerNameInput(e.target.value)))} error={formErrors.firstName} />
+                <TextInput maxLength={INVITE_FIRST_NAME_MAX} value={form.firstName} onChange={(e) => setField('firstName', inviteNameInput(e.target.value))} error={formErrors.firstName} />
               </Field>
               <Field required label="Last name" error={formErrors.lastName}>
-                <TextInput maxLength={LAST_NAME_MAX_LENGTH} value={form.lastName} onChange={(e) => setField('lastName', capitalizeFirst(caretakerNameInput(e.target.value)))} error={formErrors.lastName} />
+                <TextInput maxLength={INVITE_LAST_NAME_MAX} value={form.lastName} onChange={(e) => setField('lastName', inviteNameInput(e.target.value))} error={formErrors.lastName} />
               </Field>
             </div>
             <Field required label="Email (Gmail only)" error={formErrors.email}>
-              <div className="flex">
-                <TextInput type="text" inputMode="email" maxLength={64} value={form.email} onChange={(e) => setField('email', e.target.value.replace(/@gmail\.com$/i, '').replace(/[^A-Za-z0-9._%+-]/g, ''))} error={formErrors.email} className="min-w-0 rounded-r-none" aria-label="Gmail username" />
-                <span className={`flex min-h-[2.5rem] items-center rounded-r-lg border border-l-0 px-3 text-sm ${formErrors.email ? 'border-red-400 text-gray-500' : 'border-gray-300 text-gray-600'}`}>@gmail.com</span>
-              </div>
+              <GmailUsernameInput value={form.email} onChange={(value) => setField('email', value)} error={formErrors.email} />
             </Field>
             <Field required label="Phone (+63)" error={formErrors.phone}>
               <PhoneInput value={form.phone} onChange={(value) => setField('phone', value)} error={formErrors.phone} placeholder="917 123 4567" />

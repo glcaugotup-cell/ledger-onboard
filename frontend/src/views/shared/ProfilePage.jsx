@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import PageHeader from '../../components/layout/PageHeader.jsx';
@@ -14,6 +14,7 @@ import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
 import PhoneInput from '../../components/ui/PhoneInput.jsx';
+import CountryPhoneInput from '../../components/ui/CountryPhoneInput.jsx';
 import { ReviewForm } from '../../components/ReviewForm.jsx';
 import TwoFactorCard from '../../components/TwoFactorCard.jsx';
 import EmailNotificationSettings from '../../components/EmailNotificationSettings.jsx';
@@ -24,6 +25,7 @@ import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst, toNameCase } from '../../utils/textFormat.js';
 import { formatDate, formatStatus } from '../../utils/format.js';
 import { validateName, validatePassword, validatePhone } from '../../utils/validators.js';
+import { validateAdminPhone } from '../../data/adminPhoneCountries.js';
 
 const ROLE_LABEL = { tenant: 'Tenant', landlord: 'Landlord', caretaker: 'Caretaker', admin: 'Administrator' };
 
@@ -114,6 +116,7 @@ export default function ProfilePage() {
 
   const [phone, setPhone] = useState(user?.phone || '');
   const [phoneError, setPhoneError] = useState('');
+  const adminPhoneId = useId();
   const [profileMsg, setProfileMsg] = useState('');
   const [profileError, setProfileError] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
@@ -162,7 +165,7 @@ export default function ProfilePage() {
     e.preventDefault();
     setProfileError('');
     setProfileMsg('');
-    const error = validatePhone(phone);
+    const error = validateAdminPhone(phone);
     setPhoneError(error || '');
     if (error) return;
 
@@ -372,14 +375,15 @@ export default function ProfilePage() {
             <form onSubmit={savePhone} className="space-y-3" noValidate>
               <ErrorBanner message={profileError} />
               <SuccessBanner message={profileMsg} />
-              <Field required label="Phone" error={phoneError}>
-                <PhoneInput
+              {/* Only admins reach this form; their number may be from another listed country. */}
+              <Field required label="Phone" error={phoneError} htmlFor={adminPhoneId}>
+                <CountryPhoneInput
+                  id={adminPhoneId}
                   value={phone}
                   onChange={(value) => {
                     setPhone(value);
                     if (phoneError) setPhoneError('');
                   }}
-                  placeholder="917 123 4567"
                   error={phoneError}
                 />
               </Field>
