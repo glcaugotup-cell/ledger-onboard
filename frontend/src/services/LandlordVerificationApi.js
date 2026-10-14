@@ -10,11 +10,12 @@ class LandlordVerificationApi extends BaseApiClient {
   }
 
   // Verification documents are never public — fetched as an authenticated
-  // blob and turned into an object URL by the caller, same pattern as
-  // PaymentApi.fetchProofImageObjectUrl.
-  async fetchDocumentObjectUrl(id, docType) {
+  // blob and turned into an object URL, same pattern as
+  // PaymentApi.fetchProofImageObjectUrl. The caller revokes the URL when done;
+  // `type` tells a PDF from an image for the preview.
+  async fetchDocument(id, docType) {
     const res = await this.http.get(`/landlord/verification/${id}/document/${docType}`, { responseType: 'blob' });
-    return URL.createObjectURL(res.data);
+    return { url: URL.createObjectURL(res.data), type: res.data.type };
   }
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CalendarDaysIcon,
   CheckCircleIcon,
@@ -17,10 +17,11 @@ import AdminApi from '../../services/AdminApi.js';
 import LandlordVerificationApi from '../../services/LandlordVerificationApi.js';
 import Button from '../../components/ui/Button.jsx';
 import ReasonDialog from '../../components/ReasonDialog.jsx';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState } from '../../components/ui/Feedback.jsx';
 import { formatDateTime } from '../../utils/format.js';
 
-function DocumentRow({ title, onView }) {
+function DocumentRow({ title, loading, onView }) {
   return (
     <div className="flex flex-col gap-3 border-b border-gray-100 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
@@ -36,7 +37,7 @@ function DocumentRow({ title, onView }) {
         <span className="flex items-center gap-1 text-sm font-medium text-green-600">
           <CheckCircleIcon className="h-4 w-4" /> Submitted
         </span>
-        <Button type="button" variant="secondary" onClick={onView} className="gap-1.5">
+        <Button type="button" variant="secondary" loading={loading} onClick={onView} className="gap-1.5" aria-label={`View ${title}`}>
           <EyeIcon className="h-4 w-4" /> View
         </Button>
       </div>
@@ -44,7 +45,12 @@ function DocumentRow({ title, onView }) {
   );
 }
 
-function SubmissionCard({ submission: s, busy, onView, onAct }) {
+const DOCUMENTS = [
+  { type: 'permit', title: "Mayor's / Business Permit" },
+  { type: 'bir', title: 'BIR Form 2303' },
+];
+
+function SubmissionCard({ submission: s, busy, viewingKey, onView, onAct }) {
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="flex items-start gap-3 border-b border-amber-100 bg-amber-50 px-5 py-4">
@@ -88,8 +94,9 @@ function SubmissionCard({ submission: s, busy, onView, onAct }) {
 
       <div className="px-5 py-2">
         <p className="pt-2 text-sm font-semibold text-gray-900">Submitted Documents</p>
-        <DocumentRow title="Mayor's / Business Permit" onView={() => onView(s._id, 'permit')} />
-        <DocumentRow title="BIR Form 2303" onView={() => onView(s._id, 'bir')} />
+        {DOCUMENTS.map((d) => (
+          <DocumentRow key={d.type} title={d.title} loading={viewingKey === `${s._id}:${d.type}`} onView={() => onView(s._id, d.type, `${d.title} — ${s.landlordId?.fullName || 'Landlord'}`)} />
+        ))}
       </div>
 
       <div className="flex justify-end gap-3 border-t border-gray-100 bg-gray-50 px-5 py-4">
@@ -110,6 +117,8 @@ export default function LandlordVerificationPage() {
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [rejecting, setRejecting] = useState(null); // submission id awaiting a rejection reason
+  const [preview, setPreview] = useState(null); // { url, type, title } of the document being viewed
+  const [viewingKey, setViewingKey] = useState(null); // "<id>:<docType>" while it loads
 
   const load = () => {
     setLoading(true);
@@ -121,14 +130,31 @@ export default function LandlordVerificationPage() {
 
   useEffect(load, []);
 
-  const viewDocument = async (id, docType) => {
+  // Shown inside the page first (like the landlord's own preview), with a button to open it in a new tab.
+  const viewDocument = async (id, docType, title) => {
+    setViewingKey(`${id}:${docType}`);
+    setError('');
     try {
-      const url = await LandlordVerificationApi.fetchDocumentObjectUrl(id, docType);
-      window.open(url, '_blank');
+      const { url, type } = await LandlordVerificationApi.fetchDocument(id, docType);
+      setPreview({ url, type, title });
     } catch {
       setError('Could not load that document.');
+    } finally {
+      setViewingKey(null);
     }
   };
+
+  const closePreview = () => {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  };
+
+  // Frees the last loaded file if the admin leaves the page with the preview open.
+  const previewUrlRef = useRef(null);
+  useEffect(() => {
+    previewUrlRef.current = preview?.url || null;
+  }, [preview]);
+  useEffect(() => () => { if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); }, []);
 
   const act = async (id, approve, rejectionReason) => {
     setBusyId(id);
@@ -165,7 +191,7 @@ export default function LandlordVerificationPage() {
         {!loading && submissions.length > 0 && (
           <div className="space-y-5">
             {submissions.map((s) => (
-              <SubmissionCard key={s._id} submission={s} busy={busyId === s._id} onView={viewDocument} onAct={(id, approve) => (approve ? act(id, true) : setRejecting(id))} />
+              <SubmissionCard key={s._id} submission={s} busy={busyId === s._id} viewingKey={viewingKey} onView={viewDocument} onAct={(id, approve) => (approve ? act(id, true) : setRejecting(id))} />
             ))}
           </div>
         )}
@@ -182,6 +208,18 @@ export default function LandlordVerificationPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={Boolean(preview)}
+        title={preview?.title || ''}
+        cancelLabel="Close preview"
+        confirmLabel="Open in new tab"
+        onConfirm={() => window.open(preview.url, '_blank', 'noopener,noreferrer')}
+        onCancel={closePreview}
+      >
+        {preview && (preview.type === 'application/pdf'
+          ? <iframe title={`Preview of ${preview.title}`} src={preview.url} className="h-[60vh] w-full rounded-lg border" />
+          : <img alt={`Preview of ${preview.title}`} src={preview.url} className="max-h-[60vh] w-full rounded-lg object-contain" />)}
+      </ConfirmDialog>
       {rejecting && (
         <ReasonDialog
           open
