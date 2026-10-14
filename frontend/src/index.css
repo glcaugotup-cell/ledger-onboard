@@ -26,6 +26,12 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Leaflet stacks its layers up to z-index 1000. Keeping them inside each map stops a map from
+   covering the sticky header and its menus (notifications, account) while the page scrolls. */
+.leaflet-container {
+  isolation: isolate;
+}
+
 @layer base {
   :where(a, button, input, select, textarea) {
     transition-property: color, background-color, border-color, box-shadow;
