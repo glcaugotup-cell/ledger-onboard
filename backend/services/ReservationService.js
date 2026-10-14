@@ -4,6 +4,7 @@ const PropertyRepository = require('../repositories/PropertyRepository');
 const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const BillingSOARepository = require('../repositories/BillingSOARepository');
+const PaymentTransactionRepository = require('../repositories/PaymentTransactionRepository');
 const RoomService = require('./RoomService');
 const NotificationService = require('./NotificationService');
 const EmailNotificationService = require('./EmailNotificationService');
@@ -11,7 +12,7 @@ const env = require('../config/env');
 const ApiError = require('../utils/ApiError');
 const { roundMoney } = require('../utils/money');
 const { appDateKey, inputDateKey, addDaysToKey, formatDateKey } = require('../utils/dates');
-const { ACCOUNT_STATUS, ROLES, RESERVATION_STATUS, RESERVATION_TRANSITIONS, ROOM_STATUS, PAYMENT_STATUS } = require('../utils/constants');
+const { ACCOUNT_STATUS, ROLES, RESERVATION_STATUS, RESERVATION_TRANSITIONS, ROOM_STATUS, PAYMENT_STATUS, VERIFICATION_STATUS } = require('../utils/constants');
 
 // Section 2 recommendation: a landlord cannot confirm a move-in until tenants have a GCash QR to pay with.
 // Set to false to remove the gate.
@@ -337,7 +338,7 @@ class ReservationService {
     ]);
     const landlordById = new Map(landlords.map((l) => [String(l._id), l]));
     const caretakerById = new Map(caretakers.map((c) => [String(c._id), c]));
-    return reservations.map((reservation) => {
+    return Promise.all(reservations.map(async (reservation) => {
       const plain = typeof reservation.toObject === 'function' ? reservation.toObject() : { ...reservation };
       const landlord = landlordById.get(idOf(plain.propertyId?.landlordId));
       const caretaker = caretakerById.get(idOf(plain.caretakerAssignedId));
@@ -347,8 +348,31 @@ class ReservationService {
         landlordContact: landlord ? (shareContacts ? { fullName: landlord.fullName, email: landlord.email, phone: landlord.phone || null } : { fullName: landlord.fullName }) : null,
         caretakerContact: shareContacts && caretaker ? { fullName: caretaker.fullName, phone: caretaker.phone || null } : null,
         holdUntil: plain.status === RESERVATION_STATUS.APPROVED ? this._holdUntilKey(plain) : null,
+        ...(plain.status === RESERVATION_STATUS.COMPLETED ? { pastStayBalance: await this._pastStayBalance(plain) } : {}),
       };
-    });
+    }));
+  }
+
+  /**
+   * What a moved-out tenant still owes for that stay: its latest bill carries any unpaid amount
+   * forward, so paying that bill settles the stay. Null when nothing is owed. `pendingPayment`
+   * is true while a payment for it waits for the landlord, so the tenant doesn't pay twice.
+   */
+  async _pastStayBalance(stay) {
+    const until = stay.movedOutAt || stay.updatedAt || new Date();
+    const [latest] = await BillingSOARepository.find(
+      { tenantId: idOf(stay.tenantId), roomId: idOf(stay.roomId), billingPeriod: { $lte: until } },
+      { sort: { billingPeriod: -1 }, limit: 1 }
+    );
+    if (!latest || latest.paymentStatus === PAYMENT_STATUS.PAID || !(latest.remainingBalance > 0)) return null;
+    const pending = await PaymentTransactionRepository.findOne({ soaId: latest._id, verificationStatus: VERIFICATION_STATUS.PENDING });
+    return {
+      soaId: String(latest._id),
+      remainingBalance: roundMoney(latest.remainingBalance),
+      billingPeriod: latest.billingPeriod,
+      dueDate: latest.dueDate,
+      pendingPayment: Boolean(pending),
+    };
   }
 
   async _notifyStatusChange({ reservation, previousStatus, property, place, requester }) {

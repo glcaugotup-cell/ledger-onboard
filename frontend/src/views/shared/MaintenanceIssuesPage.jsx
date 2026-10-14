@@ -39,9 +39,11 @@ function Modal({ label, children, wide = false }) {
 /**
  * Maintenance issues for every role. Tenants report and confirm fixes; landlords triage,
  * assign, mark done and remove invalid reports; caretakers record completed work.
- * `embedded` renders it inside My Apartment (no page header).
+ * `embedded` renders it inside My Apartment (no page header). For tenants, `hideStayIds` leaves
+ * out issues from past stays (they show on each past-stay card), and `stayId` shows only one
+ * stay's issues in a compact list (nothing at all when that stay has none).
  */
-export function MaintenanceIssuesContent({ embedded = false, highlightIssueId = null }) {
+export function MaintenanceIssuesContent({ embedded = false, highlightIssueId = null, stayId = null, hideStayIds = [] }) {
   const { user } = useAuth();
   const role = user?.role;
   const [issues, setIssues] = useState([]);
@@ -119,11 +121,15 @@ export function MaintenanceIssuesContent({ embedded = false, highlightIssueId = 
   }, [selected?._id]);
   useEffect(() => () => mediaUrls.forEach(URL.revokeObjectURL), [mediaUrls]);
 
+  const stayOf = (issue) => String(issue.reservationId?._id || issue.reservationId);
+  const hiddenStays = hideStayIds.join(',');
   const filtered = useMemo(() => issues.filter((issue) =>
+    (role !== 'tenant' || (stayId ? stayOf(issue) === String(stayId) : !hiddenStays.split(',').includes(stayOf(issue)))) &&
     (!filters.urgency || issue.urgency === filters.urgency) &&
     (!filters.category || issue.category === filters.category) &&
     (!filters.room || String(issue.roomId?._id || issue.roomId) === filters.room)
-  ), [issues, filters]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [issues, filters, role, stayId, hiddenStays]);
   const caretakerLog = role === 'caretaker' ? filtered.filter((issue) => !OPEN_FOR_WORK.includes(issue.status)) : [];
   const visibleIssues = role === 'caretaker' ? filtered.filter((issue) => OPEN_FOR_WORK.includes(issue.status)) : filtered;
 
@@ -265,10 +271,13 @@ export function MaintenanceIssuesContent({ embedded = false, highlightIssueId = 
   );
 
   const openIssues = issues.filter((item) => item.status !== 'resolved');
+  const compact = Boolean(stayId);
+  // A past stay without issues shows nothing on its card.
+  if (compact && (loading || visibleIssues.length === 0)) return null;
 
   return <>
     {!embedded && <PageHeader title={title} description={description} actions={reportButton} />}
-    {embedded && role === 'tenant' && (
+    {embedded && role === 'tenant' && !compact && (
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-500">{reservations.length ? 'Report a repair and follow its progress.' : 'You can report issues once your landlord confirms your move-in. Past issues stay here.'}</p>
         {reportButton}
@@ -287,7 +296,8 @@ export function MaintenanceIssuesContent({ embedded = false, highlightIssueId = 
       <Select aria-label="Filter by room" value={filters.room} onChange={(e) => setFilters({ ...filters, room: e.target.value })}><option value="">All room units</option>{[...new Map(issues.map((i) => [String(i.roomId?._id || i.roomId), i.roomId])).entries()].map(([id, room]) => <option key={id} value={id}>Room {room?.roomNumber || id.slice(-5)}</option>)}</Select>
     </div></Card>}
 
-    {!loading && issues.length === 0 && <EmptyState title="No maintenance issues" description={role === 'tenant' ? 'Report a repair when something needs attention.' : role === 'landlord' ? 'New tenant reports will show here. Removed reports are in your Archive.' : 'Tasks assigned to you will show here. Archived tasks are in your Archive.'} />}
+    {!loading && !compact && (role === 'tenant' ? visibleIssues.length === 0 : issues.length === 0) && <EmptyState title="No maintenance issues" description={role === 'tenant' ? (hideStayIds.length ? 'Report a repair when something needs attention. Issues from past stays are on their cards below.' : 'Report a repair when something needs attention.') : role === 'landlord' ? 'New tenant reports will show here. Removed reports are in your Archive.' : 'Tasks assigned to you will show here. Archived tasks are in your Archive.'} />}
+    {compact && <h3 className="mb-2 mt-4 text-sm font-semibold text-gray-900">Maintenance issues from this stay</h3>}
     {role === 'caretaker' && visibleIssues.length > 0 && <h2 className="mb-3 text-base font-semibold text-gray-900">Assigned jobs</h2>}
     <div className="space-y-3">{visibleIssues.map(issueCard)}</div>
 

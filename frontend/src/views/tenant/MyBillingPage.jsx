@@ -20,7 +20,7 @@ function validateReferenceNumber(value) {
   return /^\d{10,13}$/.test(value) ? '' : 'Reference number must be 10 to 13 digits.';
 }
 
-function PaySoaForm({ soa, onDone }) {
+export function PaySoaForm({ soa, onDone }) {
   const [amount, setAmount] = useState(String(soa.remainingBalance));
   const [referenceNumber, setReferenceNumber] = useState('');
   const [qrUrl, setQrUrl] = useState('');
@@ -112,12 +112,13 @@ function PaySoaForm({ soa, onDone }) {
 }
 
 /**
- * The tenant's statements, balances and GCash payment. Used inside My Apartment; existing
- * bills stay visible and payable even after a stay ends. `highlightBillId` (from a
- * notification link) scrolls to and marks that bill.
+ * The tenant's statements, balances and GCash payment. Used inside My Apartment.
+ * `highlightBillId` (from a notification link) scrolls to and marks that bill. `hideBill`
+ * leaves out bills shown elsewhere (a past stay's balance is paid from its past-stay card).
  */
-export function BillingSection({ highlightBillId = null }) {
-  const [soas, setSoas] = useState([]);
+export function BillingSection({ highlightBillId = null, hideBill = null, hiddenNote = '' }) {
+  const [allSoas, setSoas] = useState([]);
+  const soas = hideBill ? allSoas.filter((soa) => !hideBill(soa)) : allSoas;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [payingId, setPayingId] = useState(null);
@@ -155,7 +156,7 @@ export function BillingSection({ highlightBillId = null }) {
       </div>
       {loading && <LoadingState label="Loading your statements…" />}
       {!loading && soas.length === 0 && (
-        <EmptyState icon={DocumentTextIcon} title="No statements yet" description="Your monthly statement of account appears here once you have moved in and a caretaker logs your bill." />
+        <EmptyState icon={DocumentTextIcon} title="No statements yet" description={`Your monthly statement of account appears here once you have moved in and a caretaker logs your bill.${allSoas.length && hiddenNote ? ` ${hiddenNote}` : ''}`} />
       )}
       {!loading && open.length > 0 && (
         <section className="mb-6" aria-labelledby="balances-to-pay-heading">

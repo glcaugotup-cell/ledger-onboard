@@ -1,3 +1,7 @@
+// Many payments are submitted from one test address; the limiters are not what this file tests.
+process.env.PAYMENT_SUBMISSION_RATE_LIMIT_MAX = '1000';
+process.env.PAYMENT_RATE_LIMIT_MAX = '1000';
+
 const mongoose = require('mongoose');
 const request = require('supertest');
 const { startTestDb, stopTestDb } = require('../helpers/testDb');
@@ -498,6 +502,60 @@ describe('M1-M8: maintenance issues', () => {
     const other = await makeUser('tenant');
     expect((await request(app).delete(`/api/maintenance-issues/${issueId}/archive`).set(auth(other.token))).status).toBe(404);
   });
+});
+
+// Rule from the user (2026-10-15): a balance left after moving out is paid from the past-stay card, in-app only.
+describe('balances left after moving out', () => {
+  async function movedOutWithBill() {
+    const setup = await makeSetup();
+    const tenant = await makeUser('tenant');
+    const id = await moveIn(setup, tenant);
+    const soa = await BillingSOARepository.create({ tenantId: tenant.user._id, roomId: setup.room._id, billingPeriod: new Date('2026-08-01'), baseRent: 3000, totalAmountDue: 3000, amountPaid: 1000, remainingBalance: 2000, paymentStatus: 'PARTIAL', dueDate: new Date('2030-08-11') });
+    expect((await setStatus(setup.landlord.token, id, { status: 'completed' })).status).toBe(200);
+    return { setup, tenant, id, soa };
+  }
+  const myStay = async (tenant, id) => (await request(app).get('/api/reservations').set(auth(tenant.token))).body.data.reservations.find((r) => r._id === id);
+
+  test("the tenant's past stay carries its balance, shows a payment under review, and clears once paid", async () => {
+    const { setup, tenant, id, soa } = await movedOutWithBill();
+    expect((await myStay(tenant, id)).pastStayBalance).toMatchObject({ soaId: String(soa._id), remainingBalance: 2000, pendingPayment: false });
+
+    const paid = await request(app).post('/api/payments').set(auth(tenant.token)).send({ soaId: String(soa._id), amount: 2000, paymentMethod: 'GCASH_QR', referenceNumber: '5556667778889' });
+    expect(paid.status).toBe(201);
+    expect((await myStay(tenant, id)).pastStayBalance.pendingPayment).toBe(true);
+
+    const verify = await request(app).patch(`/api/payments/${paid.body.data.payment._id}/verify`).set(auth(setup.landlord.token)).send({ approve: true });
+    expect(verify.status).toBe(200);
+    expect((await myStay(tenant, id)).pastStayBalance).toBeNull();
+  });
+
+  test('payments on a past stay are announced in-app only; a current stay still goes through the email step', async () => {
+    const EmailNotificationService = require('../../services/EmailNotificationService');
+    const { setup, tenant, soa } = await movedOutWithBill();
+    const deliver = jest.spyOn(EmailNotificationService, 'deliver'); // from here on: only the payment's notices
+    const paid = await request(app).post('/api/payments').set(auth(tenant.token)).send({ soaId: String(soa._id), amount: 500, paymentMethod: 'GCASH_QR', referenceNumber: '4445556667778' });
+    expect(paid.status).toBe(201);
+    expect(await NotificationRepository.findOne({ userId: setup.landlord.user._id, type: 'PAYMENT_SUBMITTED', relatedId: paid.body.data.payment._id })).not.toBeNull();
+    await request(app).patch(`/api/payments/${paid.body.data.payment._id}/verify`).set(auth(setup.landlord.token)).send({ approve: false, rejectionReason: 'Reference not found' });
+    expect(await NotificationRepository.findOne({ userId: tenant.user._id, type: 'PAYMENT_REJECTED' })).not.toBeNull();
+    expect(deliver).not.toHaveBeenCalled();
+
+    // A current stay's payment is unchanged: it is handed to the email step (which skips unconfirmed inboxes itself).
+    const now = await billFor();
+    deliver.mockClear();
+    const current = await request(app).post('/api/payments').set(auth(now.tenant.token)).send({ soaId: String(now.soa._id), amount: 100, paymentMethod: 'GCASH_QR', referenceNumber: '3334445556667' });
+    expect(current.status).toBe(201);
+    expect(deliver).toHaveBeenCalled();
+    deliver.mockRestore();
+  });
+
+  async function billFor() {
+    const setup = await makeSetup();
+    const tenant = await makeUser('tenant');
+    await moveIn(setup, tenant);
+    const soa = await BillingSOARepository.create({ tenantId: tenant.user._id, roomId: setup.room._id, billingPeriod: new Date('2026-08-01'), baseRent: 3000, totalAmountDue: 3000, remainingBalance: 3000, paymentStatus: 'UNPAID', dueDate: new Date('2030-08-11') });
+    return { setup, tenant, soa };
+  }
 });
 
 describe('P2: GCash reference numbers', () => {

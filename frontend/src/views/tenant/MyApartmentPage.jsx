@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowRightOnRectangleIcon, EnvelopeIcon, HomeModernIcon, MapPinIcon, PhoneIcon } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
@@ -12,9 +12,9 @@ import { Field, TextArea } from '../../components/ui/Field.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import ReservationApi from '../../services/ReservationApi.js';
 import ReviewApi from '../../services/ReviewApi.js';
-import { BillingSection } from './MyBillingPage.jsx';
+import { BillingSection, PaySoaForm } from './MyBillingPage.jsx';
 import { MaintenanceIssuesContent } from '../shared/MaintenanceIssuesPage.jsx';
-import { formatDate } from '../../utils/format.js';
+import { formatDate, formatPeriod, formatPeso } from '../../utils/format.js';
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst } from '../../utils/textFormat.js';
 
@@ -190,10 +190,57 @@ function StayReview({ stay, review, onChanged }) {
   );
 }
 
+const idOf = (value) => String(value?._id || value || '');
+const monthStart = (date) => { const d = new Date(date); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); };
+
+/** A bill from this past stay: same room, billed between the move-in month and the move-out. */
+function belongsToStay(soa, stay) {
+  if (idOf(soa.roomId) !== idOf(stay.roomId)) return false;
+  const period = new Date(soa.billingPeriod);
+  return period >= monthStart(stay.movedInAt || stay.moveInDate) && period <= new Date(stay.movedOutAt || stay.updatedAt);
+}
+
+/**
+ * What is still owed for a past stay, paid from its card with the usual GCash form. Its latest
+ * bill carries any unpaid amount forward, so paying it settles the stay. Notices about these
+ * payments are in-app only.
+ */
+function PastStayBalance({ stay, highlighted, onPaid }) {
+  const [paying, setPaying] = useState(false);
+  const [message, setMessage] = useState('');
+  const balance = stay.pastStayBalance;
+  if (!balance) return <p className="mt-3 text-sm text-green-700">No balance left for this stay.</p>;
+  return (
+    <div className={`mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 ${highlighted ? 'ring-2 ring-amber-300' : ''}`}>
+      <SuccessBanner message={message} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Balance to pay</p>
+          <p className="text-xl font-bold tabular-nums text-gray-900">{formatPeso(balance.remainingBalance)}</p>
+          <p className="text-xs text-gray-600">From your {formatPeriod(balance.billingPeriod)} bill{balance.dueDate ? ` · due ${formatDate(balance.dueDate)}` : ''}</p>
+        </div>
+        {balance.pendingPayment
+          ? <p className="text-sm font-medium text-amber-900">Your payment is being verified by your landlord.</p>
+          : <Button onClick={() => setPaying((open) => !open)}>{paying ? 'Close payment' : 'Pay balance'}</Button>}
+      </div>
+      {paying && !balance.pendingPayment && (
+        <PaySoaForm
+          soa={{ _id: balance.soaId, remainingBalance: balance.remainingBalance }}
+          onDone={() => {
+            setPaying(false);
+            setMessage('GCash payment reference submitted — your landlord will verify it. You will be notified here in the app.');
+            onPaid();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 /**
  * R11: the tenant's apartment hub. The current stay at the top, then Billing and
- * Maintenance issues. Without a current stay, past bills, issues and stays stay
- * reachable read-only.
+ * Maintenance issues for the current stay. Each past stay has its own card with any balance
+ * left to pay, its maintenance issues (still confirmable) and the tenant's rating.
  */
 export default function MyApartmentPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -226,6 +273,20 @@ export default function MyApartmentPage() {
   const current = reservations.find((r) => r.status === 'active');
   const pastStays = reservations.filter((r) => r.status === 'completed');
   const reserved = reservations.find((r) => r.status === 'approved');
+  const pastStayIds = pastStays.map((stay) => stay._id);
+  const isPastStayBill = (soa) => pastStays.some((stay) => belongsToStay(soa, stay));
+  const highlightBillId = searchParams.get('bill');
+  const highlightIssueId = searchParams.get('issue');
+
+  // A notification about a past stay's bill opens that stay's card instead (once).
+  const scrolledToBill = useRef(false);
+  useEffect(() => {
+    if (loading || !highlightBillId || scrolledToBill.current) return;
+    const stay = pastStays.find((item) => item.pastStayBalance?.soaId === highlightBillId);
+    if (!stay) return;
+    scrolledToBill.current = true;
+    document.getElementById(`stay-${stay._id}`)?.scrollIntoView?.({ block: 'center' });
+  }, [loading, highlightBillId, pastStays]);
 
   const selectTab = (key) => setSearchParams(key === 'billing' ? { tab: 'billing' } : { tab: key }, { replace: true });
 
@@ -265,7 +326,9 @@ export default function MyApartmentPage() {
             ))}
           </div>
           <div role="tabpanel">
-            {tab === 'billing' ? <BillingSection highlightBillId={searchParams.get('bill')} /> : <MaintenanceIssuesContent embedded highlightIssueId={searchParams.get('issue')} />}
+            {tab === 'billing'
+              ? <BillingSection highlightBillId={highlightBillId} hideBill={pastStays.length ? isPastStayBill : null} hiddenNote="Balances from past stays are on their cards below." />
+              : <MaintenanceIssuesContent embedded highlightIssueId={highlightIssueId} hideStayIds={pastStayIds} />}
           </div>
 
           {pastStays.length > 0 && (
@@ -281,6 +344,8 @@ export default function MyApartmentPage() {
                       </div>
                       <Badge tone="gray">Moved out</Badge>
                     </div>
+                    <PastStayBalance stay={stay} highlighted={Boolean(highlightBillId) && stay.pastStayBalance?.soaId === highlightBillId} onPaid={load} />
+                    <MaintenanceIssuesContent embedded stayId={stay._id} highlightIssueId={highlightIssueId} />
                     <StayReview stay={stay} review={reviewFor(stay._id)} onChanged={loadReviews} />
                   </Card>
                 ))}

@@ -6,6 +6,7 @@ import MyApartmentPage from './MyApartmentPage.jsx';
 import ReservationApi from '../../services/ReservationApi.js';
 import BillingApi from '../../services/BillingApi.js';
 import MaintenanceIssueApi from '../../services/MaintenanceIssueApi.js';
+import PaymentApi from '../../services/PaymentApi.js';
 import ReviewApi from '../../services/ReviewApi.js';
 import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.js';
 
@@ -15,7 +16,7 @@ vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useN
 vi.mock('../../services/ReservationApi.js', () => ({ default: { list: vi.fn(), requestLeave: vi.fn() } }));
 vi.mock('../../services/BillingApi.js', () => ({ default: { list: vi.fn(), fetchPaymentQrObjectUrl: vi.fn() } }));
 vi.mock('../../services/PaymentApi.js', () => ({ default: { submitQr: vi.fn() } }));
-vi.mock('../../services/MaintenanceIssueApi.js', () => ({ default: { list: vi.fn(), getMedia: vi.fn() } }));
+vi.mock('../../services/MaintenanceIssueApi.js', () => ({ default: { list: vi.fn(), getMedia: vi.fn(), confirm: vi.fn() } }));
 vi.mock('../../services/ReviewApi.js', () => ({ default: { listEligible: vi.fn(), submit: vi.fn(), listMine: vi.fn(), update: vi.fn(), remove: vi.fn() } }));
 
 const stay = {
@@ -168,6 +169,85 @@ describe('MyApartmentPage', () => {
 
       expect(await screen.findByText('Shown on the property page')).toBeInTheDocument();
       expect(screen.queryByText(/waiting for an admin/i)).not.toBeInTheDocument();
+    });
+  });
+
+  // Rule from the user (2026-10-15): after moving out, a stay's balance and issues live on its past-stay card.
+  describe('after moving out', () => {
+    const current = { ...stay, roomId: { _id: 'r1', roomNumber: '67' } };
+    const past = {
+      _id: 'old1', status: 'completed', movedInAt: '2026-06-01', moveInDate: '2026-06-01', movedOutAt: '2026-09-15',
+      propertyId: { _id: 'p9', propertyName: 'Riverside Dorm' }, roomId: { _id: 'r9', roomNumber: '12' },
+      pastStayBalance: { soaId: 'b9', remainingBalance: 1500, billingPeriod: '2026-09-01', dueDate: '2026-09-11', pendingPayment: false },
+    };
+    const currentBill = { ...bill, _id: 'b1', roomId: 'r1', billingPeriod: '2026-10-01', propertyName: 'Sunshine Boarding House' };
+    const pastBill = { ...bill, _id: 'b9', roomId: 'r9', billingPeriod: '2026-09-01', remainingBalance: 1500, totalAmountDue: 1500, propertyName: 'Riverside Dorm', roomNumber: '12' };
+    const pastCard = async () => (await screen.findByText('Riverside Dorm · Room 12')).closest('[id="stay-old1"]');
+
+    it('shows the balance on the past-stay card and pays it there; the Billing tab only shows the current stay', async () => {
+      ReservationApi.list.mockResolvedValue({ reservations: [current, past] });
+      BillingApi.list.mockResolvedValue({ soas: [currentBill, pastBill] });
+      BillingApi.fetchPaymentQrObjectUrl.mockResolvedValue('blob:qr');
+      PaymentApi.submitQr.mockResolvedValue({});
+      const user = userEvent.setup();
+      renderPage();
+
+      const card = await pastCard();
+      expect(within(card).getByText('Balance to pay')).toBeInTheDocument();
+      expect(within(card).getByText('₱1,500')).toBeInTheDocument();
+      expect(within(card).getByText(/From your September 2026 bill/)).toBeInTheDocument();
+      const panel = screen.getByRole('tabpanel');
+      await within(panel).findByText('Balances to pay');
+      expect(within(panel).queryByText(/Riverside Dorm/)).not.toBeInTheDocument();
+
+      await user.click(within(card).getByRole('button', { name: 'Pay balance' }));
+      expect(BillingApi.fetchPaymentQrObjectUrl).toHaveBeenCalledWith('b9');
+      await within(card).findByAltText('Landlord GCash payment QR code');
+      await user.type(within(card).getByLabelText(/GCash transaction reference/), '1234567890');
+      const loadsBefore = ReservationApi.list.mock.calls.length;
+      await user.click(within(card).getByRole('button', { name: /submit payment/i }));
+      await waitFor(() => expect(PaymentApi.submitQr).toHaveBeenCalledWith(expect.objectContaining({ soaId: 'b9', amount: '1500', referenceNumber: '1234567890' })));
+      expect(await within(card).findByText(/You will be notified here in the app/)).toBeInTheDocument();
+      // The stays reload, so the card can show the payment as being verified.
+      expect(ReservationApi.list.mock.calls.length).toBe(loadsBefore + 1);
+    });
+
+    it('a payment being verified hides Pay balance; a stay with nothing owed says so', async () => {
+      ReservationApi.list.mockResolvedValue({
+        reservations: [
+          { ...past, pastStayBalance: { ...past.pastStayBalance, pendingPayment: true } },
+          { ...past, _id: 'old2', propertyId: { _id: 'p8', propertyName: 'Bonuan Bedspace' }, pastStayBalance: null },
+        ],
+      });
+      BillingApi.list.mockResolvedValue({ soas: [pastBill] });
+      renderPage();
+
+      const card = await pastCard();
+      expect(within(card).getByText('Your payment is being verified by your landlord.')).toBeInTheDocument();
+      expect(within(card).queryByRole('button', { name: 'Pay balance' })).not.toBeInTheDocument();
+      expect(screen.getByText('No balance left for this stay.')).toBeInTheDocument();
+      // Without a current stay the Billing tab points to the cards below.
+      expect(await screen.findByText(/Balances from past stays are on their cards below/)).toBeInTheDocument();
+    });
+
+    it("a past stay's issues show on its card (still confirmable); the issues tab shows the current stay only", async () => {
+      const pastIssue = { _id: 'i9', reservationId: 'old1', status: 'awaiting_confirmation', category: 'Plumbing', urgency: 'medium', description: 'barado po yung cr', roomId: { roomNumber: '12' }, propertyId: { propertyName: 'Riverside Dorm' }, createdAt: '2026-08-04', resolutionNotes: 'Unclogged the drain' };
+      const currentIssue = { ...pastIssue, _id: 'i1', reservationId: 'res1', status: 'pending', category: 'Electrical', description: 'no power', roomId: { roomNumber: '67' } };
+      ReservationApi.list.mockResolvedValue({ reservations: [current, past] });
+      MaintenanceIssueApi.list.mockResolvedValue({ issues: [pastIssue, currentIssue] });
+      MaintenanceIssueApi.confirm.mockResolvedValue({});
+      const user = userEvent.setup();
+      renderPage('/tenant/apartment?tab=issues');
+
+      const card = await pastCard();
+      expect(await within(card).findByText('Maintenance issues from this stay')).toBeInTheDocument();
+      expect(within(card).getByText('barado po yung cr')).toBeInTheDocument();
+      const panel = screen.getByRole('tabpanel');
+      expect(await within(panel).findByText('no power')).toBeInTheDocument();
+      expect(within(panel).queryByText('barado po yung cr')).not.toBeInTheDocument();
+
+      await user.click(within(card).getByRole('button', { name: 'Confirm solved' }));
+      await waitFor(() => expect(MaintenanceIssueApi.confirm).toHaveBeenCalledWith('i9', true));
     });
   });
 });

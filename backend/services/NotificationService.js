@@ -22,9 +22,10 @@ const NO_EMAIL_STATUSES = new Set([ACCOUNT_STATUS.DEACTIVATED, ACCOUNT_STATUS.AR
  * (reservation approved, payment verified, etc.).
  */
 class NotificationService {
-  async notify({ userId, type, title, message, relatedType = null, relatedId = null, link = null }) {
+  /** `email: false` keeps an otherwise emailed type in-app only (e.g. payments on a past stay's bills). */
+  async notify({ userId, type, title, message, relatedType = null, relatedId = null, link = null, email = true }) {
     const notification = await NotificationRepository.create({ userId, type, title, message, relatedType, relatedId, link });
-    if (EMAILED_TYPES.has(type)) await this._email(userId, { title, message, link }, categoryOfNotification(type));
+    if (email && EMAILED_TYPES.has(type)) await this._email(userId, { title, message, link }, categoryOfNotification(type));
     return notification;
   }
 

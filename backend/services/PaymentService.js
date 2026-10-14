@@ -9,8 +9,9 @@ const EmailNotificationService = require('./EmailNotificationService');
 const FileStorageService = require('./FileStorageService');
 const { FILE_CATEGORIES } = require('./FileStorageService');
 const UserRepository = require('../repositories/UserRepository');
+const ReservationRepository = require('../repositories/ReservationRepository');
 const ApiError = require('../utils/ApiError');
-const { ROLES, PAYMENT_METHOD, VERIFICATION_STATUS } = require('../utils/constants');
+const { ROLES, PAYMENT_METHOD, RESERVATION_STATUS, VERIFICATION_STATUS } = require('../utils/constants');
 const { withPaymentContext } = require('./displayContext');
 const { ACTIVE_REFERENCE_STATUSES } = require('../utils/paymentReferenceIndex');
 
@@ -101,12 +102,21 @@ class PaymentService {
   }
 
   /** Tells the bill's landlord about a payment to review; a notification problem never fails the payment. */
+  /** A balance left after moving out: the tenant finished a stay in that room and has no current one there. */
+  async _isPastStayBill(soa) {
+    const stayIn = (status) => ReservationRepository.findOne({ tenantId: soa.tenantId, roomId: soa.roomId, status });
+    if (await stayIn(RESERVATION_STATUS.ACTIVE)) return false;
+    return Boolean(await stayIn(RESERVATION_STATUS.COMPLETED));
+  }
+
   async _notifyLandlordOfPayment(soa, tenantId, type, title, message, paymentId) {
     try {
       const room = await RoomRepository.findById(soa.roomId);
       const property = room && await PropertyRepository.findById(room.propertyId);
       if (!property) return;
-      await NotificationService.notify({ userId: property.landlordId, type, title, message, relatedType: 'PaymentTransaction', relatedId: paymentId, link: `/landlord/payments?payment=${paymentId}` });
+      // Paying off a past stay's balance is announced in-app only.
+      const email = !(await this._isPastStayBill(soa));
+      await NotificationService.notify({ userId: property.landlordId, type, title, message, relatedType: 'PaymentTransaction', relatedId: paymentId, link: `/landlord/payments?payment=${paymentId}`, email });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[notifications] payment notification failed:', err.message);
@@ -213,8 +223,10 @@ class PaymentService {
     });
 
     // The review is already saved, logged and notified in-app; email trouble must not turn it into an error.
+    // Payments on a past stay's balance are in-app only.
     try {
-      const tenant = await UserRepository.findById(payment.tenantId);
+      const paidSoa = await BillingSOARepository.findById(payment.soaId);
+      const tenant = paidSoa && (await this._isPastStayBill(paidSoa)) ? null : await UserRepository.findById(payment.tenantId);
       if (tenant) {
         if (isApproved) await EmailNotificationService.deliver(tenant, 'sendPaymentVerifiedEmail', [tenant.fullName, verifiedAmount], { category: 'payments' });
         else await EmailNotificationService.deliver(tenant, 'sendPaymentRejectedEmail', [tenant.fullName, updated.rejectionReason], { category: 'payments' });
