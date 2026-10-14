@@ -19,7 +19,7 @@ const readline = require('readline');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const DEMO_NAMES = Object.freeze([
-  { email: 'ledgeronboard@gmail.com', firstName: 'Main', lastName: 'Admin' },
+  { email: 'ledgeronboard@gmail.com', firstName: 'Ledger OnBoard', lastName: 'Admin' },
   { email: 'demo.landlord@gmail.com', firstName: 'Gladdiel', lastName: 'Landlord' },
   { email: 'demo.tenant@gmail.com', firstName: 'Paula', lastName: 'Tenant' },
   { email: 'demo.caretaker@gmail.com', firstName: 'Paul', lastName: 'Caretaker' },

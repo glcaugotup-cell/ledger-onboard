@@ -38,7 +38,7 @@ import sidebarHouse from '../../assets/housedesign1.webp';
 import PropertyApi from '../../services/PropertyApi.js';
 import ReservationApi from '../../services/ReservationApi.js';
 
-const roleLabel = (user) => (user?.isMainAdmin ? 'Main Admin' : formatStatus(user?.role));
+const roleLabel = (user) => (user?.isMainAdmin ? 'System Administrator' : formatStatus(user?.role));
 
 const NAV_BY_ROLE = {
   tenant: [

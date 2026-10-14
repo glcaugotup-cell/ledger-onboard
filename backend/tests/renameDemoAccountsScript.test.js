@@ -34,13 +34,13 @@ test('renames the existing demo accounts and nothing else; running it again chan
 
   const plan = await script.planRenames();
   expect(plan.map((p) => [p.email, p.fullName])).toEqual([
-    ['ledgeronboard@gmail.com', 'Main Admin'],
+    ['ledgeronboard@gmail.com', 'Ledger OnBoard Admin'],
     ['demo.landlord@gmail.com', 'Gladdiel Landlord'],
     ['demo.caretaker@gmail.com', 'Paul Caretaker'],
   ]);
   await script.applyRenames(plan);
 
-  expect(await UserRepository.findById(admin._id)).toMatchObject({ firstName: 'Main', lastName: 'Admin', fullName: 'Main Admin' });
+  expect(await UserRepository.findById(admin._id)).toMatchObject({ firstName: 'Ledger OnBoard', lastName: 'Admin', fullName: 'Ledger OnBoard Admin' });
   expect(await UserRepository.findById(landlord._id)).toMatchObject({ firstName: 'Gladdiel', fullName: 'Gladdiel Landlord' });
   expect(await UserRepository.findById(caretaker._id)).toMatchObject({ firstName: 'Paul', fullName: 'Paul Caretaker' });
   expect((await UserRepository.findById(stranger._id)).fullName).toBe('Demo Person');

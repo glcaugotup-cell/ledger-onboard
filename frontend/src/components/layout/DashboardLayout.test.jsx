@@ -45,6 +45,21 @@ describe('DashboardLayout', () => {
     expect(screen.getAllByText('Landlord Cruz').length).toBeGreaterThan(0);
   });
 
+  it('the main admin shows as "System Administrator" under their name; other admins as "Admin"', () => {
+    useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Ledger OnBoard Admin', role: 'admin', isMainAdmin: true } }));
+    const { unmount } = renderLayout();
+    expect(screen.getAllByText('Ledger OnBoard Admin').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('System Administrator').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Main Admin')).not.toBeInTheDocument();
+    unmount();
+
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Other Admin', role: 'admin', isMainAdmin: false } }));
+    renderLayout();
+    expect(screen.queryByText('System Administrator')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Admin').length).toBeGreaterThan(0);
+  });
+
   it('R11: tenants get My Apartment below My Reservations; Billing and Maintenance moved inside it', () => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Tenant Cruz', role: 'tenant' } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());

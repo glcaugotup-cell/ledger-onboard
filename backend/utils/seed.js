@@ -40,9 +40,9 @@ async function main() {
   const staleAdmin = await UserRepository.findByEmail('demo.admin@gmail.com');
   if (staleAdmin) await UserRepository.deleteById(staleAdmin._id);
   const admin = await upsertUser({
-    firstName: 'Main',
+    firstName: 'Ledger OnBoard',
     lastName: 'Admin',
-    fullName: 'Main Admin',
+    fullName: 'Ledger OnBoard Admin',
     email: 'ledgeronboard@gmail.com',
     phone: '09170000001',
     role: ROLES.ADMIN,

@@ -328,7 +328,7 @@ export default function ProfilePage() {
           <dl className="mb-4">
             {!canEditDetails && <InfoRow label="Full name" value={user?.fullName} hint="Your registered name can’t be changed here." />}
             <InfoRow label="Email" value={user?.email} hint="Your sign-in email can’t be changed." />
-            <InfoRow label="Role" value={user?.isMainAdmin ? 'Main Administrator' : ROLE_LABEL[role] || role} hint={canEditDetails ? 'Your role can’t be changed.' : undefined} />
+            <InfoRow label="Role" value={user?.isMainAdmin ? 'System Administrator' : ROLE_LABEL[role] || role} hint={canEditDetails ? 'Your role can’t be changed.' : undefined} />
             {role === 'caretaker' && (
               <InfoRow label="Service barangay" value={user?.serviceBarangay} hint="Set by your landlord; used to match you with boarding houses nearby." />
             )}
