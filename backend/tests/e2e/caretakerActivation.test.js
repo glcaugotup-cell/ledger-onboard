@@ -275,3 +275,49 @@ describe('5.4 activation with email, code and a new password', () => {
     expect((await UserRepository.findById(caretaker._id)).accountStatus).toBe('pending_activation');
   }, 30000);
 });
+
+describe('cancelling an invitation', () => {
+  const cancel = async (id, token) => request(app).post(`/api/landlord/caretakers/${id}/cancel-invitation`).set('Authorization', `Bearer ${token || (await landlordSession())}`);
+
+  test('the code stops working, the invite leaves the list, the record is kept and the email can be invited again', async () => {
+    const { caretaker, activationCode } = await invite('cancel.me@gmail.com');
+    const res = await cancel(caretaker._id);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ cancelled: true });
+
+    expectGeneric(await activate('cancel.me@gmail.com', activationCode));
+    const list = await request(app).get('/api/landlord/caretakers').set('Authorization', `Bearer ${await landlordSession()}`);
+    expect(list.body.data.caretakers.some((c) => c._id === String(caretaker._id))).toBe(false);
+
+    // Nothing is deleted: the record stays, closed, with the email freed and no usable code.
+    const kept = await UserRepository.findByIdWithSecrets(caretaker._id);
+    expect(kept).toMatchObject({ accountStatus: 'deleted', firstName: 'Code', email: `cancelled-${caretaker._id}@deleted.invalid` });
+    expect(kept.otp.codeHash).toBeNull();
+    expect(kept.phone).toBeUndefined();
+    const audit = (await AuditLogRepository.findRecent({ action: 'CARETAKER_INVITATION_CANCELLED' })).find((l) => String(l.targetId) === String(caretaker._id));
+    expect(String(audit.actorId)).toBe(String(await landlordId()));
+    expect(audit.metadata.email).toBe('cancel.me@gmail.com');
+
+    const again = await invite('cancel.me@gmail.com');
+    expect((await activate('cancel.me@gmail.com', again.activationCode)).status).toBe(200);
+    expect((await login('cancel.me@gmail.com', NEW_PASSWORD)).status).toBe(200);
+  }, 30000);
+
+  test('only works for this landlord\'s caretakers who have not activated yet', async () => {
+    const { caretaker, activationCode } = await invite('already.active@gmail.com');
+    expect((await activate('already.active@gmail.com', activationCode)).status).toBe(200);
+    const activated = await cancel(caretaker._id);
+    expect(activated.status).toBe(409);
+    expect(activated.body.error.code).toBe('ALREADY_ACTIVATED');
+    expect((await login('already.active@gmail.com', NEW_PASSWORD)).status).toBe(200);
+
+    const pending = await invite('not.yours@gmail.com');
+    await makeUser('other.landlord@gmail.com', { role: 'landlord', businessVerificationStatus: 'VERIFIED' });
+    const otherToken = (await login('other.landlord@gmail.com', PASSWORD)).body.data.accessToken;
+    expect((await cancel(pending.caretaker._id, otherToken)).status).toBe(404);
+    await makeUser('a.tenant@gmail.com', { role: 'tenant', emergencyContact: { name: 'Ana Tenant', phone: '09171234598' } });
+    const tenantToken = (await login('a.tenant@gmail.com', PASSWORD)).body.data.accessToken;
+    expect((await cancel(pending.caretaker._id, tenantToken)).status).toBe(403);
+    expect((await UserRepository.findById(pending.caretaker._id)).accountStatus).toBe('pending_activation');
+  }, 30000);
+});

@@ -24,6 +24,11 @@ class CaretakerController {
     sendSuccess(res, { data: result });
   });
 
+  cancelInvitation = asyncHandler(async (req, res) => {
+    const result = await AuthService.cancelCaretakerInvitation(req.user.id, req.params.id);
+    sendSuccess(res, { data: result });
+  });
+
   remove = asyncHandler(async (req, res) => {
     const result = await AuthService.removeCaretaker(req.user.id, req.params.id, req.body.reason);
     sendSuccess(res, { data: result });

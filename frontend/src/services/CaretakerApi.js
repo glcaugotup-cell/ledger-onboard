@@ -17,6 +17,11 @@ class CaretakerApi extends BaseApiClient {
     return this.post(`/landlord/caretakers/${id}/resend-invitation`);
   }
 
+  /** Only for caretakers who haven't activated: the code stops working and the email is freed. */
+  cancelInvitation(id) {
+    return this.post(`/landlord/caretakers/${id}/cancel-invitation`);
+  }
+
   remove(id, reason) {
     return this.delete(`/landlord/caretakers/${id}`, { data: { reason } });
   }

@@ -19,6 +19,7 @@ caretakersRouter.post('/caretakers', requireRole(ROLES.LANDLORD), createCaretake
 caretakersRouter.get('/caretakers', requireRole(ROLES.LANDLORD), CaretakerController.list);
 caretakersRouter.patch('/caretakers/:id', requireRole(ROLES.LANDLORD), objectIdParam('id'), updateCaretakerValidators, validate, CaretakerController.update);
 caretakersRouter.post('/caretakers/:id/resend-invitation', requireRole(ROLES.LANDLORD), sensitiveAuthRateLimiters.resendCaretakerInvitation, objectIdParam('id'), validate, CaretakerController.resendInvitation);
+caretakersRouter.post('/caretakers/:id/cancel-invitation', requireRole(ROLES.LANDLORD), objectIdParam('id'), validate, CaretakerController.cancelInvitation);
 caretakersRouter.delete('/caretakers/:id', requireRole(ROLES.LANDLORD), objectIdParam('id'), validate, CaretakerController.remove);
 
 // Analytics is mounted at /api/analytics/landlord.

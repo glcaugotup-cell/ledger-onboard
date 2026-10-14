@@ -2,6 +2,8 @@ const VARIANTS = {
   primary: 'bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800 disabled:bg-brand-300',
   secondary: 'bg-white text-brand-700 border border-brand-300 hover:bg-brand-50 active:bg-brand-100 disabled:border-gray-200 disabled:text-gray-400',
   danger: 'bg-red-600 text-white shadow-sm hover:bg-red-700 active:bg-red-800 disabled:bg-red-300',
+  // A visible but lighter destructive action, next to a secondary button (e.g. "Cancel invitation").
+  dangerOutline: 'bg-white text-red-700 border border-red-300 hover:bg-red-50 active:bg-red-100 disabled:border-gray-200 disabled:text-gray-400',
   ghost: 'bg-transparent text-gray-600 hover:bg-gray-100 active:bg-gray-200 disabled:text-gray-300',
   // Amber call-to-action used for the auth screens' primary buttons.
   accent: 'bg-amber-500 text-white shadow-sm hover:bg-amber-600 active:bg-amber-700 disabled:bg-amber-300',

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,7 @@ import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.j
 const { useAuthMock, useNotificationsMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), useNotificationsMock: vi.fn() }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
-vi.mock('../../services/CaretakerApi.js', () => ({ default: { list: vi.fn(), create: vi.fn(), update: vi.fn(), resendInvitation: vi.fn() } }));
+vi.mock('../../services/CaretakerApi.js', () => ({ default: { list: vi.fn(), create: vi.fn(), update: vi.fn(), resendInvitation: vi.fn(), cancelInvitation: vi.fn() } }));
 
 function renderPage() {
   return render(
@@ -225,5 +225,51 @@ describe('CaretakersPage', () => {
     await user.click(await screen.findByRole('button', { name: /new activation code/i }));
     expect(await screen.findByText('Too many requests. Please try again later.')).toBeInTheDocument();
     expect(screen.queryByTestId('activation-code')).not.toBeInTheDocument();
+  });
+
+  it('cancels an invitation only for caretakers who have not activated, after confirming', async () => {
+    CaretakerApi.list.mockResolvedValue({
+      caretakers: [
+        { _id: 'c1', fullName: 'Maria Santos', email: 'maria@gmail.com', accountStatus: 'active' },
+        { _id: 'c2', fullName: 'Nat Quinto', email: 'nat.quinto@gmail.com', accountStatus: 'pending_activation' },
+      ],
+    });
+    CaretakerApi.cancelInvitation.mockResolvedValue({ cancelled: true });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText('Nat Quinto');
+    const buttons = screen.getAllByRole('button', { name: 'Cancel invitation' });
+    expect(buttons).toHaveLength(1);
+
+    await user.click(buttons[0]);
+    let dialog = screen.getByRole('dialog', { name: "Cancel Nat Quinto's invitation?" });
+    expect(within(dialog).getByText(/You can invite nat.quinto@gmail.com again later/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Keep invitation' }));
+    expect(CaretakerApi.cancelInvitation).not.toHaveBeenCalled();
+    expect(screen.getByText('Nat Quinto')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel invitation' }));
+    dialog = screen.getByRole('dialog', { name: "Cancel Nat Quinto's invitation?" });
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel invitation' }));
+    await waitFor(() => expect(CaretakerApi.cancelInvitation).toHaveBeenCalledWith('c2'));
+    expect(await screen.findByText(/The invitation for Nat Quinto was cancelled/)).toBeInTheDocument();
+    expect(screen.queryByText('nat.quinto@gmail.com')).not.toBeInTheDocument();
+    expect(screen.getByText('Maria Santos')).toBeInTheDocument();
+  });
+
+  it('keeps the invitation and shows the error when cancelling fails (for example, they just activated)', async () => {
+    CaretakerApi.list.mockResolvedValue({
+      caretakers: [{ _id: 'c2', fullName: 'Nat Quinto', email: 'nat.quinto@gmail.com', accountStatus: 'pending_activation' }],
+    });
+    CaretakerApi.cancelInvitation.mockRejectedValue(new ApiClientError('This caretaker has already activated their account', 'ALREADY_ACTIVATED', 409));
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel invitation' }));
+    const dialog = screen.getByRole('dialog', { name: "Cancel Nat Quinto's invitation?" });
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel invitation' }));
+    expect(await within(dialog).findByText('This caretaker has already activated their account')).toBeInTheDocument();
+    expect(screen.getByText('nat.quinto@gmail.com')).toBeInTheDocument();
   });
 });

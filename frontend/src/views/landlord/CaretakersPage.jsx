@@ -98,6 +98,9 @@ export default function CaretakersPage() {
   const [removeLoading, setRemoveLoading] = useState(false);
   const [resendingId, setResendingId] = useState(null);
   const [resendError, setResendError] = useState(null);
+  const [cancelling, setCancelling] = useState(null); // pending caretaker whose invitation is being cancelled
+  const [cancelError, setCancelError] = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   const resendInvitation = async (caretaker) => {
     setResendingId(caretaker._id);
@@ -131,6 +134,21 @@ export default function CaretakersPage() {
       setRemoveError(describeApiError(err).message);
     } finally {
       setRemoveLoading(false);
+    }
+  };
+
+  const cancelInvitation = async () => {
+    setCancelLoading(true);
+    setCancelError('');
+    try {
+      await CaretakerApi.cancelInvitation(cancelling._id);
+      setCaretakers((items) => items.filter((item) => item._id !== cancelling._id));
+      setSuccessMsg(`The invitation for ${cancelling.fullName} was cancelled. Their activation code no longer works.`);
+      setCancelling(null);
+    } catch (err) {
+      setCancelError(describeApiError(err).message);
+    } finally {
+      setCancelLoading(false);
     }
   };
 
@@ -254,11 +272,14 @@ export default function CaretakersPage() {
                   </div>
                   <StatusBadge status={c.accountStatus} tones={STATUS_TONE} />
                   {c.accountStatus === 'pending_activation' && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Waiting for activation</span>}
-                  {c.accountStatus === 'pending_activation' && (
-                    <Button variant="secondary" loading={resendingId === c._id} disabled={Boolean(resendingId)} onClick={() => resendInvitation(c)}>New activation code</Button>
-                  )}
                   {c.accountStatus === 'active' && <Button variant="danger" onClick={() => { setRemoving(c); setRemoveReason(''); setRemoveError(''); }}>Remove</Button>}
                 </div>
+                {c.accountStatus === 'pending_activation' && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button variant="secondary" loading={resendingId === c._id} disabled={Boolean(resendingId)} onClick={() => resendInvitation(c)}>New activation code</Button>
+                    <Button variant="dangerOutline" onClick={() => { setCancelling(c); setCancelError(''); setSuccessMsg(''); }}>Cancel invitation</Button>
+                  </div>
+                )}
                 {resendError?.id === c._id && <p className="mt-2 text-right text-xs text-red-600" role="alert">{resendError.message}</p>}
                 <div className="mt-4 grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 xl:grid-cols-[minmax(8rem,0.8fr)_minmax(10rem,1fr)_minmax(14rem,1.4fr)]">
                   <div className="min-w-0">
@@ -285,6 +306,18 @@ export default function CaretakersPage() {
           <TextArea rows={3} maxLength={500} value={removeReason} onChange={(e) => setRemoveReason(e.target.value)} placeholder="Explain why this caretaker is being removed" />
         </Field>
       </ConfirmDialog>
+      <ConfirmDialog
+        open={Boolean(cancelling)}
+        tone="danger"
+        title={cancelling ? `Cancel ${cancelling.fullName}'s invitation?` : ''}
+        message={cancelling ? `Their activation code will stop working and they will leave this list. You can invite ${cancelling.email} again later.` : ''}
+        confirmLabel="Cancel invitation"
+        cancelLabel="Keep invitation"
+        loading={cancelLoading}
+        error={cancelError}
+        onConfirm={cancelInvitation}
+        onCancel={() => setCancelling(null)}
+      />
     </DashboardLayout>
   );
 }

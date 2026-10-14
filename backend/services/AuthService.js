@@ -636,6 +636,49 @@ class AuthService {
     return { caretaker: sanitizeUser(updated), activationCode: code, expiresAt };
   }
 
+  /**
+   * Cancels an invitation the caretaker hasn't accepted. Nothing is deleted: the record is closed
+   * (status deleted) and kept for the audit trail, the activation code stops working, and the
+   * email is freed so the landlord can invite it again or its owner can register.
+   * Only applies while the account is still pending, so it can't race with an activation.
+   */
+  async cancelCaretakerInvitation(landlordId, caretakerId) {
+    const caretaker = await UserRepository.findById(caretakerId);
+    if (!caretaker || caretaker.role !== ROLES.CARETAKER || String(caretaker.assignedLandlordId) !== String(landlordId)) {
+      throw ApiError.notFound('Caretaker not found', 'CARETAKER_NOT_FOUND');
+    }
+    const now = new Date();
+    // Straight to the collection, as the model keeps the email immutable.
+    const result = await UserRepository.model.collection.updateOne(
+      { _id: caretaker._id, accountStatus: ACCOUNT_STATUS.PENDING_ACTIVATION },
+      {
+        $set: {
+          email: `cancelled-${caretaker._id}@deleted.invalid`,
+          accountStatus: ACCOUNT_STATUS.DELETED,
+          statusReason: 'Invitation cancelled by the landlord',
+          statusChangedAt: now,
+          deletedAt: now,
+          otp: { codeHash: null, purpose: null, expiresAt: null, attempts: 0 },
+          refreshTokenHash: null,
+        },
+        $unset: { phone: '' },
+        $inc: { tokenVersion: 1 },
+      },
+    );
+    if (result.modifiedCount === 0) {
+      throw ApiError.conflict('This caretaker has already activated their account', 'ALREADY_ACTIVATED');
+    }
+    await AuditLogRepository.record({
+      action: 'CARETAKER_INVITATION_CANCELLED',
+      actorId: landlordId,
+      actorRole: ROLES.LANDLORD,
+      targetType: 'User',
+      targetId: caretaker._id,
+      metadata: { email: caretaker.email },
+    });
+    return { cancelled: true };
+  }
+
   async _emailCaretakerInvitation(caretaker, code, landlordId) {
     if (!env.emailAccountFlowsEnabled) return;
     try {
@@ -662,7 +705,8 @@ class AuthService {
   }
 
   async listCaretakersForLandlord(landlordId) {
-    const caretakers = await UserRepository.findCaretakersByLandlord(landlordId);
+    // Cancelled invitations stay on record but leave the landlord's list.
+    const caretakers = await UserRepository.findCaretakersByLandlord(landlordId, { accountStatus: { $ne: ACCOUNT_STATUS.DELETED } });
     return caretakers.map(sanitizeUser);
   }
 
