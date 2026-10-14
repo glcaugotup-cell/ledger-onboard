@@ -5,6 +5,11 @@ class LandlordVerificationApi extends BaseApiClient {
     return this.post('/landlord/verification', formData, UPLOAD_CONFIG);
   }
 
+  /** Swaps the permit and/or BIR form on a submission that is still pending review. */
+  replaceDocuments(id, formData) {
+    return this.patch(`/landlord/verification/${id}/documents`, formData, UPLOAD_CONFIG);
+  }
+
   getMine() {
     return this.get('/landlord/verification/mine');
   }

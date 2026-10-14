@@ -249,4 +249,72 @@ describe('Landlord business verification', () => {
     const viaPublicRoute = await request(app).get(`/uploads/properties/${filename}`);
     expect(viaPublicRoute.status).toBe(404);
   }, 30000);
+
+  test('before the admin decides, the landlord can replace a document on the same submission; afterwards they cannot', async () => {
+    // eslint-disable-next-line global-require
+    const UserRepository = require('../../repositories/UserRepository');
+    // eslint-disable-next-line global-require
+    const AuditLogRepository = require('../../repositories/AuditLogRepository');
+    // eslint-disable-next-line global-require
+    const LandlordVerificationRepository = require('../../repositories/LandlordVerificationRepository');
+    // eslint-disable-next-line global-require
+    const FileStorageService = require('../../services/FileStorageService');
+    await registerAndVerify({
+      firstName: 'Swap', lastName: 'Landlord', email: 'swap.landlord@gmail.com', phone: '09171235011', password: 'Str0ng!Pass', role: 'landlord', privacyConsent: true,
+    });
+    const { token } = await loginAndGetToken('swap.landlord@gmail.com');
+    const submitted = (await attachDocs(request(app).post('/api/landlord/verification').set('Authorization', `Bearer ${token}`))).body.data.submission;
+    const replace = (auth, attach = (r) => r.attach('mayorBusinessPermit', Buffer.from('right-permit'), { filename: 'right.jpg', contentType: 'image/jpeg' })) =>
+      attach(request(app).patch(`/api/landlord/verification/${submitted._id}/documents`).set('Authorization', `Bearer ${auth}`));
+
+    // Nothing chosen: refused.
+    const empty = await request(app).patch(`/api/landlord/verification/${submitted._id}/documents`).set('Authorization', `Bearer ${token}`);
+    expect(empty.status).toBe(400);
+    expect(empty.body.error.code).toBe('DOCUMENTS_REQUIRED');
+
+    // Only the permit is swapped; the BIR form and the submission itself stay.
+    const res = await replace(token);
+    expect(res.status).toBe(200);
+    const updated = res.body.data.submission;
+    expect(updated).toMatchObject({ _id: submitted._id, status: 'PENDING', birForm2303Url: submitted.birForm2303Url });
+    expect(updated.mayorBusinessPermitUrl).not.toBe(submitted.mayorBusinessPermitUrl);
+    expect(updated.documentsUpdatedAt).toBeTruthy();
+    const served = await request(app).get(`/api/landlord/verification/${submitted._id}/document/permit`).set('Authorization', `Bearer ${token}`);
+    expect(served.headers['content-type']).toMatch(/^image\/jpeg/);
+    // The earlier file is kept, and the audit entry says which one was replaced.
+    expect(await FileStorageService.getByUrl(submitted.mayorBusinessPermitUrl, 'landlord-verification')).toBeTruthy();
+    const audit = (await AuditLogRepository.findRecent({ action: 'BUSINESS_VERIFICATION_DOCUMENTS_REPLACED' })).find((l) => String(l.targetId) === submitted._id);
+    expect(audit.metadata).toMatchObject({ documents: ['permit'], replaced: { permit: submitted.mayorBusinessPermitUrl } });
+
+    // Another landlord cannot touch it.
+    await registerAndVerify({
+      firstName: 'Nosy', lastName: 'Landlord', email: 'nosy.landlord@gmail.com', phone: '09171235012', password: 'Str0ng!Pass', role: 'landlord', privacyConsent: true,
+    });
+    const { token: otherToken } = await loginAndGetToken('nosy.landlord@gmail.com');
+    expect((await replace(otherToken)).status).toBe(404);
+
+    // Once the admin decides, replacing is refused.
+    await registerAndVerify({
+      firstName: 'Swap', lastName: 'Admin', email: 'swap.admin@gmail.com', phone: '09171235013', password: 'Str0ng!Pass', role: 'tenant', privacyConsent: true,
+      emergencyContact: { name: 'X Y', phone: '09171235096' },
+    });
+    await UserRepository.updateById((await UserRepository.findByEmail('swap.admin@gmail.com'))._id, { role: 'admin' });
+    const { token: adminToken } = await loginAndGetToken('swap.admin@gmail.com');
+    await request(app).patch(`/api/admin/landlord-verifications/${submitted._id}/review`).set('Authorization', `Bearer ${adminToken}`).send({ approve: false, rejectionReason: 'Blurry permit' });
+    const late = await replace(token);
+    expect(late.status).toBe(409);
+    expect(late.body.error.code).toBe('SUBMISSION_ALREADY_REVIEWED');
+
+    // If the admin decides between the check and the save, nothing changes and the new upload is removed.
+    const stale = await LandlordVerificationRepository.findById(submitted._id);
+    stale.status = 'PENDING';
+    const findSpy = jest.spyOn(LandlordVerificationRepository, 'findById').mockResolvedValueOnce(stale);
+    const deleteSpy = jest.spyOn(FileStorageService, 'deleteByUrls');
+    const raced = await replace(token);
+    expect(raced.status).toBe(409);
+    expect(deleteSpy).toHaveBeenCalledWith([expect.stringMatching(/^\/uploads\/landlord-verification\//)]);
+    expect((await LandlordVerificationRepository.findById(submitted._id)).mayorBusinessPermitUrl).toBe(updated.mayorBusinessPermitUrl);
+    findSpy.mockRestore();
+    deleteSpy.mockRestore();
+  }, 30000);
 });

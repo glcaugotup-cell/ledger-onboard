@@ -19,9 +19,18 @@ import { FieldRequirement } from '../../components/ui/Field.jsx';
 import { Badge, ErrorBanner, LoadingState, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
+import DocumentPreviewDialog from '../../components/DocumentPreviewDialog.jsx';
+import { formatDateTime } from '../../utils/format.js';
 
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,application/pdf';
 const MAX_DOCUMENT_MB = 5;
+
+/** Same rules as the server's upload filter: PDF/JPG/PNG/WebP, 5 MB. Returns a message, or '' when the file is fine. */
+function documentFileError(file) {
+  if (!ACCEPTED_TYPES.split(',').includes(file.type)) return 'Only PDF, JPG, PNG or WebP files are accepted.';
+  if (file.size > MAX_DOCUMENT_MB * 1024 * 1024) return `The file must be ${MAX_DOCUMENT_MB} MB or smaller.`;
+  return '';
+}
 
 /** Drag-and-drop (or click-to-browse) upload zone for one required document. Purely presentational — every pick, whether dropped or chosen, still goes through the same `onFileChange` state setter the page already had. */
 function DocumentUploadCard({ label, file, onFileChange, inputId }) {
@@ -32,15 +41,12 @@ function DocumentUploadCard({ label, file, onFileChange, inputId }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
-  // Same rules as the server's upload filter: PDF/JPG/PNG/WebP, 5 MB. Rejected picks never replace the current file.
+  // Rejected picks never replace the current file.
   function pick(fileList) {
     const picked = fileList?.[0] || null;
-    if (picked && !ACCEPTED_TYPES.split(',').includes(picked.type)) {
-      setFileError('Only PDF, JPG, PNG or WebP files are accepted.');
-      return;
-    }
-    if (picked && picked.size > MAX_DOCUMENT_MB * 1024 * 1024) {
-      setFileError(`The file must be ${MAX_DOCUMENT_MB} MB or smaller.`);
+    const problem = picked ? documentFileError(picked) : '';
+    if (problem) {
+      setFileError(problem);
       return;
     }
     setFileError('');
@@ -107,6 +113,102 @@ function DocumentUploadCard({ label, file, onFileChange, inputId }) {
       <p className="mt-3 flex items-center gap-1.5 text-xs text-gray-500">
         <LockClosedIcon className="h-3.5 w-3.5" /> Your document will be kept private and secure.
       </p>
+    </div>
+  );
+}
+
+const SUBMITTED_DOCUMENTS = [
+  { type: 'permit', field: 'mayorBusinessPermit', label: "Mayor's / Business Permit" },
+  { type: 'bir', field: 'birForm2303', label: 'BIR Form 2303' },
+];
+
+/**
+ * While the admin hasn't decided, the landlord can view each submitted document and replace one
+ * they got wrong (e.g. the wrong photo). The admin then sees the new file.
+ */
+function PendingDocuments({ submission, onReplaced, onMessage }) {
+  const inputRefs = useRef({});
+  const [busy, setBusy] = useState(null); // "view:<type>" or "replace:<type>"
+  const [errors, setErrors] = useState({});
+  const [preview, setPreview] = useState(null);
+  const previewUrlRef = useRef(null);
+  useEffect(() => {
+    previewUrlRef.current = preview?.url || null;
+  }, [preview]);
+  useEffect(() => () => { if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); }, []);
+
+  const view = async (doc) => {
+    setBusy(`view:${doc.type}`);
+    setErrors((e) => ({ ...e, [doc.type]: '' }));
+    try {
+      const { url, type } = await LandlordVerificationApi.fetchDocument(submission._id, doc.type);
+      setPreview({ url, type, title: doc.label });
+    } catch {
+      setErrors((e) => ({ ...e, [doc.type]: 'Could not load that document.' }));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const closePreview = () => {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  };
+
+  const replace = async (doc, file) => {
+    if (!file) return;
+    const problem = documentFileError(file);
+    setErrors((e) => ({ ...e, [doc.type]: problem }));
+    if (problem) return;
+    setBusy(`replace:${doc.type}`);
+    onMessage('');
+    try {
+      const fd = new FormData();
+      fd.append(doc.field, file);
+      const { submission: updated } = await LandlordVerificationApi.replaceDocuments(submission._id, fd);
+      onReplaced(updated);
+      onMessage(`${doc.label} replaced. The admin will review the new file.`);
+    } catch (err) {
+      setErrors((e) => ({ ...e, [doc.type]: describeApiError(err).message }));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="mt-4 border-t border-gray-100 pt-4">
+      <p className="text-sm font-semibold text-gray-900">Submitted documents</p>
+      <p className="text-xs text-gray-500">Uploaded the wrong file? You can replace it until the admin reviews your submission.</p>
+      {submission.documentsUpdatedAt && <p className="mt-1 text-xs text-gray-500">Last updated {formatDateTime(submission.documentsUpdatedAt)}</p>}
+      <div className="mt-2">
+        {SUBMITTED_DOCUMENTS.map((doc) => (
+          <div key={doc.type} className="border-b border-gray-100 py-3 last:border-b-0">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                  <DocumentTextIcon className="h-5 w-5" />
+                </span>
+                <p className="text-sm font-medium text-gray-900">{doc.label}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="secondary" className="text-xs" loading={busy === `view:${doc.type}`} disabled={Boolean(busy)} onClick={() => view(doc)} aria-label={`View ${doc.label}`}>View</Button>
+                <Button type="button" variant="ghost" className="text-xs" loading={busy === `replace:${doc.type}`} disabled={Boolean(busy)} onClick={() => inputRefs.current[doc.type]?.click()} aria-label={`Replace ${doc.label}`}>Replace file</Button>
+                <input
+                  ref={(el) => { inputRefs.current[doc.type] = el; }}
+                  type="file"
+                  accept={ACCEPTED_TYPES}
+                  aria-label={`New file for ${doc.label}`}
+                  className="hidden"
+                  onChange={(e) => { replace(doc, e.target.files?.[0]); e.target.value = ''; }}
+                />
+              </div>
+            </div>
+            {errors[doc.type] && <p className="mt-1 text-xs text-red-600" role="alert">{errors[doc.type]}</p>}
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-gray-500">Accepted formats: PDF, JPG, PNG, WebP (Max 5MB)</p>
+      <DocumentPreviewDialog preview={preview} onClose={closePreview} />
     </div>
   );
 }
@@ -229,6 +331,7 @@ export default function BusinessVerificationPage() {
                 <p className="text-sm text-gray-600">Your submitted documents are awaiting admin review.</p>
               </div>
             </div>
+            {submission?.status === 'PENDING' && <PendingDocuments submission={submission} onReplaced={setSubmission} onMessage={setSuccess} />}
           </Card>
         )}
 

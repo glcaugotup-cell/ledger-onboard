@@ -41,6 +41,19 @@ verificationRouter.post(
   ]),
   LandlordVerificationController.submit
 );
+// Before the admin decides, the landlord may swap either document on their pending submission.
+verificationRouter.patch(
+  '/verification/:id/documents',
+  requireRole(ROLES.LANDLORD),
+  uploadRateLimiter,
+  landlordVerificationUpload.fields([
+    { name: 'mayorBusinessPermit', maxCount: 1 },
+    { name: 'birForm2303', maxCount: 1 },
+  ]),
+  objectIdParam('id'),
+  validate,
+  LandlordVerificationController.replaceDocuments
+);
 verificationRouter.get('/verification/mine', requireRole(ROLES.LANDLORD), LandlordVerificationController.getMine);
 verificationRouter.get(
   '/verification/:id/document/:docType',

@@ -61,6 +61,45 @@ class LandlordVerificationService {
     return { message: 'Documents submitted for review.', submission };
   }
 
+  /**
+   * Before the admin decides, the landlord can swap the permit and/or the BIR form on the same
+   * submission (e.g. they picked the wrong photo). The earlier files are kept, like those of
+   * earlier submissions, and the audit entry records which references were replaced.
+   * If the admin decides first, nothing changes and the new uploads are removed.
+   */
+  async replaceDocuments(landlordId, submissionId, { permitFile, birFile }) {
+    const submission = await LandlordVerificationRepository.findById(submissionId);
+    if (!submission || String(submission.landlordId) !== String(landlordId)) {
+      throw ApiError.notFound('Submission not found', 'SUBMISSION_NOT_FOUND');
+    }
+    if (submission.status !== VERIFICATION_STATUS.PENDING) {
+      throw ApiError.conflict('This submission has already been reviewed', 'SUBMISSION_ALREADY_REVIEWED');
+    }
+
+    const replacing = [
+      permitFile && { doc: 'permit', field: 'mayorBusinessPermitUrl', file: permitFile },
+      birFile && { doc: 'bir', field: 'birForm2303Url', file: birFile },
+    ].filter(Boolean);
+    const urls = await FileStorageService.saveUploads(replacing.map((r) => r.file), FILE_CATEGORIES.LANDLORD_VERIFICATION);
+    const updates = Object.fromEntries(replacing.map((r, i) => [r.field, urls[i]]));
+    const updated = await LandlordVerificationRepository.updatePendingOfLandlord(submissionId, landlordId, { ...updates, documentsUpdatedAt: new Date() });
+    if (!updated) {
+      await FileStorageService.deleteByUrls(urls);
+      throw ApiError.conflict('This submission has already been reviewed', 'SUBMISSION_ALREADY_REVIEWED');
+    }
+
+    await AuditLogRepository.record({
+      action: 'BUSINESS_VERIFICATION_DOCUMENTS_REPLACED',
+      actorId: landlordId,
+      actorRole: ROLES.LANDLORD,
+      targetType: 'LandlordVerification',
+      targetId: submission._id,
+      metadata: { documents: replacing.map((r) => r.doc), replaced: Object.fromEntries(replacing.map((r) => [r.doc, submission[r.field]])) },
+    });
+
+    return { message: replacing.length === 2 ? 'Both documents were replaced.' : 'Document replaced.', submission: updated };
+  }
+
   async getMine(landlordId) {
     const submission = await LandlordVerificationRepository.findLatestByLandlord(landlordId);
     return submission;

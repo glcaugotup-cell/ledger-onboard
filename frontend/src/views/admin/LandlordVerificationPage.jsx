@@ -17,7 +17,7 @@ import AdminApi from '../../services/AdminApi.js';
 import LandlordVerificationApi from '../../services/LandlordVerificationApi.js';
 import Button from '../../components/ui/Button.jsx';
 import ReasonDialog from '../../components/ReasonDialog.jsx';
-import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
+import DocumentPreviewDialog from '../../components/DocumentPreviewDialog.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState } from '../../components/ui/Feedback.jsx';
 import { formatDateTime } from '../../utils/format.js';
 
@@ -79,6 +79,7 @@ function SubmissionCard({ submission: s, busy, viewingKey, onView, onAct }) {
             <div>
               <p className="font-medium text-gray-800">Submitted On</p>
               <p className="text-gray-500">{formatDateTime(s.submittedAt)}</p>
+              {s.documentsUpdatedAt && <p className="text-xs font-medium text-amber-700">Documents updated {formatDateTime(s.documentsUpdatedAt)}</p>}
             </div>
           </div>
         )}
@@ -208,18 +209,7 @@ export default function LandlordVerificationPage() {
           </div>
         )}
       </div>
-      <ConfirmDialog
-        open={Boolean(preview)}
-        title={preview?.title || ''}
-        cancelLabel="Close preview"
-        confirmLabel="Open in new tab"
-        onConfirm={() => window.open(preview.url, '_blank', 'noopener,noreferrer')}
-        onCancel={closePreview}
-      >
-        {preview && (preview.type === 'application/pdf'
-          ? <iframe title={`Preview of ${preview.title}`} src={preview.url} className="h-[60vh] w-full rounded-lg border" />
-          : <img alt={`Preview of ${preview.title}`} src={preview.url} className="max-h-[60vh] w-full rounded-lg object-contain" />)}
-      </ConfirmDialog>
+      <DocumentPreviewDialog preview={preview} onClose={closePreview} />
       {rejecting && (
         <ReasonDialog
           open

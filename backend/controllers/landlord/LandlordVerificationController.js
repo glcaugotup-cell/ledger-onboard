@@ -19,6 +19,17 @@ class LandlordVerificationController {
     sendSuccess(res, { statusCode: 201, data: result });
   });
 
+  replaceDocuments = asyncHandler(async (req, res) => {
+    const files = req.files || {};
+    const permitFile = files.mayorBusinessPermit?.[0];
+    const birFile = files.birForm2303?.[0];
+    if (!permitFile && !birFile) {
+      throw ApiError.badRequest('Choose a new file for the permit or the BIR form', 'DOCUMENTS_REQUIRED');
+    }
+    const result = await LandlordVerificationService.replaceDocuments(req.user.id, req.params.id, { permitFile, birFile });
+    sendSuccess(res, { data: result });
+  });
+
   getMine = asyncHandler(async (req, res) => {
     const submission = await LandlordVerificationService.getMine(req.user.id);
     sendSuccess(res, { data: { submission } });

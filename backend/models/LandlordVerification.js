@@ -22,6 +22,8 @@ const landlordVerificationSchema = new Schema(
     reviewedAt: { type: Date, default: null },
     rejectionReason: { type: String, default: null },
     submittedAt: { type: Date, default: Date.now },
+    // Set when the landlord swaps a document while the submission is still pending review.
+    documentsUpdatedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

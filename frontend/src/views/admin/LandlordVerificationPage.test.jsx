@@ -83,4 +83,10 @@ describe('LandlordVerificationPage document preview', () => {
     expect(await screen.findByText('Could not load that document.')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+
+  it('tells the admin when the landlord replaced documents after submitting', async () => {
+    AdminApi.listPendingLandlordVerifications.mockResolvedValue({ submissions: [{ ...submission, documentsUpdatedAt: '2026-10-14T03:20:00Z' }] });
+    renderPage();
+    expect(await screen.findByText(/^Documents updated /)).toBeInTheDocument();
+  });
 });
