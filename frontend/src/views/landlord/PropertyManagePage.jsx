@@ -19,6 +19,15 @@ import { formatDate, formatPeso } from '../../utils/format.js';
 
 const STATUS_TONE = { draft: 'gray', pending_moderation: 'yellow', approved: 'green', rejected: 'red', inactive: 'gray', available: 'green', occupied: 'red', maintenance: 'yellow' };
 
+/** Same rent limits as backend/validators/roomValidators.js; null when the amount is fine. */
+function rentError(monthlyBaseRent) {
+  const rent = Number(monthlyBaseRent);
+  if (monthlyBaseRent === '' || !Number.isFinite(rent) || !/^\d+(\.\d{1,2})?$/.test(monthlyBaseRent) || rent < 0 || rent > 1000000) {
+    return 'Enter an amount from ₱0 to ₱1,000,000 with up to 2 decimal places';
+  }
+  return null;
+}
+
 /** Same limits as backend/validators/roomValidators.js. */
 function validateRoom({ roomNumber, capacity, monthlyBaseRent }) {
   const errors = {};
@@ -26,11 +35,33 @@ function validateRoom({ roomNumber, capacity, monthlyBaseRent }) {
   else if (roomNumber.trim().length > 20) errors.roomNumber = 'Room number must be at most 20 characters';
   const cap = Number(capacity);
   if (!Number.isInteger(cap) || cap < 1 || cap > 50) errors.capacity = 'Capacity must be a whole number from 1 to 50';
-  const rent = Number(monthlyBaseRent);
-  if (monthlyBaseRent === '' || !Number.isFinite(rent) || !/^\d+(\.\d{1,2})?$/.test(monthlyBaseRent) || rent < 0 || rent > 1000000) {
-    errors.monthlyBaseRent = 'Enter an amount from ₱0 to ₱1,000,000 with up to 2 decimal places';
-  }
+  const rent = rentError(monthlyBaseRent);
+  if (rent) errors.monthlyBaseRent = rent;
   return errors;
+}
+
+/** Peso amount box: digits with up to 2 decimals and at most ₱1,000,000, typed as text. */
+function RentInput({ value, onChange, error, ...props }) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center rounded-l-lg border-r border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-600">₱</span>
+      <TextInput
+        type="text"
+        inputMode="decimal"
+        placeholder="0.00"
+        maxLength={10}
+        value={value}
+        className="pl-12 tabular-nums"
+        onChange={(e) => {
+          const next = e.target.value;
+          if (next === '' || (/^\d{1,7}(\.\d{0,2})?$/.test(next) && Number(next) <= 1000000)) onChange(next);
+        }}
+        error={error}
+        aria-label="Monthly rent per slot in Philippine pesos"
+        {...props}
+      />
+    </div>
+  );
 }
 
 function AddRoomForm({ propertyId, onAdded }) {
@@ -81,23 +112,7 @@ function AddRoomForm({ propertyId, onAdded }) {
         <TextInput type="number" min="1" max="50" step="1" inputMode="numeric" value={form.capacity} onChange={(e) => setField('capacity', e.target.value)} error={fieldErrors.capacity} />
       </Field>
       <Field required label="Rent per slot" hint="Monthly · up to ₱1,000,000 · 2 decimal places" error={fieldErrors.monthlyBaseRent}>
-        <div className="relative">
-          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center rounded-l-lg border-r border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-600">₱</span>
-          <TextInput
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-            maxLength={10}
-            value={form.monthlyBaseRent}
-            className="pl-12 tabular-nums"
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === '' || (/^\d{1,7}(\.\d{0,2})?$/.test(value) && Number(value) <= 1000000)) setField('monthlyBaseRent', value);
-            }}
-            error={fieldErrors.monthlyBaseRent}
-            aria-label="Monthly rent per slot in Philippine pesos"
-          />
-        </div>
+        <RentInput value={form.monthlyBaseRent} onChange={(value) => setField('monthlyBaseRent', value)} error={fieldErrors.monthlyBaseRent} />
       </Field>
       <div>
         <Button type="submit" loading={loading} className="w-full">
@@ -353,6 +368,10 @@ export default function PropertyManagePage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [roomToDelete, setRoomToDelete] = useState(null);
+  const [rentRoom, setRentRoom] = useState(null); // room whose rent is being edited
+  const [newRent, setNewRent] = useState('');
+  const [rentErrorText, setRentErrorText] = useState('');
+  const [savingRent, setSavingRent] = useState(false);
   const [deletingRoom, setDeletingRoom] = useState(false);
   const [deleteRoomError, setDeleteRoomError] = useState('');
 
@@ -398,6 +417,36 @@ export default function PropertyManagePage() {
       setRooms((prev) => prev.map((r) => (r._id === roomId ? room : r)));
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const openRentEditor = (room) => {
+    setRentRoom(room);
+    setNewRent(String(room.monthlyBaseRent));
+    setRentErrorText('');
+  };
+
+  const saveRent = async () => {
+    const problem = rentError(newRent);
+    if (problem) {
+      setRentErrorText(problem);
+      return;
+    }
+    if (Number(newRent) === Number(rentRoom.monthlyBaseRent)) {
+      setRentRoom(null);
+      return;
+    }
+    setSavingRent(true);
+    setRentErrorText('');
+    try {
+      const { room } = await PropertyApi.updateRoom(rentRoom._id, { monthlyBaseRent: Number(newRent) });
+      setRooms((prev) => prev.map((r) => (r._id === room._id ? room : r)));
+      setMsg(`Rent for Room ${room.roomNumber} is now ${formatPeso(room.monthlyBaseRent)} per slot. Bills already issued stay the same.`);
+      setRentRoom(null);
+    } catch (err) {
+      setRentErrorText(describeApiError(err).message || 'Could not update the rent.');
+    } finally {
+      setSavingRent(false);
     }
   };
 
@@ -482,6 +531,9 @@ export default function PropertyManagePage() {
                     Mark maintenance
                   </Button>
                 )}
+                <Button variant="secondary" onClick={() => openRentEditor(room)} aria-label={`Edit rent for Room ${room.roomNumber}`}>
+                  Edit rent
+                </Button>
                 <Button variant="danger" onClick={() => { setDeleteRoomError(''); setRoomToDelete(room); }}>
                   Delete
                 </Button>
@@ -510,6 +562,22 @@ export default function PropertyManagePage() {
         onConfirm={deleteRoom}
         onCancel={() => setRoomToDelete(null)}
       />
+
+      <ConfirmDialog
+        open={Boolean(rentRoom)}
+        title={rentRoom ? `Edit rent for Room ${rentRoom.roomNumber}` : ''}
+        message="Bills already issued keep their amount. Bills issued from now on use the new rent, including for tenants already staying in or holding this room; they get an in-app notice."
+        confirmLabel="Save rent"
+        loading={savingRent}
+        onConfirm={saveRent}
+        onCancel={() => setRentRoom(null)}
+      >
+        <div className="mt-3">
+          <Field required label="Rent per slot" hint={rentRoom ? `Now ${formatPeso(rentRoom.monthlyBaseRent)} per month` : undefined} error={rentErrorText}>
+            <RentInput value={newRent} onChange={(value) => { setNewRent(value); setRentErrorText(''); }} error={rentErrorText} />
+          </Field>
+        </div>
+      </ConfirmDialog>
 
       <CaretakerAssignment propertyId={id} />
 

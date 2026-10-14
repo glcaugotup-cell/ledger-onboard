@@ -206,4 +206,29 @@ describe('PropertyManagePage', () => {
     await waitFor(() => expect(PropertyApi.assignCaretaker).toHaveBeenCalledWith('p1', 'c1'));
     expect(await screen.findByText('Near Cruz is now assigned to this property.')).toBeInTheDocument();
   });
+
+  it('edits a room rent: explains which bills change, checks the amount, then saves', async () => {
+    PropertyApi.getForManagement.mockResolvedValue(managementData);
+    PropertyApi.updateRoom.mockResolvedValue({ room: { ...managementData.rooms[0], monthlyBaseRent: 2800 } });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Edit rent for Room 101' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit rent for Room 101' });
+    expect(within(dialog).getByText(/Bills already issued keep their amount/)).toBeInTheDocument();
+    const amount = within(dialog).getByRole('textbox', { name: /monthly rent per slot/i });
+    expect(amount).toHaveValue('2500');
+
+    await user.clear(amount);
+    await user.click(within(dialog).getByRole('button', { name: 'Save rent' }));
+    expect(PropertyApi.updateRoom).not.toHaveBeenCalled();
+    expect(within(dialog).getByText(/Enter an amount from ₱0 to ₱1,000,000/)).toBeInTheDocument();
+
+    await user.type(amount, '2800abc');
+    expect(amount).toHaveValue('2800');
+    await user.click(within(dialog).getByRole('button', { name: 'Save rent' }));
+    await waitFor(() => expect(PropertyApi.updateRoom).toHaveBeenCalledWith('r1', { monthlyBaseRent: 2800 }));
+    expect(await screen.findByText(/Rent for Room 101 is now ₱2,800/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });

@@ -1,8 +1,12 @@
 const RoomRepository = require('../repositories/RoomRepository');
 const PropertyRepository = require('../repositories/PropertyRepository');
 const ReservationRepository = require('../repositories/ReservationRepository');
+const AuditLogRepository = require('../repositories/AuditLogRepository');
+const NotificationService = require('./NotificationService');
 const ApiError = require('../utils/ApiError');
-const { ROLES, ROOM_STATUS } = require('../utils/constants');
+const { RESERVATION_STATUS, ROLES, ROOM_STATUS } = require('../utils/constants');
+
+const peso = (amount) => `₱${Number(amount).toLocaleString('en-PH')}`;
 
 class RoomService {
   async listByProperty(propertyId) {
@@ -50,7 +54,36 @@ class RoomService {
     if (safeUpdates.status === ROOM_STATUS.AVAILABLE && room.currentOccupancy >= room.capacity) {
       throw ApiError.conflict('This room is full. Complete or cancel a tenancy before marking it available.', 'ROOM_IS_FULL');
     }
-    return RoomRepository.updateById(roomId, safeUpdates);
+    const updated = await RoomRepository.updateById(roomId, safeUpdates);
+    if (safeUpdates.monthlyBaseRent !== undefined && Number(safeUpdates.monthlyBaseRent) !== Number(room.monthlyBaseRent)) {
+      await this._rentChanged(room, updated, property, requester);
+    }
+    return updated;
+  }
+
+  /**
+   * Bills already issued keep their amount (each bill copies the rent when it is created); bills
+   * issued from now on use the new rent. The change is audited, and tenants holding or staying in
+   * the room get an in-app notice.
+   */
+  async _rentChanged(before, after, property, requester) {
+    await AuditLogRepository.record({
+      action: 'ROOM_RENT_CHANGED', actorId: requester.id, actorRole: requester.role, targetType: 'Room', targetId: before._id,
+      metadata: { from: before.monthlyBaseRent, to: after.monthlyBaseRent },
+    });
+    const tenancies = await ReservationRepository.find({ roomId: before._id, status: { $in: [RESERVATION_STATUS.APPROVED, RESERVATION_STATUS.ACTIVE] } });
+    for (const tenancy of tenancies) {
+      // eslint-disable-next-line no-await-in-loop
+      await NotificationService.notify({
+        userId: tenancy.tenantId,
+        type: 'ROOM_RENT_CHANGED',
+        title: 'Rent change',
+        message: `The rent for ${property.propertyName}, Room ${before.roomNumber} changed from ${peso(before.monthlyBaseRent)} to ${peso(after.monthlyBaseRent)} per month. Bills already issued stay the same; your next bills use the new rent.`,
+        relatedType: 'Reservation',
+        relatedId: tenancy._id,
+        link: '/tenant/apartment',
+      });
+    }
   }
 
   async delete(roomId, requester) {

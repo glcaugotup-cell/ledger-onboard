@@ -575,6 +575,34 @@ describe('X1 notifications and M9 property archive', () => {
     expect(card.landlordContact).toMatchObject({ email: setup.landlord.user.email, phone: setup.landlord.user.phone });
   });
 
+  test('a rent change is audited, tells tenants in that room in-app, and never changes bills already issued', async () => {
+    const setup = await makeSetup();
+    const staying = await makeUser('tenant');
+    await moveIn(setup, staying);
+    const otherRoom = await RoomRepository.create({ propertyId: setup.property._id, roomNumber: `X${Date.now() % 1000}`, capacity: 2, monthlyBaseRent: 3000 });
+    const elsewhere = await makeUser('tenant');
+    const elsewhereId = await reserve(elsewhere.token, otherRoom._id);
+    await setStatus(setup.landlord.token, elsewhereId, { status: 'approved' });
+    const bill = await BillingSOARepository.create({ tenantId: staying.user._id, roomId: setup.room._id, billingPeriod: new Date('2026-08-01'), baseRent: 3000, totalAmountDue: 3000, remainingBalance: 3000, paymentStatus: 'UNPAID', dueDate: new Date('2030-08-11') });
+
+    const edit = (token, body) => request(app).patch(`/api/rooms/${setup.room._id}`).set(auth(token)).send(body);
+    expect((await edit(setup.landlord.token, { monthlyBaseRent: 3200.555 })).status).toBe(400);
+    const other = await makeUser('landlord');
+    expect((await edit(other.token, { monthlyBaseRent: 3200 })).status).toBe(403);
+    const res = await edit(setup.landlord.token, { monthlyBaseRent: 3200 });
+    expect(res.status).toBe(200);
+    expect(res.body.data.room.monthlyBaseRent).toBe(3200);
+
+    expect(await AuditLogRepository.findOne({ action: 'ROOM_RENT_CHANGED', targetId: setup.room._id })).toMatchObject({ metadata: { from: 3000, to: 3200 } });
+    const notice = await NotificationRepository.findOne({ userId: staying.user._id, type: 'ROOM_RENT_CHANGED' });
+    expect(notice.message).toMatch(/changed from ₱3,000 to ₱3,200 per month\. Bills already issued stay the same/);
+    expect(await NotificationRepository.findOne({ userId: elsewhere.user._id, type: 'ROOM_RENT_CHANGED' })).toBeNull();
+    expect((await BillingSOARepository.findById(bill._id)).totalAmountDue).toBe(3000);
+    // Saving the same rent again (or other room fields) sends nothing new.
+    await edit(setup.landlord.token, { monthlyBaseRent: 3200 });
+    expect(await NotificationRepository.model.countDocuments({ userId: staying.user._id, type: 'ROOM_RENT_CHANGED' })).toBe(1);
+  });
+
   test("public listings and the property page show the landlord's name, never their email or phone", async () => {
     const setup = await makeSetup();
     const listed = (await request(app).get('/api/properties')).body.data.properties.find((p) => p._id === String(setup.property._id));
