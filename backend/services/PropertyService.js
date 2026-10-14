@@ -218,15 +218,29 @@ class PropertyService {
     return { deleted: true };
   }
 
-  /** The landlord's hidden (soft-deleted) properties, shown in their Archive. */
+  /** The landlord's hidden (soft-deleted) properties, shown in their Archive (minus those deleted from it). */
   async listArchived(landlordId) {
-    return (await PropertyRepository.findByLandlord(landlordId)).filter((p) => p.deletedAt);
+    return (await PropertyRepository.findByLandlord(landlordId)).filter((p) => p.deletedAt && !p.archiveDeletedAt);
+  }
+
+  /**
+   * "Delete" in the landlord's Archive: the hidden property leaves the Archive for good and can't be
+   * restored from there. Nothing is erased: its rooms, reservations, bills and reviews stay on record.
+   */
+  async deleteFromArchive(propertyId, landlordId) {
+    const property = await PropertyRepository.findById(propertyId);
+    if (!property || !property.deletedAt || property.archiveDeletedAt || String(property.landlordId) !== String(landlordId)) {
+      throw ApiError.notFound('Archived property not found', 'PROPERTY_NOT_FOUND');
+    }
+    await PropertyRepository.updateById(propertyId, { archiveDeletedAt: new Date() });
+    await AuditLogRepository.record({ action: 'PROPERTY_DELETED_FROM_ARCHIVE', actorId: landlordId, actorRole: ROLES.LANDLORD, targetType: 'Property', targetId: property._id });
+    return { deleted: true };
   }
 
   /** Brings a hidden property back. Verified landlords' listings go live again, as when first created. */
   async restore(propertyId, requester) {
     const property = await PropertyRepository.findById(propertyId);
-    if (!property || !property.deletedAt) throw ApiError.notFound('Archived property not found', 'PROPERTY_NOT_FOUND');
+    if (!property || !property.deletedAt || property.archiveDeletedAt) throw ApiError.notFound('Archived property not found', 'PROPERTY_NOT_FOUND');
     this._assertLandlordOwnsOrAdmin(property, requester);
     await PropertyRepository.updateById(propertyId, { listingStatus: LISTING_STATUS.APPROVED, deletedAt: null, deletedBy: null });
     await AuditLogRepository.record({ action: 'PROPERTY_RESTORED', actorId: requester.id, actorRole: requester.role, targetType: 'Property', targetId: property._id });

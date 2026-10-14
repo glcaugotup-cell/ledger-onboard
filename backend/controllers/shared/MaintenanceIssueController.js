@@ -13,6 +13,7 @@ class MaintenanceIssueController {
   remove = asyncHandler(async (req, res) => sendSuccess(res, { data: { issue: await IssueService.remove(req.params.id, req.user.id, req.body.reason) } }));
   archive = asyncHandler(async (req, res) => sendSuccess(res, { data: { issue: await IssueService.archive(req.params.id, req.user) } }));
   restore = asyncHandler(async (req, res) => sendSuccess(res, { data: { issue: await IssueService.restore(req.params.id, req.user) } }));
+  deleteFromArchive = asyncHandler(async (req, res) => sendSuccess(res, { data: { issue: await IssueService.deleteFromArchive(req.params.id, req.user) } }));
   media = asyncHandler(async (req, res) => {
     const file = await IssueService.getMedia(req.params.id, req.params.kind, req.params.index, req.user);
     sendStoredFile(req, res, file, { cacheControl: 'private, no-store' });

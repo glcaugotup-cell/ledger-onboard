@@ -39,6 +39,10 @@ const issueSchema = new Schema({
   removedAt: { type: Date, default: null },
   removedReason: { type: String, trim: true, maxlength: 500, default: null },
   removedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  // "Delete" in someone's Archive: gone from that person's lists for good (no Restore); the record stays.
+  tenantDeletedAt: { type: Date, default: null },
+  caretakerDeletedAt: { type: Date, default: null },
+  landlordDeletedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 issueSchema.index({ landlordId:  1, status: 1, createdAt: -1 });

@@ -35,6 +35,11 @@ class PropertyApi extends BaseApiClient {
     return this.get('/properties/mine/archived');
   }
 
+  /** Removes a hidden property from the landlord's Archive for good; the record stays. */
+  deleteFromArchive(id) {
+    return this.delete(`/properties/${id}/archive`);
+  }
+
   restore(id) {
     return this.patch(`/properties/${id}/restore`);
   }

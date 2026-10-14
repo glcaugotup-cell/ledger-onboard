@@ -55,6 +55,8 @@ router.patch(
 );
 router.delete('/:id', authenticate, requireRole(ROLES.LANDLORD, ROLES.ADMIN), objectIdParam('id'), validate, PropertyController.remove);
 router.patch('/:id/restore', authenticate, requireRole(ROLES.LANDLORD, ROLES.ADMIN), objectIdParam('id'), validate, PropertyController.restore);
+// "Delete" in the landlord's Archive: gone from the Archive for good; the record stays.
+router.delete('/:id/archive', authenticate, requireRole(ROLES.LANDLORD), objectIdParam('id'), validate, PropertyController.deleteFromArchive);
 
 // Caretaker assignment: suggestions are ranked by location (same barangay as the property); assigning is an explicit landlord action.
 router.get(

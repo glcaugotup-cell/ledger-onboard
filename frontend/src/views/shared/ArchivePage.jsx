@@ -21,7 +21,8 @@ const DESCRIPTION = {
 /**
  * M9: the account menu's Archive. Tenants and caretakers see the issues they archived;
  * landlords see hidden (soft-deleted) properties and the reports they removed.
- * Every item can be restored.
+ * Every item can be restored, or deleted: gone from this Archive for good, while the record
+ * itself stays (nothing is erased).
  */
 export default function ArchivePage() {
   const { user } = useAuth();
@@ -32,6 +33,7 @@ export default function ArchivePage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [restoring, setRestoring] = useState(null); // { kind: 'issue'|'property', item }
+  const [deleting, setDeleting] = useState(null); // { kind: 'issue'|'property', item }
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState('');
 
@@ -67,6 +69,29 @@ export default function ArchivePage() {
     }
   };
 
+  const deleteItem = async () => {
+    setBusy(true);
+    setDialogError('');
+    try {
+      if (deleting.kind === 'property') await PropertyApi.deleteFromArchive(deleting.item._id);
+      else await MaintenanceIssueApi.deleteFromArchive(deleting.item._id);
+      setMessage('Deleted from your Archive.');
+      setDeleting(null);
+      await load();
+    } catch (err) {
+      setDialogError(describeApiError(err).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const actions = (kind, item, name) => (
+    <div className="flex shrink-0 gap-2">
+      <Button variant="secondary" onClick={() => { setDialogError(''); setMessage(''); setRestoring({ kind, item }); }}>Restore</Button>
+      <Button variant="dangerOutline" aria-label={`Delete ${name}`} onClick={() => { setDialogError(''); setMessage(''); setDeleting({ kind, item }); }}>Delete</Button>
+    </div>
+  );
+
   const empty = !loading && issues.length === 0 && properties.length === 0;
 
   return (
@@ -87,7 +112,7 @@ export default function ArchivePage() {
                     <p className="font-medium text-gray-900">{property.propertyName}</p>
                     <p className="text-xs text-gray-500">{property.address?.barangay}{property.deletedAt ? ` · Hidden ${formatDate(property.deletedAt)}` : ''}</p>
                   </div>
-                  <Button variant="secondary" onClick={() => { setDialogError(''); setRestoring({ kind: 'property', item: property }); }}>Restore</Button>
+                  {actions('property', property, property.propertyName)}
                 </div>
               </Card>
             ))}
@@ -108,7 +133,7 @@ export default function ArchivePage() {
                     <p className="mt-1 text-xs text-gray-500">{issue.propertyId?.propertyName} · Reported {formatDate(issue.createdAt)}{role !== 'tenant' && issue.tenantId?.fullName ? ` · ${issue.tenantId.fullName}` : ''}</p>
                     {role === 'landlord' && issue.removedReason && <p className="mt-1 text-sm text-red-700">Removed {formatDate(issue.removedAt)}: {issue.removedReason}</p>}
                   </div>
-                  <Button variant="secondary" onClick={() => { setDialogError(''); setRestoring({ kind: 'issue', item: issue }); }}>Restore</Button>
+                  {actions('issue', issue, `${issue.category} · Room ${issue.roomId?.roomNumber}`)}
                 </div>
               </Card>
             ))}
@@ -127,6 +152,22 @@ export default function ArchivePage() {
         error={dialogError}
         onConfirm={restore}
         onCancel={() => setRestoring(null)}
+      />
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        tone="danger"
+        title="Delete from your Archive?"
+        message={deleting?.kind === 'property'
+          ? "It leaves your Archive for good and can't be restored. Its rooms, reservations, bills and reviews stay on record."
+          : role === 'landlord'
+            ? "It leaves your Archive for good and can't be restored. The tenant's record of the report is unchanged."
+            : "It leaves your Archive for good and can't be restored. Your landlord keeps the record."}
+        confirmLabel="Delete"
+        cancelLabel="Keep it"
+        loading={busy}
+        error={dialogError}
+        onConfirm={deleteItem}
+        onCancel={() => setDeleting(null)}
       />
     </DashboardLayout>
   );

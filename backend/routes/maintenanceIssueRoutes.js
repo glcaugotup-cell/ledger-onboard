@@ -38,5 +38,7 @@ router.patch('/:id/confirm', requireRole(ROLES.TENANT), objectIdParam('id'), bod
 router.patch('/:id/remove', requireRole(ROLES.LANDLORD), objectIdParam('id'), body('reason').trim().isLength({ min: 3, max: 500 }).withMessage('Give a reason (3 to 500 characters)'), validate, IssueController.remove);
 router.patch('/:id/archive', requireRole(ROLES.TENANT, ROLES.CARETAKER), objectIdParam('id'), validate, IssueController.archive);
 router.patch('/:id/restore', requireRole(ROLES.TENANT, ROLES.LANDLORD, ROLES.CARETAKER), objectIdParam('id'), validate, IssueController.restore);
+// "Delete" in your own Archive: gone from your Archive for good; the record stays.
+router.delete('/:id/archive', requireRole(ROLES.TENANT, ROLES.LANDLORD, ROLES.CARETAKER), objectIdParam('id'), validate, IssueController.deleteFromArchive);
 router.get('/:id/media/:kind/:index', objectIdParam('id'), param('kind').isIn(['photo', 'proof']), param('index').isInt({ min: 0, max: 4 }), validate, IssueController.media);
 module.exports = router;

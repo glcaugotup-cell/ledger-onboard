@@ -10,6 +10,8 @@ class MaintenanceIssueApi extends BaseApiClient {
   remove(id, reason) { return this.patch(`/maintenance-issues/${id}/remove`, { reason }); }
   archive(id) { return this.patch(`/maintenance-issues/${id}/archive`); }
   restore(id) { return this.patch(`/maintenance-issues/${id}/restore`); }
+  /** Removes it from your own Archive for good; the record stays. */
+  deleteFromArchive(id) { return this.delete(`/maintenance-issues/${id}/archive`); }
   async getMedia(id, kind, index) {
     const response = await this.http.get(`/maintenance-issues/${id}/media/${kind}/${index}`, { responseType: 'blob' });
     return URL.createObjectURL(response.data);

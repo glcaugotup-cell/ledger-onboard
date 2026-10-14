@@ -10,6 +10,7 @@ const BillingSOARepository = require('../../repositories/BillingSOARepository');
 const NotificationRepository = require('../../repositories/NotificationRepository');
 const MaintenanceIssueRepository = require('../../repositories/MaintenanceIssueRepository');
 const PaymentTransactionRepository = require('../../repositories/PaymentTransactionRepository');
+const AuditLogRepository = require('../../repositories/AuditLogRepository');
 const { hashPassword } = require('../../utils/password');
 const { ensurePaymentReferenceIndex } = require('../../utils/paymentReferenceIndex');
 const { appDateKey } = require('../../utils/dates');
@@ -447,6 +448,56 @@ describe('M1-M8: maintenance issues', () => {
     expect((await request(app).get('/api/maintenance-issues').set(auth(tenant.token))).body.data.issues).toHaveLength(1);
     expect((await request(app).get('/api/maintenance-issues').set(auth(setup.landlord.token))).body.data.issues).toHaveLength(1);
   });
+
+  test('Delete in an Archive: only archived items, gone for that person only, no restore; the record stays', async () => {
+    const setup = await makeSetup();
+    const tenant = await makeUser('tenant');
+    const id = await moveIn(setup, tenant);
+    const issueId = (await reportIssue(tenant.token, id)).body.data.issue._id;
+    const del = (token) => request(app).delete(`/api/maintenance-issues/${issueId}/archive`).set(auth(token));
+    const ids = async (token, archived) => (await request(app).get(`/api/maintenance-issues${archived ? '?archived=true' : ''}`).set(auth(token))).body.data.issues.map((i) => i._id);
+
+    // Not archived yet: refused for everyone.
+    expect((await del(tenant.token)).body.error.code).toBe('NOT_IN_ARCHIVE');
+    expect((await del(setup.landlord.token)).body.error.code).toBe('NOT_IN_ARCHIVE');
+
+    await request(app).patch(`/api/maintenance-issues/${issueId}/complete`).set(auth(setup.landlord.token)).send({ workSummary: 'Fixed it' });
+    await request(app).patch(`/api/maintenance-issues/${issueId}/confirm`).set(auth(tenant.token)).send({ solved: true });
+    await request(app).patch(`/api/maintenance-issues/${issueId}/archive`).set(auth(tenant.token));
+    expect((await del(tenant.token)).status).toBe(200);
+    expect(await ids(tenant.token, true)).not.toContain(issueId);
+    expect(await ids(tenant.token, false)).not.toContain(issueId);
+    expect((await request(app).patch(`/api/maintenance-issues/${issueId}/restore`).set(auth(tenant.token))).status).toBe(404);
+    expect((await del(tenant.token)).status).toBe(404);
+
+    // The landlord still has it, and their own Archive works separately.
+    expect(await ids(setup.landlord.token, false)).toContain(issueId);
+    await request(app).patch(`/api/maintenance-issues/${issueId}/remove`).set(auth(setup.landlord.token)).send({ reason: 'Old duplicate' });
+    expect((await del(setup.landlord.token)).status).toBe(200);
+    expect(await ids(setup.landlord.token, true)).not.toContain(issueId);
+    expect((await request(app).patch(`/api/maintenance-issues/${issueId}/restore`).set(auth(setup.landlord.token))).status).toBe(404);
+
+    const stored = await MaintenanceIssueRepository.findById(issueId);
+    expect(stored).toMatchObject({ status: 'resolved', description: expect.any(String) });
+    expect(stored.tenantDeletedAt).not.toBeNull();
+    expect(stored.landlordDeletedAt).not.toBeNull();
+    expect(stored.caretakerDeletedAt).toBeNull();
+  });
+
+  test('Delete in the caretaker Archive is personal too', async () => {
+    const setup = await makeSetup();
+    const tenant = await makeUser('tenant');
+    const id = await moveIn(setup, tenant);
+    const issueId = (await reportIssue(tenant.token, id)).body.data.issue._id;
+    await request(app).patch(`/api/maintenance-issues/${issueId}/assignment`).set(auth(setup.landlord.token)).send({ caretakerId: String(setup.caretaker.user._id), targetDate: dateOnly(1) });
+    await request(app).patch(`/api/maintenance-issues/${issueId}/archive`).set(auth(setup.caretaker.token));
+    expect((await request(app).delete(`/api/maintenance-issues/${issueId}/archive`).set(auth(setup.caretaker.token))).status).toBe(200);
+    expect((await request(app).get('/api/maintenance-issues?archived=true').set(auth(setup.caretaker.token))).body.data.issues).toHaveLength(0);
+    expect((await request(app).get('/api/maintenance-issues').set(auth(tenant.token))).body.data.issues.map((i) => i._id)).toContain(issueId);
+    // Another caretaker's or a stranger's token cannot touch it.
+    const other = await makeUser('tenant');
+    expect((await request(app).delete(`/api/maintenance-issues/${issueId}/archive`).set(auth(other.token))).status).toBe(404);
+  });
 });
 
 describe('P2: GCash reference numbers', () => {
@@ -543,5 +594,22 @@ describe('X1 notifications and M9 property archive', () => {
     expect((await request(app).patch(`/api/properties/${setup.property._id}/restore`).set(auth(other.token))).status).toBe(403);
     expect((await request(app).patch(`/api/properties/${setup.property._id}/restore`).set(auth(setup.landlord.token))).status).toBe(200);
     expect((await request(app).get(`/api/properties/${setup.property._id}`)).status).toBe(200);
+  });
+
+  test('a hidden property can be deleted from the landlord archive: gone from it for good, records kept', async () => {
+    const setup = await makeSetup();
+    const del = (token) => request(app).delete(`/api/properties/${setup.property._id}/archive`).set(auth(token));
+    expect((await del(setup.landlord.token)).status).toBe(404); // still listed, not in the archive
+    await request(app).delete(`/api/properties/${setup.property._id}`).set(auth(setup.landlord.token));
+    const other = await makeUser('landlord');
+    expect((await del(other.token)).status).toBe(404);
+
+    expect((await del(setup.landlord.token)).status).toBe(200);
+    expect((await request(app).get('/api/properties/mine/archived').set(auth(setup.landlord.token))).body.data.properties).toEqual([]);
+    expect((await request(app).patch(`/api/properties/${setup.property._id}/restore`).set(auth(setup.landlord.token))).status).toBe(404);
+    expect((await del(setup.landlord.token)).status).toBe(404);
+    expect(await RoomRepository.findById(setup.room._id)).not.toBeNull();
+    expect((await PropertyRepository.findById(setup.property._id)).archiveDeletedAt).not.toBeNull();
+    expect(await AuditLogRepository.findOne({ action: 'PROPERTY_DELETED_FROM_ARCHIVE', targetId: setup.property._id })).not.toBeNull();
   });
 });

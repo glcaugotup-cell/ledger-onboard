@@ -35,12 +35,12 @@ class MaintenanceIssueService {
   async list(requester, { archived = false } = {}) {
     let filter;
     if (requester.role === ROLES.TENANT) {
-      filter = { tenantId: requester.id, tenantArchivedAt: archived ? { $ne: null } : null };
+      filter = { tenantId: requester.id, tenantArchivedAt: archived ? { $ne: null } : null, tenantDeletedAt: null };
     } else if (requester.role === ROLES.LANDLORD) {
-      filter = { landlordId: requester.id, removedAt: archived ? { $ne: null } : null };
+      filter = { landlordId: requester.id, removedAt: archived ? { $ne: null } : null, landlordDeletedAt: null };
     } else {
       filter = archived
-        ? { caretakerId: requester.id, caretakerArchivedAt: { $ne: null } }
+        ? { caretakerId: requester.id, caretakerArchivedAt: { $ne: null }, caretakerDeletedAt: null }
         : { caretakerId: requester.id, caretakerArchivedAt: null, removedAt: null };
     }
     return IssueRepository.find(filter, { populate: 'tenantId landlordId caretakerId roomId propertyId', sort: { createdAt: -1 } });
@@ -179,7 +179,7 @@ class MaintenanceIssueService {
   /** Restore from the requester's own Archive. Only the landlord can restore a report the landlord removed. */
   async restore(issueId, requester) {
     if (requester.role === ROLES.LANDLORD) {
-      const issue = await IssueRepository.findOne({ _id: issueId, landlordId: requester.id });
+      const issue = await IssueRepository.findOne({ _id: issueId, landlordId: requester.id, landlordDeletedAt: null });
       if (!issue) throw ApiError.notFound('Issue not found', 'ISSUE_NOT_FOUND');
       if (!issue.removedAt) throw ApiError.badRequest('This report is not removed.', 'ISSUE_NOT_REMOVED');
       const updated = await IssueRepository.updateById(issueId, {
@@ -192,6 +192,24 @@ class MaintenanceIssueService {
     }
     await this._findForArchive(issueId, requester);
     return IssueRepository.updateById(issueId, requester.role === ROLES.TENANT ? { tenantArchivedAt: null } : { caretakerArchivedAt: null });
+  }
+
+  /**
+   * "Delete" in the requester's own Archive: the item leaves their Archive for good and can no
+   * longer be restored there. Nothing is erased; other people's lists and the history are unchanged.
+   */
+  async deleteFromArchive(issueId, requester) {
+    const now = new Date();
+    if (requester.role === ROLES.LANDLORD) {
+      const issue = await IssueRepository.findOne({ _id: issueId, landlordId: requester.id, landlordDeletedAt: null });
+      if (!issue) throw ApiError.notFound('Issue not found', 'ISSUE_NOT_FOUND');
+      if (!issue.removedAt) throw ApiError.badRequest('Only items in your Archive can be deleted.', 'NOT_IN_ARCHIVE');
+      return IssueRepository.updateById(issueId, { landlordDeletedAt: now });
+    }
+    const issue = await this._findForArchive(issueId, requester);
+    const archivedAt = requester.role === ROLES.TENANT ? issue.tenantArchivedAt : issue.caretakerArchivedAt;
+    if (!archivedAt) throw ApiError.badRequest('Only items in your Archive can be deleted.', 'NOT_IN_ARCHIVE');
+    return IssueRepository.updateById(issueId, requester.role === ROLES.TENANT ? { tenantDeletedAt: now } : { caretakerDeletedAt: now });
   }
 
   async getMedia(issueId, kind, index, requester) {
@@ -221,7 +239,8 @@ class MaintenanceIssueService {
   }
 
   async _findForArchive(issueId, requester) {
-    const owner = requester.role === ROLES.TENANT ? { tenantId: requester.id } : { caretakerId: requester.id };
+    // Items the requester deleted from their Archive are gone for them: no archive, restore or delete again.
+    const owner = requester.role === ROLES.TENANT ? { tenantId: requester.id, tenantDeletedAt: null } : { caretakerId: requester.id, caretakerDeletedAt: null };
     const issue = await IssueRepository.findOne({ _id: issueId, ...owner });
     if (!issue) throw ApiError.notFound('Issue not found', 'ISSUE_NOT_FOUND');
     return issue;

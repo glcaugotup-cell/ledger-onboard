@@ -55,6 +55,11 @@ class PropertyController {
     sendSuccess(res, { data: result });
   });
 
+  deleteFromArchive = asyncHandler(async (req, res) => {
+    const result = await PropertyService.deleteFromArchive(req.params.id, req.user.id);
+    sendSuccess(res, { data: result });
+  });
+
   listPendingModeration = asyncHandler(async (req, res) => {
     const properties = await PropertyService.listPendingModeration();
     sendSuccess(res, { data: { properties } });
