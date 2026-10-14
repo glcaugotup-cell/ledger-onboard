@@ -37,6 +37,7 @@ import logo from '../../assets/Logo.png';
 import sidebarHouse from '../../assets/housedesign1.webp';
 import PropertyApi from '../../services/PropertyApi.js';
 import ReservationApi from '../../services/ReservationApi.js';
+import BackToTopButton from '../BackToTopButton.jsx';
 
 const roleLabel = (user) => (user?.isMainAdmin ? 'System Administrator' : formatStatus(user?.role));
 
@@ -430,6 +431,8 @@ export default function DashboardLayout({ children, back }) {
             )}
             {children}
           </main>
+          {/* Every signed-in page; it only shows after scrolling down a long page. */}
+          <BackToTopButton />
         </div>
       </div>
       <ConfirmDialog

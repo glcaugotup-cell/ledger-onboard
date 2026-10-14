@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import PropertyDetailContent from '../../components/PropertyDetailContent.jsx';
 import BackButton from '../../components/BackButton.jsx';
+import BackToTopButton from '../../components/BackToTopButton.jsx';
 import logo from '../../assets/Logo.png';
 
 export default function PropertyDetailPublicPage() {
@@ -22,6 +23,7 @@ export default function PropertyDetailPublicPage() {
         <BackButton fallback="/" />
         <PropertyDetailContent />
       </div>
+      <BackToTopButton />
     </div>
   );
 }

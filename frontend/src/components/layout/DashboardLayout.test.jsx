@@ -60,6 +60,13 @@ describe('DashboardLayout', () => {
     expect(screen.getAllByText('Admin').length).toBeGreaterThan(0);
   });
 
+  it('every signed-in page gets the Back to top button (shown once the page is scrolled down)', () => {
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Tenant Cruz', role: 'tenant' } }));
+    useNotificationsMock.mockReturnValue(mockNotificationsValue());
+    renderLayout();
+    expect(screen.getByLabelText('Back to top')).toBeInTheDocument();
+  });
+
   it('R11: tenants get My Apartment below My Reservations; Billing and Maintenance moved inside it', () => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: { fullName: 'Tenant Cruz', role: 'tenant' } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());
