@@ -1,131 +1,50 @@
 /**
- * Seeds demo accounts (one per role) and a sample approved property with a room.
- * The demo password comes from SEED_DEMO_PASSWORD in backend/.env — it is never
- * stored in the code, because this repository is public and the database is live.
- * Existing accounts are left untouched. Run: npm run seed
+ * Creates the main admin account (MAIN_ADMIN_EMAIL, default ledgeronboard@gmail.com) when a
+ * database doesn't have it yet. There are no demo accounts: every other account is a real one,
+ * registered through the app, so nothing the app sends goes to an inbox nobody owns.
+ * The first password comes from SEED_DEMO_PASSWORD in backend/.env — it is never stored in the
+ * code, because this repository is public and the database is live. An existing admin account is
+ * left untouched. Run: npm run seed
  */
 require('dotenv').config();
 const { connectDB, disconnectDB } = require('../config/db');
+const env = require('../config/env');
 const UserRepository = require('../repositories/UserRepository');
-const PropertyRepository = require('../repositories/PropertyRepository');
-const RoomRepository = require('../repositories/RoomRepository');
 const { hashPassword } = require('./password');
-const { ROLES, ACCOUNT_STATUS, LISTING_STATUS, VERIFICATION_STATUS } = require('./constants');
+const { ROLES, ACCOUNT_STATUS } = require('./constants');
 
-const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
+const ADMIN_PASSWORD = process.env.SEED_DEMO_PASSWORD;
 const STRONG_PASSWORD = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-if (!DEMO_PASSWORD || !STRONG_PASSWORD.test(DEMO_PASSWORD)) {
+if (!ADMIN_PASSWORD || !STRONG_PASSWORD.test(ADMIN_PASSWORD)) {
   // eslint-disable-next-line no-console
   console.error('[seed] Set SEED_DEMO_PASSWORD in backend/.env to a strong password (8+ chars, upper, lower, number, symbol).');
   process.exit(1);
 }
 
-async function upsertUser(fields) {
-  const existing = await UserRepository.findByEmail(fields.email);
-  if (existing) return existing;
-  const passwordHash = await hashPassword(DEMO_PASSWORD);
-  return UserRepository.create({
-    ...fields,
-    passwordHash,
-    accountStatus: ACCOUNT_STATUS.ACTIVE,
-    privacyConsent: { given: true, at: new Date() },
-  });
-}
-
 async function main() {
   await connectDB();
 
-  // The main admin account is ledgeronboard@gmail.com (MAIN_ADMIN_EMAIL). User.email is immutable, so the old
-  // demo.admin@gmail.com account is removed rather than renamed.
-  const staleAdmin = await UserRepository.findByEmail('demo.admin@gmail.com');
-  if (staleAdmin) await UserRepository.deleteById(staleAdmin._id);
-  const admin = await upsertUser({
-    firstName: 'Ledger OnBoard',
-    lastName: 'Admin',
-    fullName: 'Ledger OnBoard Admin',
-    email: 'ledgeronboard@gmail.com',
-    phone: '09170000001',
-    role: ROLES.ADMIN,
-  });
-
-  let landlord = await upsertUser({
-    firstName: 'Gladdiel',
-    lastName: 'Landlord',
-    fullName: 'Gladdiel Landlord',
-    email: 'demo.landlord@gmail.com',
-    phone: '09170000002',
-    role: ROLES.LANDLORD,
-    businessVerificationStatus: VERIFICATION_STATUS.VERIFIED, // demo landlord's property-creation flows keep working with no manual verification step
-  });
-  // upsertUser doesn't update existing accounts, so set this field explicitly.
-  if (landlord.businessVerificationStatus !== VERIFICATION_STATUS.VERIFIED) {
-    landlord = await UserRepository.updateById(landlord._id, { businessVerificationStatus: VERIFICATION_STATUS.VERIFIED });
-  }
-
-  const tenant = await upsertUser({
-    firstName: 'Paula',
-    lastName: 'Tenant',
-    fullName: 'Paula Tenant',
-    email: 'demo.tenant@gmail.com',
-    phone: '09170000003',
-    role: ROLES.TENANT,
-    emergencyContact: { name: 'Demo Emergency Contact', phone: '09170000099' },
-  });
-
-  const caretaker = await upsertUser({
-    firstName: 'Paul',
-    lastName: 'Caretaker',
-    fullName: 'Paul Caretaker',
-    email: 'demo.caretaker@gmail.com',
-    phone: '09170000004',
-    role: ROLES.CARETAKER,
-    assignedLandlordId: landlord._id,
-    createdByLandlordId: landlord._id,
-  });
-
-  let property = await PropertyRepository.findOne({ landlordId: landlord._id, propertyName: 'Dagupan Demo Boarding House' });
-  if (!property) {
-    property = await PropertyRepository.create({
-      landlordId: landlord._id,
-      caretakerIds: [caretaker._id],
-      propertyName: 'Dagupan Demo Boarding House',
-      description: 'A seeded sample listing for demoing Ledger OnBoard.',
-      address: { street: '123 Rizal St', barangay: 'Bonuan', city: 'Dagupan City', province: 'Pangasinan' },
-      locationCoordinates: { lat: 16.0433, lng: 120.3333 },
-      propertyType: 'Bedspace',
-      tenantGenderPolicy: 'Co-Ed',
-      nearbyUniversities: ['University of Pangasinan', 'PHINMA UPang'],
-      houseRules: ['No smoking indoors', 'Quiet hours after 10 PM'],
-      amenities: ['WiFi', 'CCTV', 'Shared kitchen'],
-      images: [],
-      listingStatus: LISTING_STATUS.APPROVED,
-    });
-  }
-
-  let room = await RoomRepository.findOne({ propertyId: property._id, roomNumber: '101' });
-  if (!room) {
-    room = await RoomRepository.create({
-      propertyId: property._id,
-      roomNumber: '101',
-      description: 'Shared room, 2 beds',
-      capacity: 2,
-      currentOccupancy: 0,
-      monthlyBaseRent: 2500,
-      status: 'available',
-      amenities: ['Fan', 'Study desk'],
+  const email = env.mainAdminEmail;
+  let admin = await UserRepository.findByEmail(email);
+  const created = !admin;
+  if (!admin) {
+    admin = await UserRepository.create({
+      firstName: 'Ledger OnBoard',
+      lastName: 'Admin',
+      fullName: 'Ledger OnBoard Admin',
+      email,
+      phone: '09170000001',
+      role: ROLES.ADMIN,
+      passwordHash: await hashPassword(ADMIN_PASSWORD),
+      accountStatus: ACCOUNT_STATUS.ACTIVE,
+      privacyConsent: { given: true, at: new Date() },
     });
   }
 
   // eslint-disable-next-line no-console
-  console.log(`
-Seed complete. Newly created demo accounts use SEED_DEMO_PASSWORD from backend/.env:
-  Admin:     ${admin.email} (use "Forgot Password" to give the admin its own password)
-  Landlord:  ${landlord.email}
-  Tenant:    ${tenant.email}
-  Caretaker: ${caretaker.email}
-
-Sample listing: "${property.propertyName}" (approved) with Room ${room.roomNumber}.
-`);
+  console.log(created
+    ? `Seed complete. Created the main admin ${admin.email} with the password from SEED_DEMO_PASSWORD; change it after signing in.`
+    : `Seed complete. The main admin ${admin.email} already exists; nothing changed.`);
 
   await disconnectDB();
 }

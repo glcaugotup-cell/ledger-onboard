@@ -65,7 +65,7 @@ npm install
 | `ACCOUNT_ARCHIVE_WARNING_DAYS`, `ACCOUNT_ARCHIVE_DAYS`, `ACCOUNT_LIFECYCLE_CRON` | Inactivity warning/archive thresholds and the daily job schedule |
 | `MAX_UPLOAD_MB`, `MAX_VIDEO_UPLOAD_MB` | Upload size limits (photos/documents, video) |
 | `UPLOAD_DIR` | Source folder for `npm run migrate:uploads` (old on-disk uploads); uploads themselves are stored in MongoDB |
-| `SEED_DEMO_PASSWORD` | Password given to demo accounts created by `npm run seed` (strong password required; never commit it) |
+| `SEED_DEMO_PASSWORD` | First password of the main admin account created by `npm run seed` (strong password required; never commit it) |
 
 Never commit `backend/.env`; it is excluded by `.gitignore`.
 
@@ -135,14 +135,14 @@ cd frontend
 npm run dev
 ```
 
-### Demo data (optional)
+### Main admin account (new databases)
 
 ```bash
 cd backend
 npm run seed
 ```
 
-This creates one account per role — `ledgeronboard@gmail.com` (admin), `demo.landlord@gmail.com`, `demo.tenant@gmail.com`, `demo.caretaker@gmail.com` — plus a sample approved property. New demo accounts get the password set in `SEED_DEMO_PASSWORD` (backend `.env`); existing accounts are left unchanged.
+This creates the main admin account (`MAIN_ADMIN_EMAIL`, default `ledgeronboard@gmail.com`) if the database doesn't have it yet, with the password set in `SEED_DEMO_PASSWORD` (backend `.env`); change it after signing in. An existing admin is left unchanged. There are no demo accounts: tenants and landlords register through the app with their own Gmail, and landlords invite their caretakers, so nothing the app sends goes to an inbox nobody owns.
 
 ### Moving old uploads into MongoDB (one time)
 
