@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { UserPlusIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../components/layout/DashboardLayout.jsx';
 import PageHeader from '../../components/layout/PageHeader.jsx';
 import CaretakerApi from '../../services/CaretakerApi.js';
+import { useNotifications } from '../../context/NotificationContext.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Field, Select, TextArea, TextInput } from '../../components/ui/Field.jsx';
@@ -89,6 +90,7 @@ export default function CaretakersPage() {
   const [createError, setCreateError] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [joinedMsg, setJoinedMsg] = useState(''); // a pending caretaker accepted while this page was open
   const [removing, setRemoving] = useState(null);
   const [removeReason, setRemoveReason] = useState('');
   const [removeError, setRemoveError] = useState('');
@@ -161,6 +163,30 @@ export default function CaretakersPage() {
   };
 
   useEffect(load, []);
+
+  // The bell checks for notifications every 30 seconds. When it brings a new "Caretaker joined" notice,
+  // update the list in place (no spinner, no page reload) and say who accepted.
+  const { notifications } = useNotifications();
+  const activationNoticeIds = notifications.filter((n) => n.type === 'CARETAKER_ACTIVATED').map((n) => n._id).join(',');
+  const caretakersRef = useRef(caretakers);
+  useEffect(() => {
+    caretakersRef.current = caretakers;
+  });
+  const firstNoticeCheck = useRef(true);
+  useEffect(() => {
+    if (firstNoticeCheck.current) {
+      firstNoticeCheck.current = false;
+      return;
+    }
+    const statusBefore = new Map(caretakersRef.current.map((c) => [c._id, c.accountStatus]));
+    CaretakerApi.list()
+      .then(({ caretakers: list }) => {
+        setCaretakers(list);
+        const joined = list.filter((c) => statusBefore.get(c._id) === 'pending_activation' && c.accountStatus === 'active').map((c) => c.fullName);
+        if (joined.length) setJoinedMsg(`${joined.join(', ')} accepted your invitation and ${joined.length === 1 ? 'is now your caretaker' : 'are now your caretakers'}.`);
+      })
+      .catch(() => {}); // the next notice or a reload tries again
+  }, [activationNoticeIds]);
 
   const setField = (key, value) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -255,6 +281,7 @@ export default function CaretakersPage() {
             <span className="shrink-0 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800">{loading ? '…' : caretakers.length}</span>
           </div>
           <ErrorBanner message={error} />
+          <SuccessBanner message={joinedMsg} />
           {loading && <LoadingState />}
           {!loading && caretakers.length === 0 && <EmptyState title="No caretakers yet" description="Your invited team members will appear here." />}
           <div className="space-y-3">

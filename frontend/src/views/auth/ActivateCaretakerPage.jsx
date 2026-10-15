@@ -4,7 +4,8 @@ import AuthLayout from './AuthLayout.jsx';
 import AuthApi from '../../services/AuthApi.js';
 import { Field, TextInput } from '../../components/ui/Field.jsx';
 import Button from '../../components/ui/Button.jsx';
-import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
+import { ErrorBanner } from '../../components/ui/Feedback.jsx';
 import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
@@ -39,7 +40,8 @@ export default function ActivateCaretakerPage() {
   const [confirmError, setConfirmError] = useState('');
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({}); // { email, code, password }
-  const [success, setSuccess] = useState('');
+  // { landlordName } once activated: shown in a pop-up until the caretaker goes on to sign in.
+  const [activated, setActivated] = useState(null);
   const [loading, setLoading] = useState(false);
 
   // Editing a field clears its own message.
@@ -47,6 +49,8 @@ export default function ActivateCaretakerPage() {
     setForm((f) => ({ ...f, [key]: value }));
     setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
   };
+
+  const goToSignIn = () => navigate('/', { replace: true });
 
   const showFieldErrors = (errors) => {
     setFieldErrors(errors);
@@ -82,8 +86,7 @@ export default function ActivateCaretakerPage() {
     try {
       // confirmPassword is a frontend-only typo guard (same pattern as registration): never sent.
       const res = await AuthApi.activateCaretaker({ email: form.email.trim(), code: form.code, password });
-      setSuccess(res.message);
-      setTimeout(() => navigate('/', { replace: true }), 1200);
+      setActivated({ landlordName: res.landlordName || null });
     } catch (err) {
       // A validation error names its fields (email, code, password): show each under its field.
       const { message, fieldErrors: serverErrors } = describeApiError(err);
@@ -107,7 +110,6 @@ export default function ActivateCaretakerPage() {
           </p>
         )}
         <ErrorBanner message={error} />
-        <SuccessBanner message={success} />
 
         <Field required label="Email" error={fieldErrors.email}>
           <TextInput
@@ -163,10 +165,24 @@ export default function ActivateCaretakerPage() {
           {confirmError && <p className="mt-2 text-xs text-red-600">{confirmError}</p>}
         </div>
 
-        <Button type="submit" className="w-full" loading={loading}>
+        <Button type="submit" className="w-full" loading={loading} disabled={Boolean(activated)}>
           Activate account
         </Button>
       </form>
+      <ConfirmDialog
+        open={Boolean(activated)}
+        tone="success"
+        title="You're now a caretaker"
+        message={
+          activated?.landlordName
+            ? `Your account is active. You are now a caretaker for ${activated.landlordName}. Sign in with your email and new password.`
+            : 'Your account is active. Sign in with your email and new password.'
+        }
+        confirmLabel="Go to sign in"
+        cancelLabel={null}
+        onConfirm={goToSignIn}
+        onCancel={goToSignIn}
+      />
     </AuthLayout>
   );
 }

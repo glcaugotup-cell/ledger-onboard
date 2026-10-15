@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ExclamationTriangleIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, ExclamationTriangleIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
 import Button from './Button.jsx';
 
 /**
@@ -9,6 +9,8 @@ import Button from './Button.jsx';
  * backdrop and Escape all just call `onCancel`. Extra content (e.g. reason
  * checkboxes) goes in `children`. Rendered through a portal like
  * PrivacyPolicyModal, so it isn't clipped by transformed ancestors.
+ * `cancelLabel={null}` leaves only the confirm button, for a message the
+ * user just acknowledges (e.g. tone 'success').
  */
 export default function ConfirmDialog({
   open,
@@ -17,7 +19,7 @@ export default function ConfirmDialog({
   children,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
-  tone = 'primary', // 'primary' | 'danger'
+  tone = 'primary', // 'primary' | 'danger' | 'success'
   loading = false,
   confirmDisabled = false,
   error = '',
@@ -25,6 +27,7 @@ export default function ConfirmDialog({
   onCancel,
 }) {
   const cancelRef = useRef(null);
+  const confirmRef = useRef(null);
   // Latest handlers/state for the Escape listener, so the effect below runs only when the dialog opens
   // (re-running it on every render would move focus away from fields inside the dialog).
   const escapeRef = useRef({ onCancel, loading });
@@ -35,7 +38,7 @@ export default function ConfirmDialog({
   useEffect(() => {
     if (!open) return undefined;
     const previouslyFocused = document.activeElement;
-    cancelRef.current?.focus();
+    (cancelRef.current || confirmRef.current)?.focus();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     function onKeyDown(e) {
@@ -51,7 +54,8 @@ export default function ConfirmDialog({
 
   if (!open) return null;
 
-  const Icon = tone === 'danger' ? ExclamationTriangleIcon : QuestionMarkCircleIcon;
+  const Icon = tone === 'danger' ? ExclamationTriangleIcon : tone === 'success' ? CheckCircleIcon : QuestionMarkCircleIcon;
+  const iconTone = tone === 'danger' ? 'bg-red-50 text-red-600' : tone === 'success' ? 'bg-green-50 text-green-600' : 'bg-brand-50 text-brand-700';
   return createPortal(
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center overflow-y-auto bg-brand-900/60 p-4 backdrop-blur-sm"
@@ -65,11 +69,7 @@ export default function ConfirmDialog({
         className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl"
       >
         <div className="flex gap-3 px-5 pb-3 pt-5">
-          <span
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-              tone === 'danger' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700'
-            }`}
-          >
+          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconTone}`}>
             <Icon className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
@@ -86,10 +86,12 @@ export default function ConfirmDialog({
           </p>
         )}
         <div className="flex flex-col-reverse gap-2 border-t border-gray-100 bg-gray-50/60 px-5 py-3 sm:flex-row sm:justify-end">
-          <Button ref={cancelRef} type="button" variant="secondary" onClick={onCancel} disabled={loading}>
-            {cancelLabel}
-          </Button>
-          <Button type="button" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading} disabled={confirmDisabled}>
+          {cancelLabel !== null && (
+            <Button ref={cancelRef} type="button" variant="secondary" onClick={onCancel} disabled={loading}>
+              {cancelLabel}
+            </Button>
+          )}
+          <Button ref={confirmRef} type="button" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading} disabled={confirmDisabled}>
             {confirmLabel}
           </Button>
         </div>

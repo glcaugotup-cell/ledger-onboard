@@ -321,3 +321,57 @@ describe('cancelling an invitation', () => {
     expect((await UserRepository.findById(pending.caretaker._id)).accountStatus).toBe('pending_activation');
   }, 30000);
 });
+
+// User rule (2026-10-16): after activating, the caretaker is told which landlord they now work for,
+// and that landlord gets an in-app notice (no email) that the invitation was accepted.
+describe('activation tells the caretaker and the landlord', () => {
+  const NotificationRepository = () => require('../../repositories/NotificationRepository');
+  const activationNotices = async (caretakerId) => NotificationRepository().find({ type: 'CARETAKER_ACTIVATED', relatedId: caretakerId });
+
+  test('the answer names the landlord, and only that landlord gets one in-app notice linking to Caretakers', async () => {
+    const { caretaker, activationCode } = await invite('joins.landlord@gmail.com');
+
+    const res = await activate('joins.landlord@gmail.com', activationCode);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.landlordName).toBe('Code User');
+    const notices = await activationNotices(caretaker._id);
+    expect(notices).toHaveLength(1);
+    expect(String(notices[0].userId)).toBe(String(await landlordId()));
+    expect(notices[0]).toMatchObject({
+      title: 'Caretaker joined',
+      message: 'Code Caretaker accepted your invitation and is now your caretaker.',
+      relatedType: 'User',
+      link: '/landlord/caretakers',
+      read: false,
+    });
+    const listed = await request(app).get('/api/notifications').set('Authorization', `Bearer ${await landlordSession()}`);
+    expect(listed.body.data.notifications.some((n) => n.type === 'CARETAKER_ACTIVATED' && String(n.relatedId) === String(caretaker._id))).toBe(true);
+  }, 30000);
+
+  test('a wrong code or a second use of the code sends no notice and names no landlord', async () => {
+    const { caretaker, activationCode } = await invite('no.notice@gmail.com');
+
+    const wrong = await activate('no.notice@gmail.com', 'ABCDE-FGHJK');
+    expectGeneric(wrong);
+    expect(wrong.body.data?.landlordName).toBeUndefined();
+    expect(await activationNotices(caretaker._id)).toHaveLength(0);
+
+    expect((await activate('no.notice@gmail.com', activationCode)).status).toBe(200);
+    expectGeneric(await activate('no.notice@gmail.com', activationCode, 'An0ther!Pass'));
+    expect(await activationNotices(caretaker._id)).toHaveLength(1);
+  }, 30000);
+
+  test('the account is still activated when the notice cannot be saved', async () => {
+    const { caretaker, activationCode } = await invite('notice.fails@gmail.com');
+    jest.spyOn(require('../../services/NotificationService'), 'notify').mockRejectedValue(new Error('database hiccup'));
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const res = await activate('notice.fails@gmail.com', activationCode);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.landlordName).toBe('Code User');
+    expect((await UserRepository.findById(caretaker._id)).accountStatus).toBe('active');
+    expect((await login('notice.fails@gmail.com', NEW_PASSWORD)).status).toBe(200);
+  }, 30000);
+});

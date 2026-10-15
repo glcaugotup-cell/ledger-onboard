@@ -4,6 +4,7 @@ const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const EmailService = require('./EmailService');
 const EmailNotificationService = require('./EmailNotificationService');
+const NotificationService = require('./NotificationService');
 const { EMAIL_CATEGORIES } = require('../utils/emailCategories');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, comparePassword, unusablePasswordHash } = require('../utils/password');
@@ -798,7 +799,26 @@ class AuthService {
     if (!activated) throw invalidActivationCode(); // the same code was used a moment ago
 
     await AuditLogRepository.record({ action: 'CARETAKER_ACTIVATED', actorId: user._id, actorRole: ROLES.CARETAKER, targetType: 'User', targetId: user._id });
-    return { message: 'Account activated. You can now log in.' };
+    const landlord = activated.assignedLandlordId ? await UserRepository.findById(activated.assignedLandlordId) : null;
+    if (landlord) await this._notifyLandlordOfActivation(landlord, activated);
+    return { message: 'Account activated. You can now log in.', landlordName: landlord?.fullName || null };
+  }
+
+  /** In-app notice to the landlord that their invitation was accepted; a failure here never undoes the activation. */
+  async _notifyLandlordOfActivation(landlord, caretaker) {
+    try {
+      await NotificationService.notify({
+        userId: landlord._id,
+        type: 'CARETAKER_ACTIVATED',
+        title: 'Caretaker joined',
+        message: `${caretaker.fullName} accepted your invitation and is now your caretaker.`,
+        relatedType: 'User',
+        relatedId: caretaker._id,
+        link: '/landlord/caretakers',
+      });
+    } catch {
+      console.warn('[AuthService] Could not notify the landlord about a caretaker activation.');
+    }
   }
 }
 

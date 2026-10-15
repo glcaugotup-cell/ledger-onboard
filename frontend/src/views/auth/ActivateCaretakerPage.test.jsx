@@ -200,19 +200,44 @@ describe('ActivateCaretakerPage — redirect after activation', () => {
     );
   }
 
-  it('goes to the landing page (/) — not /login — after a successful activation', async () => {
-    AuthApi.activateCaretaker.mockResolvedValue({ message: 'Account activated.' });
-    const user = userEvent.setup();
-    renderWithDestinations();
+  async function activate(user) {
     await fillEmailAndCode(user);
-
     await user.type(screen.getByLabelText(/^new password/i), 'Angelo@calaycay66');
     await user.type(screen.getByLabelText(/^confirm password/i), 'Angelo@calaycay66');
     await user.click(screen.getByRole('button', { name: 'Activate account' }));
+  }
 
-    expect(await screen.findByText('Account activated.')).toBeInTheDocument();
-    expect(await screen.findByText('Landing page', {}, { timeout: 3000 })).toBeInTheDocument();
+  // User rule (2026-10-16): a pop-up names the landlord the caretaker now works for and stays until they
+  // press "Go to sign in" (it used to be a banner and an automatic redirect after 1.2 seconds).
+  it('shows a pop-up naming the landlord, stays until "Go to sign in", then goes to the landing page (/), not /login', async () => {
+    AuthApi.activateCaretaker.mockResolvedValue({ message: 'Account activated.', landlordName: 'Gladdie Ugot' });
+    const user = userEvent.setup();
+    renderWithDestinations();
+    await activate(user);
+
+    const dialog = await screen.findByRole('dialog', { name: "You're now a caretaker" });
+    expect(dialog).toHaveTextContent('You are now a caretaker for Gladdie Ugot.');
+    expect(within(dialog).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Go to sign in' })).toHaveFocus();
+    await new Promise((r) => setTimeout(r, 1500)); // longer than the old automatic redirect
+    expect(screen.queryByText('Landing page')).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Go to sign in' }));
+    expect(await screen.findByText('Landing page')).toBeInTheDocument();
     expect(screen.queryByText('Login page')).not.toBeInTheDocument();
+  });
+
+  it('still confirms the activation when the answer has no landlord name (an older backend)', async () => {
+    AuthApi.activateCaretaker.mockResolvedValue({ message: 'Account activated.' });
+    const user = userEvent.setup();
+    renderWithDestinations();
+    await activate(user);
+
+    const dialog = await screen.findByRole('dialog', { name: "You're now a caretaker" });
+    expect(dialog).toHaveTextContent('Your account is active. Sign in with your email and new password.');
+    expect(dialog).not.toHaveTextContent('caretaker for');
+    await user.keyboard('{Escape}');
+    expect(await screen.findByText('Landing page')).toBeInTheDocument();
   });
 
   it('stays on the activation page with the error when activation fails (e.g. expired code)', async () => {

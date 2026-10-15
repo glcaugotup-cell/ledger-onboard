@@ -294,4 +294,52 @@ describe('CaretakersPage', () => {
     expect(await within(dialog).findByText('This caretaker has already activated their account')).toBeInTheDocument();
     expect(screen.getByText('nat.quinto@gmail.com')).toBeInTheDocument();
   });
+  // User rule (2026-10-16): when a caretaker accepts, the landlord sees it without reloading the page.
+  // The bell fetches notifications every 30 seconds; a new 'Caretaker joined' notice updates the list.
+  describe('when a caretaker accepts while the page is open', () => {
+    const pendingNat = { _id: 'c2', fullName: 'Nat Quinto', email: 'nat.quinto@gmail.com', accountStatus: 'pending_activation' };
+    const notice = (id, type = 'CARETAKER_ACTIVATED') => ({ _id: id, type, title: 'Caretaker joined', message: '', read: false });
+    const page = () => (
+      <MemoryRouter>
+        <CaretakersPage />
+      </MemoryRouter>
+    );
+
+    it('updates the list in place and says who accepted, without a reload', async () => {
+      CaretakerApi.list.mockResolvedValueOnce({ caretakers: [pendingNat] });
+      const { rerender } = render(page());
+      expect(await screen.findByText('Pending activation')).toBeInTheDocument();
+      expect(CaretakerApi.list).toHaveBeenCalledTimes(1);
+
+      CaretakerApi.list.mockResolvedValueOnce({ caretakers: [{ ...pendingNat, accountStatus: 'active', activatedAt: '2026-10-16T01:00:00Z' }] });
+      useNotificationsMock.mockReturnValue(mockNotificationsValue({ notifications: [notice('n1')], unreadCount: 1 }));
+      rerender(page());
+
+      expect(screen.getByText('Nat Quinto')).toBeInTheDocument(); // no loading spinner in its place
+      expect(await screen.findByText('Nat Quinto accepted your invitation and is now your caretaker.')).toBeInTheDocument();
+      expect(screen.getByText('Active')).toBeInTheDocument();
+      expect(screen.queryByText('Pending activation')).not.toBeInTheDocument();
+      expect(CaretakerApi.list).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not reload for other notifications, and an older notice already there names no one', async () => {
+      useNotificationsMock.mockReturnValue(mockNotificationsValue({ notifications: [notice('old')] }));
+      CaretakerApi.list.mockResolvedValue({ caretakers: [pendingNat] });
+      const { rerender } = render(page());
+      expect(await screen.findByText('Pending activation')).toBeInTheDocument();
+      expect(CaretakerApi.list).toHaveBeenCalledTimes(1);
+
+      useNotificationsMock.mockReturnValue(mockNotificationsValue({ notifications: [notice('p1', 'PAYMENT_SUBMITTED'), notice('old')] }));
+      rerender(page());
+      await new Promise((r) => setTimeout(r, 50));
+      expect(CaretakerApi.list).toHaveBeenCalledTimes(1);
+
+      // A new notice for someone else (Nat is still pending): the list is checked, but no one is named.
+      useNotificationsMock.mockReturnValue(mockNotificationsValue({ notifications: [notice('n2'), notice('p1', 'PAYMENT_SUBMITTED'), notice('old')] }));
+      rerender(page());
+      await waitFor(() => expect(CaretakerApi.list).toHaveBeenCalledTimes(2));
+      expect(screen.getByText('Pending activation')).toBeInTheDocument();
+      expect(screen.queryByText(/accepted your invitation/)).not.toBeInTheDocument();
+    });
+  });
 });
