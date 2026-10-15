@@ -224,6 +224,25 @@ describe('R1-R5: reservation and tenancy lifecycle', () => {
     expect(billNote.link).toBe(`/tenant/apartment?tab=billing&bill=${billed.body.data.soas[0]._id}`);
   });
 
+  test('"Report an issue" takes any tenant concern, not only repairs, and notifies the landlord as a reported issue', async () => {
+    const setup = await makeSetup();
+    const tenant = await makeUser('tenant');
+    const id = await reserve(tenant.token, setup.room._id);
+    await setStatus(setup.landlord.token, id, { status: 'approved', caretakerAssignedId: String(setup.caretaker.user._id) });
+    await setStatus(setup.landlord.token, id, { status: 'active' });
+    const report = (category) => request(app).post('/api/maintenance-issues').set(auth(tenant.token))
+      .field('reservationId', id).field('category', category).field('urgency', 'medium').field('description', 'Loud music every night after 11 PM');
+
+    const noise = await report('Noise or neighbors');
+    expect(noise.status).toBe(201);
+    const note = await NotificationRepository.findOne({ userId: setup.landlord.user._id, type: 'MAINTENANCE_ISSUE_CREATED' });
+    expect(note.title).toBe('New reported issue');
+    expect((await report('Billing or payment concern')).status).toBe(201);
+    const unknown = await report('Made-up category');
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.error.code).toBe('INVALID_ISSUE_CATEGORY');
+  });
+
   test('meter readings only accept tenants who moved in', async () => {
     const setup = await makeSetup({ propertyType: 'Apartment' });
     const tenant = await makeUser('tenant');

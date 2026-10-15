@@ -7,7 +7,6 @@ import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import { Field, Select, TextArea, TextInput } from '../../components/ui/Field.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
-import ActivationCodeDialog from '../../components/ActivationCodeDialog.jsx';
 import PhoneInput from '../../components/ui/PhoneInput.jsx';
 import GmailUsernameInput from '../../components/ui/GmailUsernameInput.jsx';
 import { EmptyState, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '../../components/ui/Feedback.jsx';
@@ -90,8 +89,6 @@ export default function CaretakersPage() {
   const [createError, setCreateError] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
-  // { caretaker, code, expiresAt } from the invite or a new code; shown once in ActivationCodeDialog.
-  const [codeFor, setCodeFor] = useState(null);
   const [removing, setRemoving] = useState(null);
   const [removeReason, setRemoveReason] = useState('');
   const [removeError, setRemoveError] = useState('');
@@ -106,9 +103,12 @@ export default function CaretakersPage() {
     setResendingId(caretaker._id);
     setResendError(null);
     try {
-      const { caretaker: updated, activationCode, expiresAt } = await CaretakerApi.resendInvitation(caretaker._id);
+      setSuccessMsg('');
+      const { caretaker: updated, invitationSent } = await CaretakerApi.resendInvitation(caretaker._id);
       setCaretakers((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
-      setCodeFor({ caretaker: updated, code: activationCode, expiresAt });
+      // The code goes to the caretaker by email only; the landlord never sees it.
+      if (invitationSent) setSuccessMsg(`A new activation code was emailed to ${updated.email}. The previous code no longer works.`);
+      else setResendError({ id: caretaker._id, message: "The email couldn't be sent. Please try again in a moment." });
     } catch (err) {
       setResendError({ id: caretaker._id, message: describeApiError(err).message });
     } finally {
@@ -190,8 +190,11 @@ export default function CaretakersPage() {
     setCreateLoading(true);
     try {
       const created = await CaretakerApi.create(payload);
-      setSuccessMsg(`Caretaker account created for ${payload.email}. Give them the activation code so they can activate it and choose a password.`);
-      setCodeFor({ caretaker: created.caretaker, code: created.activationCode, expiresAt: created.expiresAt });
+      if (created.invitationSent === false) {
+        setCreateError(`${payload.firstName} was added, but the invitation email couldn't be sent. Use "Send new code" next to their name in Your caretakers to try again.`);
+      } else {
+        setSuccessMsg(`Invitation has been sent to ${payload.email}. Wait for the caretaker to confirm it. If they miss the deadline (3 days), send another code if needed.`);
+      }
       setForm(EMPTY_FORM);
       setFormErrors({});
       load();
@@ -211,7 +214,7 @@ export default function CaretakersPage() {
         <Card className="rounded-2xl border-gray-200/80 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100"><UserPlusIcon className="h-5 w-5" aria-hidden="true" /></span>
-            <div><h2 className="font-semibold text-gray-900">Invite a caretaker</h2><p className="mt-0.5 text-xs text-gray-500">You get a one-time activation code to give them.</p></div>
+            <div><h2 className="font-semibold text-gray-900">Invite a caretaker</h2><p className="mt-0.5 text-xs text-gray-500">We email them a one-time activation code.</p></div>
           </div>
           <form onSubmit={onCreate} className="space-y-3" noValidate>
             <ErrorBanner message={createError} />
@@ -238,7 +241,7 @@ export default function CaretakersPage() {
             </Field>
             <p className="-mt-1 text-xs text-gray-500">Where this caretaker works. Used to suggest them for boarding houses in the same barangay.</p>
             <Button type="submit" loading={createLoading} className="w-full">
-              Invite and get code
+              Send invitation
             </Button>
           </form>
         </Card>
@@ -276,7 +279,7 @@ export default function CaretakersPage() {
                 </div>
                 {c.accountStatus === 'pending_activation' && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Button variant="secondary" loading={resendingId === c._id} disabled={Boolean(resendingId)} onClick={() => resendInvitation(c)}>New activation code</Button>
+                    <Button variant="secondary" loading={resendingId === c._id} disabled={Boolean(resendingId)} onClick={() => resendInvitation(c)}>Send new code</Button>
                     <Button variant="dangerOutline" onClick={() => { setCancelling(c); setCancelError(''); setSuccessMsg(''); }}>Cancel invitation</Button>
                   </div>
                 )}
@@ -300,7 +303,6 @@ export default function CaretakersPage() {
           </div>
         </section>
       </div>
-      {codeFor && <ActivationCodeDialog key={codeFor.code} {...codeFor} onClose={() => setCodeFor(null)} />}
       <ConfirmDialog open={Boolean(removing)} tone="danger" title={removing ? `Remove ${removing.fullName}?` : ''} message="Their sign-in access will end. Existing readings, payments, and audit records will remain on file." confirmLabel="Remove caretaker" loading={removeLoading} confirmDisabled={removeReason.trim().length < 3} error={removeError} onConfirm={removeCaretaker} onCancel={() => setRemoving(null)}>
         <Field required label="Reason for removal">
           <TextArea rows={3} maxLength={500} value={removeReason} onChange={(e) => setRemoveReason(e.target.value)} placeholder="Explain why this caretaker is being removed" />

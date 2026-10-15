@@ -31,20 +31,29 @@ describe('ResetPasswordPage', () => {
         <ResetPasswordPage />
       </MemoryRouter>
     );
-    const code = screen.getByLabelText('Authenticator, backup or reset code');
+    const code = screen.getByLabelText('Recovery code');
     await user.type(code, 'ab#cd e-fg!hjkLMN');
     expect(code).toHaveValue('ABCDE-FGHJK');
   });
 
-  // Email restoration rule: emailed codes are accepted alongside authenticator, backup and admin codes.
-  it('explains emailed codes and the existing recovery codes', () => {
+  // The emailed code comes first; authenticator, backup and admin codes are still accepted.
+  it('asks for the emailed code and still accepts the other recovery codes', () => {
     render(
       <MemoryRouter>
         <ResetPasswordPage />
       </MemoryRouter>
     );
-    expect(screen.getByText(/authenticator app, one of your backup codes, or a reset code from an administrator/i)).toBeInTheDocument();
-    expect(screen.getByText(/emailed reset code/i)).toBeInTheDocument();
+    expect(screen.getByText('Enter the recovery code we emailed you, then choose a new password.')).toBeInTheDocument();
+    expect(screen.getByText(/6-digit code from your email\. A code from your authenticator app, a backup code .* or an administrator's reset code/i)).toBeInTheDocument();
+  });
+
+  it('shows the "code sent" notice handed over by the forgot-password page', () => {
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/reset-password', state: { email: 'demo.tenant@gmail.com', notice: 'A reset code has been sent.' } }]}>
+        <ResetPasswordPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('A reset code has been sent. Check your inbox and spam folder.');
   });
 
   it('sends an admin reset code as typed', async () => {
@@ -56,7 +65,7 @@ describe('ResetPasswordPage', () => {
       </MemoryRouter>
     );
     await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
-    await user.type(screen.getByLabelText('Authenticator, backup or reset code'), 'abcd-efgh');
+    await user.type(screen.getByLabelText('Recovery code'), 'abcd-efgh');
     await user.type(screen.getByLabelText(/^new password/i), 'Str0ng!Pass');
     await user.type(screen.getByLabelText(/^confirm password/i), 'Str0ng!Pass');
     await user.click(screen.getByRole('button', { name: /reset password/i }));
@@ -73,7 +82,7 @@ describe('ResetPasswordPage', () => {
     );
 
     await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
-    await user.type(screen.getByLabelText('Authenticator, backup or reset code'), '123456');
+    await user.type(screen.getByLabelText('Recovery code'), '123456');
     await user.type(screen.getByLabelText(/^new password/i), 'Str0ng!Pass');
     await user.type(screen.getByLabelText(/^confirm password/i), 'Str0ng!Pass');
     await user.click(screen.getByRole('button', { name: /reset password/i }));
@@ -98,7 +107,7 @@ describe('ResetPasswordPage', () => {
     );
 
     await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
-    await user.type(screen.getByLabelText('Authenticator, backup or reset code'), '000000');
+    await user.type(screen.getByLabelText('Recovery code'), '000000');
     await user.type(screen.getByLabelText(/^new password/i), 'Str0ng!Pass');
     await user.type(screen.getByLabelText(/^confirm password/i), 'Str0ng!Pass');
     await user.click(screen.getByRole('button', { name: /reset password/i }));
@@ -114,7 +123,7 @@ describe('ResetPasswordPage', () => {
       </MemoryRouter>
     );
     await user.type(screen.getByLabelText('Email'), 'demo.tenant@gmail.com');
-    await user.type(screen.getByLabelText('Authenticator, backup or reset code'), '123456');
+    await user.type(screen.getByLabelText('Recovery code'), '123456');
     await user.type(screen.getByLabelText(/^new password/i), 'weakpass');
     await user.type(screen.getByLabelText(/^confirm password/i), 'weakpass');
     await user.click(screen.getByRole('button', { name: /reset password/i }));

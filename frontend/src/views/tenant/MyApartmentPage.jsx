@@ -20,7 +20,7 @@ import { capitalizeFirst } from '../../utils/textFormat.js';
 
 const TABS = [
   { key: 'billing', label: 'Billing' },
-  { key: 'issues', label: 'Maintenance issues' },
+  { key: 'issues', label: 'Report an issue' },
 ];
 
 /** The current stay: where, who to contact, and the request-to-leave flow. */
@@ -292,7 +292,7 @@ export default function MyApartmentPage() {
 
   return (
     <DashboardLayout>
-      <PageHeader title="My Apartment" description="Your current stay, bills and maintenance requests in one place." />
+      <PageHeader title="My Apartment" description="Your current stay, bills and reported issues in one place." />
       <ErrorBanner message={error} />
       {loading && <LoadingState label="Loading your apartment…" />}
       {!loading && current && <CurrentStay stay={current} onChanged={load} />}
@@ -303,7 +303,7 @@ export default function MyApartmentPage() {
             title="No current stay"
             description={reserved
               ? `Your reservation at ${reserved.propertyId?.propertyName || 'your new place'} is approved. My Apartment opens once your landlord confirms your move-in. Past bills and issues stay below.`
-              : 'Once a landlord confirms your move-in, your apartment, bills and maintenance requests appear here. Past bills and issues stay below.'}
+              : 'Once a landlord confirms your move-in, your apartment, bills and reported issues appear here. Past bills and issues stay below.'}
             action={<Link to={reserved ? '/tenant/reservations' : '/tenant/discover'}><Button variant="secondary">{reserved ? 'View my reservation' : 'Discover boarding houses'}</Button></Link>}
           />
         </div>

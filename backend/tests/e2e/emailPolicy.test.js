@@ -103,15 +103,15 @@ test('turning notifications off preserves in-app preference and mailbox proof', 
   expect(result.body.data.user.notificationPreferences).toMatchObject({ email: false, inApp: true });
   expect(result.body.data.user.emailNotificationsConfirmed).toBe(true);
 });
-test('inactivity warning and archived notice reach confirmed inboxes only', async () => {
+test('inactivity warning and archived notice are account notices: sent even without inbox proof or with email off', async () => {
   const service = require('../../services/AccountLifecycleService');
-  const legacy = await user(); await service._warnUser(legacy, new Date()); expect(send).not.toHaveBeenCalled();
-  const confirmed = await user({ emailConfirmedAt: new Date(), notificationPreferences: { email: true } });
-  await service._warnUser(confirmed, new Date()); expect(send).toHaveBeenCalledTimes(1);
-  send.mockClear(); await service._archiveUser(legacy); expect(send).not.toHaveBeenCalled();
-  await service._archiveUser(confirmed); expect(send).toHaveBeenCalledTimes(1);
+  const legacy = await user({ notificationPreferences: { email: false, inApp: true } });
+  await service._warnUser(legacy, new Date()); expect(send).toHaveBeenCalledTimes(1);
+  expect(send.mock.calls[0][0]).toMatchObject({ to: legacy.email });
+  expect(send.mock.calls[0][0].unsubscribeUrl).toBeUndefined();
+  send.mockClear(); await service._archiveUser(legacy); expect(send).toHaveBeenCalledTimes(1);
   expect(send.mock.calls[0][0].subject).toContain('archived');
-  expect((await Users.findById(confirmed._id)).accountStatus).toBe('archived');
+  expect((await Users.findById(legacy._id)).accountStatus).toBe('archived');
 });
 test('password changes notify confirmed inboxes even when routine notifications are off', async () => {
   const u = await user({ emailConfirmedAt: new Date(), notificationPreferences: { email: false } });

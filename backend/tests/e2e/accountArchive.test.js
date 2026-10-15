@@ -165,3 +165,48 @@ test('admin accounts: only the main admin archives them, and no one archives the
     expect((await archive(actor, main)).body.error.code).toBe('CANNOT_MODIFY_MAIN_ADMIN');
   }
 });
+
+describe('the person is told', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('when an admin closes the account: an email with the reason and deletion date, even without inbox proof', async () => {
+    const send = jest.spyOn(require('../../services/EmailService'), 'send').mockResolvedValue({ accepted: ['x'] });
+    const tenant = await makeUser('told.closed@gmail.com', 'tenant', { emailConfirmedAt: null, notificationPreferences: { email: false, inApp: true } });
+    await archive(other, tenant, 'Fake or spam account');
+    expect(send).toHaveBeenCalledTimes(1);
+    const mail = send.mock.calls[0][0];
+    expect(mail.to).toBe('told.closed@gmail.com');
+    expect(mail.subject).toBe('Ledger OnBoard — Your account has been closed');
+    expect(mail.text).toContain('Reason: Fake or spam account');
+    expect(mail.text).toMatch(/Permanent deletion: [A-Z][a-z]+ \d{1,2}, \d{4}/);
+    expect(mail.text).toContain('ledgeronboard@gmail.com');
+    expect(mail.unsubscribeUrl).toBeUndefined();
+  });
+
+  test('when the account is deleted: one last email to the old address before it is erased', async () => {
+    const tenant = await makeUser('told.deleted@gmail.com');
+    await archive(other, tenant);
+    const send = jest.spyOn(require('../../services/EmailService'), 'send').mockResolvedValue({ accepted: ['x'] });
+    expect((await remove(main, tenant)).status).toBe(200);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0]).toMatchObject({ to: 'told.deleted@gmail.com', subject: 'Ledger OnBoard — Your account has been deleted' });
+    expect(send.mock.calls[0][0].html).toContain('href="https://');
+  });
+
+  test('a failed notice never blocks the archive or the deletion', async () => {
+    jest.spyOn(require('../../services/EmailService'), 'send').mockRejectedValue(new Error('synthetic outage'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const tenant = await makeUser('notice.fails@gmail.com');
+    expect((await archive(other, tenant)).status).toBe(200);
+    expect((await remove(main, tenant)).status).toBe(200);
+    expect((await UserRepository.model.findById(tenant._id).lean()).accountStatus).toBe('deleted');
+  });
+
+  test('at sign-in: who closed it, when it will be deleted, and who to contact', async () => {
+    const tenant = await makeUser('told.login@gmail.com');
+    await archive(other, tenant);
+    const res = await login('told.login@gmail.com');
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toMatch(/^This account was closed by an administrator\. It will be permanently deleted on [A-Z][a-z]+ \d{1,2}, \d{4}\. If you think this is a mistake, contact ledgeronboard@gmail\.com\.$/);
+  });
+});

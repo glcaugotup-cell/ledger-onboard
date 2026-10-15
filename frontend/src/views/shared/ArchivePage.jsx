@@ -14,7 +14,7 @@ import { describeApiError } from '../../utils/errors.js';
 
 const DESCRIPTION = {
   tenant: 'Resolved issues you moved out of your list. Restore one to see it again; your landlord always keeps the record.',
-  landlord: 'Hidden properties and maintenance reports you removed. Nothing here is erased; restore anything you need back.',
+  landlord: 'Hidden properties and issue reports you removed. Nothing here is erased; restore anything you need back.',
   caretaker: 'Tasks you archived from your list. Archiving only changes your own view.',
 };
 
@@ -122,7 +122,7 @@ export default function ArchivePage() {
 
       {issues.length > 0 && (
         <section aria-labelledby="archived-issues">
-          <h2 id="archived-issues" className="mb-3 text-base font-semibold text-gray-900">{role === 'landlord' ? 'Removed maintenance reports' : 'Maintenance issues'}</h2>
+          <h2 id="archived-issues" className="mb-3 text-base font-semibold text-gray-900">{role === 'landlord' ? 'Removed issue reports' : 'Reported issues'}</h2>
           <div className="space-y-2">
             {issues.map((issue) => (
               <Card key={issue._id}>

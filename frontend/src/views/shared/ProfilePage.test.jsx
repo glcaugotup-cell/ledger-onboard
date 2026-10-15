@@ -81,13 +81,14 @@ describe('ProfilePage', () => {
     expect(bills).toBeChecked();
     expect(screen.getByRole('checkbox', { name: /payment results/i })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: /reservations and move-outs/i })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: /account warnings/i })).toBeChecked();
+    // Account notices always send, so they are not a choice.
+    expect(screen.queryByRole('checkbox', { name: /account warnings/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /business verification/i })).not.toBeInTheDocument();
     const save = screen.getByRole('button', { name: /save email preferences/i });
     expect(save).toBeDisabled();
     await person.click(bills);
     await person.click(save);
-    expect(AuthApi.updateMe).toHaveBeenCalledWith({ notificationPreferences: { emailCategories: { reservations: true, bills: false, payments: false, account: true } } });
+    expect(AuthApi.updateMe).toHaveBeenCalledWith({ notificationPreferences: { emailCategories: { reservations: true, bills: false, payments: false } } });
     expect(refreshProfile).toHaveBeenCalled();
     expect(await screen.findByText('Email preferences saved.')).toBeInTheDocument();
   });

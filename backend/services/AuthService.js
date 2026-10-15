@@ -18,6 +18,7 @@ const { sanitizeUser } = require('../utils/sanitize');
 const { deriveFullName } = require('../utils/name');
 const { ROLES, ACCOUNT_STATUS, RESERVATION_STATUS, CARETAKER_ACTIVATION_CODE } = require('../utils/constants');
 const env = require('../config/env');
+const { APP_TIME_ZONE } = require('../utils/dates');
 
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_RESEND_COOLDOWN_SECONDS = 45;
@@ -313,8 +314,13 @@ class AuthService {
     if (user.accountStatus === ACCOUNT_STATUS.PENDING_ACTIVATION) {
       throw ApiError.forbidden('This account has not been activated yet. Ask your landlord for an activation code.', 'ACCOUNT_PENDING_ACTIVATION');
     }
-    if (user.accountStatus === ACCOUNT_STATUS.PENDING_DELETION || user.accountStatus === ACCOUNT_STATUS.DELETED) {
-      throw ApiError.forbidden('This account has been closed by an administrator.', 'ACCOUNT_CLOSED');
+    if (user.accountStatus === ACCOUNT_STATUS.PENDING_DELETION) {
+      const on = user.deletion?.scheduledFor
+        ? ` It will be permanently deleted on ${new Date(user.deletion.scheduledFor).toLocaleDateString('en-PH', { timeZone: APP_TIME_ZONE, month: 'long', day: 'numeric', year: 'numeric' })}.` : '';
+      throw ApiError.forbidden(`This account was closed by an administrator.${on} If you think this is a mistake, contact ${env.mainAdminEmail}.`, 'ACCOUNT_CLOSED');
+    }
+    if (user.accountStatus === ACCOUNT_STATUS.DELETED) {
+      throw ApiError.forbidden('This account has been deleted.', 'ACCOUNT_CLOSED');
     }
   }
 
@@ -357,7 +363,7 @@ class AuthService {
           console.warn('[AuthService] Password reset email was not sent.');
         }
       }
-      return { message: 'If an eligible account matches that email, a reset code has been sent. You can also use your authenticator, backup or administrator reset code.' };
+      return { message: `If an account matches that email, we've sent it a 6-digit recovery code. It works for ${env.otpTtlMinutes} minutes.` };
     }
     return { message: FORGOT_PASSWORD_MESSAGE };
   }
@@ -597,7 +603,7 @@ class AuthService {
       accountStatus: ACCOUNT_STATUS.PENDING_ACTIVATION,
     });
     const { code, expiresAt } = await this._issueActivationCode(caretaker._id);
-    await this._emailCaretakerInvitation(caretaker, code, landlordId);
+    const invitationSent = await this._emailCaretakerInvitation(caretaker, code, landlordId);
 
     await AuditLogRepository.record({
       action: 'CARETAKER_CREATED',
@@ -605,10 +611,10 @@ class AuthService {
       actorRole: ROLES.LANDLORD,
       targetType: 'User',
       targetId: caretaker._id,
-      metadata: { email: caretaker.email, expiresAt },
+      metadata: { email: caretaker.email, expiresAt, invitationSent },
     });
 
-    return { caretaker: sanitizeUser(caretaker), activationCode: code, expiresAt };
+    return this._invitationResult(caretaker, { code, expiresAt, invitationSent });
   }
 
   /** A new activation code for a caretaker who hasn't activated yet; the previous code stops working. */
@@ -622,18 +628,25 @@ class AuthService {
     }
 
     const { code, expiresAt } = await this._issueActivationCode(caretaker._id, { invitationResentAt: new Date() });
-    await this._emailCaretakerInvitation(caretaker, code, landlordId);
+    const invitationSent = await this._emailCaretakerInvitation(caretaker, code, landlordId);
     await AuditLogRepository.record({
       action: 'CARETAKER_INVITATION_RESENT',
       actorId: landlordId,
       actorRole: ROLES.LANDLORD,
       targetType: 'User',
       targetId: caretaker._id,
-      metadata: { email: caretaker.email, expiresAt },
+      metadata: { email: caretaker.email, expiresAt, invitationSent },
     });
 
-    const updated = await UserRepository.findById(caretaker._id);
-    return { caretaker: sanitizeUser(updated), activationCode: code, expiresAt };
+    return this._invitationResult(await UserRepository.findById(caretaker._id), { code, expiresAt, invitationSent });
+  }
+
+  /**
+   * The code goes to the caretaker by email and is not shown to the landlord. Only when the email
+   * could not be sent (email off, or a delivery failure) is it returned, as the API's fallback.
+   */
+  _invitationResult(caretaker, { code, expiresAt, invitationSent }) {
+    return { caretaker: sanitizeUser(caretaker), invitationSent, expiresAt, ...(invitationSent ? {} : { activationCode: code }) };
   }
 
   /**
@@ -679,13 +692,16 @@ class AuthService {
     return { cancelled: true };
   }
 
+  /** True when the invitation email was accepted for delivery. */
   async _emailCaretakerInvitation(caretaker, code, landlordId) {
-    if (!env.emailAccountFlowsEnabled) return;
+    if (!env.emailAccountFlowsEnabled) return false;
     try {
       const landlord = await UserRepository.findById(landlordId);
-      await EmailService.sendCaretakerInvitationEmail(caretaker.email, caretaker.fullName, code, landlord?.fullName);
+      const delivery = await EmailService.sendCaretakerInvitationEmail(caretaker.email, caretaker.fullName, code, landlord?.fullName);
+      return !delivery?.skipped;
     } catch {
-      console.warn('[AuthService] Caretaker invitation email was not sent; the landlord activation code is still valid.');
+      console.warn('[AuthService] Caretaker invitation email was not sent.');
+      return false;
     }
   }
 

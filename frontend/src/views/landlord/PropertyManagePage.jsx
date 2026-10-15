@@ -16,14 +16,15 @@ import { Badge, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from '..
 import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst } from '../../utils/textFormat.js';
 import { formatDate, formatPeso } from '../../utils/format.js';
+import { MAX_MONTHLY_RENT, MAX_MONTHLY_RENT_LABEL } from '../../utils/rent.js';
 
 const STATUS_TONE = { draft: 'gray', pending_moderation: 'yellow', approved: 'green', rejected: 'red', inactive: 'gray', available: 'green', occupied: 'red', maintenance: 'yellow' };
 
 /** Same rent limits as backend/validators/roomValidators.js; null when the amount is fine. */
 function rentError(monthlyBaseRent) {
   const rent = Number(monthlyBaseRent);
-  if (monthlyBaseRent === '' || !Number.isFinite(rent) || !/^\d+(\.\d{1,2})?$/.test(monthlyBaseRent) || rent < 0 || rent > 1000000) {
-    return 'Enter an amount from ₱0 to ₱1,000,000 with up to 2 decimal places';
+  if (monthlyBaseRent === '' || !Number.isFinite(rent) || !/^\d+(\.\d{1,2})?$/.test(monthlyBaseRent) || rent < 0 || rent > MAX_MONTHLY_RENT) {
+    return `Enter a monthly rent from ₱0 to ${MAX_MONTHLY_RENT_LABEL} with up to 2 decimal places`;
   }
   return null;
 }
@@ -40,7 +41,7 @@ function validateRoom({ roomNumber, capacity, monthlyBaseRent }) {
   return errors;
 }
 
-/** Peso amount box: digits with up to 2 decimals and at most ₱1,000,000, typed as text. */
+/** Peso amount box: digits with up to 2 decimals and at most MAX_MONTHLY_RENT, typed as text. */
 function RentInput({ value, onChange, error, ...props }) {
   return (
     <div className="relative">
@@ -54,7 +55,7 @@ function RentInput({ value, onChange, error, ...props }) {
         className="pl-12 tabular-nums"
         onChange={(e) => {
           const next = e.target.value;
-          if (next === '' || (/^\d{1,7}(\.\d{0,2})?$/.test(next) && Number(next) <= 1000000)) onChange(next);
+          if (next === '' || (/^\d{1,7}(\.\d{0,2})?$/.test(next) && Number(next) <= MAX_MONTHLY_RENT)) onChange(next);
         }}
         error={error}
         aria-label="Monthly rent per slot in Philippine pesos"
@@ -111,7 +112,7 @@ function AddRoomForm({ propertyId, onAdded }) {
       <Field required label="Capacity" hint="1–50 occupants" error={fieldErrors.capacity}>
         <TextInput type="number" min="1" max="50" step="1" inputMode="numeric" value={form.capacity} onChange={(e) => setField('capacity', e.target.value)} error={fieldErrors.capacity} />
       </Field>
-      <Field required label="Rent per slot" hint="Monthly · up to ₱1,000,000 · 2 decimal places" error={fieldErrors.monthlyBaseRent}>
+      <Field required label="Rent per slot" hint={`Monthly rent per occupant · up to ${MAX_MONTHLY_RENT_LABEL}`} error={fieldErrors.monthlyBaseRent}>
         <RentInput value={form.monthlyBaseRent} onChange={(value) => setField('monthlyBaseRent', value)} error={fieldErrors.monthlyBaseRent} />
       </Field>
       <div>

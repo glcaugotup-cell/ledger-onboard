@@ -20,17 +20,14 @@ const CATEGORY_TEXT = {
   },
   verification: { landlord: ['Business verification results', 'When your business documents are approved or rejected'] },
   assignments: { caretaker: ['Property assignments', 'When a landlord assigns you to a property'] },
-  account: {
-    any: ['Account warnings', 'A warning before an inactive account is archived, and the archive notice'],
-  },
 };
 const ROLE_CATEGORIES = {
-  tenant: ['reservations', 'bills', 'payments', 'account'],
-  landlord: ['reservations', 'payments', 'verification', 'account'],
-  caretaker: ['assignments', 'account'],
+  tenant: ['reservations', 'bills', 'payments'],
+  landlord: ['reservations', 'payments', 'verification'],
+  caretaker: ['assignments'],
   admin: [],
 };
-const textFor = (key, role) => CATEGORY_TEXT[key][role] || CATEGORY_TEXT[key].any;
+const textFor = (key, role) => CATEGORY_TEXT[key][role];
 const savedChoices = (user) => Object.fromEntries((ROLE_CATEGORIES[user?.role] || [])
   .map((key) => [key, user?.notificationPreferences?.emailCategories?.[key] !== false]));
 
@@ -86,7 +83,7 @@ export default function EmailNotificationSettings({ user, onChanged }) {
   });
   return (
     <Card title="Email notifications">
-      <p className="mb-3 text-sm text-gray-500">{categories.length ? 'Choose which updates also arrive by email. In-app notifications stay on, and security emails (password changes, two-factor turned off) always send.' : 'Admin accounts only get security emails, such as a password change.'} Confirm your inbox once to start. Every email has an unsubscribe link.</p>
+      <p className="mb-3 text-sm text-gray-500">{categories.length ? 'Choose which updates also arrive by email. In-app notifications stay on. Security emails (password changes, two-factor turned off) and account notices (if your account is archived, closed or deleted) always send.' : 'Admin accounts only get security emails, such as a password change.'} Confirm your inbox once to start. Every email has an unsubscribe link.</p>
       <ErrorBanner message={error} /><SuccessBanner message={message} />
       {step === 'idle' && <div className="space-y-3">
         <p className="text-sm text-gray-600">{enabled ? 'Email notifications are on.' : 'Email notifications are off.'}</p>

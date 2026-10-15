@@ -50,12 +50,16 @@ describe('MaintenanceIssuesPage', () => {
     const user = userEvent.setup();
     renderAs('tenant');
     await user.click(await screen.findByRole('button', { name: 'Report an issue' }));
-    const dialog = screen.getByRole('dialog', { name: 'Report maintenance issue' });
+    const dialog = screen.getByRole('dialog', { name: 'Report an issue' });
 
     const tenancyPlaceholder = within(dialog).getByLabelText('Apartment / room').querySelector('option[value=""]');
     const categoryPlaceholder = within(dialog).getByLabelText('Category').querySelector('option[value=""]');
     expect(tenancyPlaceholder).toHaveTextContent('Select a current tenancy');
     expect(categoryPlaceholder).toHaveTextContent('Choose category');
+    // Not only repairs: every kind of tenant concern can be reported.
+    for (const concern of ['Plumbing', 'Water or power supply', 'Noise or neighbors', 'Security and safety', 'Billing or payment concern', 'House rules or behavior', 'Other']) {
+      expect(within(dialog).getByRole('option', { name: concern })).toBeInTheDocument();
+    }
     for (const option of [tenancyPlaceholder, categoryPlaceholder]) {
       // Shown in the closed field only: disabled and hidden from the opened list.
       expect(option).toBeDisabled();
@@ -75,7 +79,7 @@ describe('MaintenanceIssuesPage', () => {
     const user = userEvent.setup();
     renderAs('tenant');
     await user.click(await screen.findByRole('button', { name: 'Report an issue' }));
-    const dialog = screen.getByRole('dialog', { name: 'Report maintenance issue' });
+    const dialog = screen.getByRole('dialog', { name: 'Report an issue' });
     const input = within(dialog).getByLabelText('Photos');
 
     await user.upload(input, [1, 2, 3, 4, 5, 6, 7].map((n) => photo(`p${n}.png`)));

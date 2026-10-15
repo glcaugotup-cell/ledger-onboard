@@ -1,17 +1,17 @@
 const { body, query } = require('express-validator');
 const mongoose = require('mongoose');
-const { PROPERTY_TYPE, GENDER_POLICY } = require('../utils/constants');
+const { PROPERTY_TYPE, GENDER_POLICY, MAX_MONTHLY_RENT } = require('../utils/constants');
 const { findBarangayByName, coordinatesMatchBarangay } = require('../utils/dagupanBarangays');
 
 const searchValidators = [
   query('barangay').optional().trim().isLength({ max: 100 }),
   query('propertyType').optional().isIn(Object.values(PROPERTY_TYPE)),
   query('tenantGenderPolicy').optional().isIn(Object.values(GENDER_POLICY)),
-  query('minRent').optional().isInt({ min: 0, max: 1000000 }).withMessage('Minimum rent must be a whole number from 0 to 1,000,000').toInt(),
+  query('minRent').optional().isInt({ min: 0, max: MAX_MONTHLY_RENT }).withMessage(`Minimum rent must be a whole number from 0 to ${MAX_MONTHLY_RENT.toLocaleString('en-PH')}`).toInt(),
   query('maxRent')
     .optional()
-    .isInt({ min: 0, max: 1000000 })
-    .withMessage('Maximum rent must be a whole number from 0 to 1,000,000')
+    .isInt({ min: 0, max: MAX_MONTHLY_RENT })
+    .withMessage(`Maximum rent must be a whole number from 0 to ${MAX_MONTHLY_RENT.toLocaleString('en-PH')}`)
     .bail()
     .custom((max, { req }) => !req.query.minRent || Number(max) >= Number(req.query.minRent))
     .withMessage('Maximum rent must be at least the minimum rent')

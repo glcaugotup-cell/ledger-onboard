@@ -19,6 +19,10 @@ const ACCOUNT_STATUS = Object.freeze({
   DELETED: 'deleted',
 });
 
+// Highest monthly rent per slot a landlord can set (also the Discover rent filter's ceiling).
+// Rooms saved before this limit keep their rent; it applies when rent is set or changed.
+const MAX_MONTHLY_RENT = 50000;
+
 // Days an account stays in the admin Archive before it is erased automatically.
 const ACCOUNT_DELETION_GRACE_DAYS = 30;
 
@@ -123,6 +127,7 @@ module.exports = {
   ROLES,
   ACCOUNT_STATUS,
   ACCOUNT_DELETION_GRACE_DAYS,
+  MAX_MONTHLY_RENT,
   MFA_METHOD,
   PASSWORD_RESET_CODE,
   CARETAKER_ACTIVATION_CODE,

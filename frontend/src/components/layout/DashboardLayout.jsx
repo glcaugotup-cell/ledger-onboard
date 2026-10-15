@@ -55,14 +55,14 @@ const NAV_BY_ROLE = {
     { to: '/landlord/caretakers', label: 'Caretakers', icon: UserGroupIcon },
     { to: '/landlord/billing', label: 'Billing', icon: DocumentTextIcon },
     { to: '/landlord/payments', label: 'Payments', icon: CreditCardIcon },
-    { to: '/landlord/issues', label: 'Maintenance Issues', icon: ClipboardDocumentListIcon },
+    { to: '/landlord/issues', label: 'Reported Issues', icon: ClipboardDocumentListIcon },
     { to: '/landlord/verification', label: 'Verification', icon: ShieldCheckIcon },
   ],
   caretaker: [
     { to: '/caretaker/rooms', label: 'Assigned Rooms', icon: HomeModernIcon },
     { to: '/caretaker/utilities', label: 'Utility Entry', icon: BoltIcon },
     { to: '/caretaker/payments', label: 'Cash & Payments', icon: CreditCardIcon },
-    { to: '/caretaker/issues', label: 'Maintenance Tasks', icon: ClipboardDocumentListIcon },
+    { to: '/caretaker/issues', label: 'Reported Issues', icon: ClipboardDocumentListIcon },
   ],
   admin: [
     { to: '/admin/users', label: 'Users', icon: UsersIcon },

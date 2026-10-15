@@ -120,6 +120,7 @@ describe('PropertyManagePage', () => {
     renderPage();
 
     await screen.findByText(/no rooms yet/i);
+    expect(screen.getByText('Monthly rent per occupant · up to ₱50,000')).toBeInTheDocument();
     await user.clear(screen.getByLabelText(/^capacity/i));
     await user.type(screen.getByLabelText(/^capacity/i), '0');
     await user.click(screen.getByRole('button', { name: /add room/i }));
@@ -127,7 +128,7 @@ describe('PropertyManagePage', () => {
     expect(PropertyApi.createRoom).not.toHaveBeenCalled();
     expect(screen.getByText('Room number is required')).toBeInTheDocument();
     expect(screen.getByText('Capacity must be a whole number from 1 to 50')).toBeInTheDocument();
-    expect(screen.getByText('Enter an amount from ₱0 to ₱1,000,000 with up to 2 decimal places')).toBeInTheDocument();
+    expect(screen.getByText('Enter a monthly rent from ₱0 to ₱50,000 with up to 2 decimal places')).toBeInTheDocument();
   });
 
   it('deletes the property only after confirming in the dialog, then navigates away', async () => {
@@ -222,7 +223,11 @@ describe('PropertyManagePage', () => {
     await user.clear(amount);
     await user.click(within(dialog).getByRole('button', { name: 'Save rent' }));
     expect(PropertyApi.updateRoom).not.toHaveBeenCalled();
-    expect(within(dialog).getByText(/Enter an amount from ₱0 to ₱1,000,000/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Enter a monthly rent from ₱0 to ₱50,000/)).toBeInTheDocument();
+    // Amounts above the limit cannot be typed at all.
+    await user.type(amount, '50001');
+    expect(amount).toHaveValue('5000');
+    await user.clear(amount);
 
     await user.type(amount, '2800abc');
     expect(amount).toHaveValue('2800');

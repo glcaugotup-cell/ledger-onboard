@@ -266,10 +266,10 @@ class EmailService {
     return this._sendMessage(to, 'Ledger OnBoard Caretaker Invitation', {
       category: 'Caretaker invitation', title: "You're invited to join", greeting: `Hi ${fullName},`,
       paragraphs: [`${landlordName || 'Your landlord'} invited you to become a caretaker on Ledger OnBoard.`,
-        'Open the activation page, enter your email and the code below, and choose your own password.'],
+        'Click the button below and you will be directed to the page. Once there, click "Activate a caretaker account" below the login button and use the activation code below, together with this email address, to choose your own password.'],
       highlight: { label: 'Your activation code', value: code },
       details: [['Invitation expires', 'In 3 days']],
-      action: { label: 'Activate my account', url: this._appLink('/activate-caretaker') },
+      action: { label: 'Go to Ledger OnBoard', url: this._appLink('/login') },
       note: 'This code works once. If the invitation was unexpected, ignore it. Your landlord can issue a new code if needed.',
     });
   }
@@ -327,6 +327,31 @@ class EmailService {
       category: 'Email check', title: 'Email is working', greeting: fullName ? `Hi ${fullName},` : 'Hello,',
       paragraphs: ['This test was sent from the admin Profile page. If you can read it, Ledger OnBoard can send emails such as sign-up codes.'],
       action: { label: 'Open Ledger OnBoard', url: this._appLink('/') },
+    });
+  }
+
+  /** An administrator moved the account to the Archive: blocked now, erased on deleteOn unless restored. */
+  sendAccountClosedEmail(to, fullName, { reason, deleteOn, contactEmail }) {
+    return this._sendMessage(to, 'Ledger OnBoard — Your account has been closed', {
+      category: 'Account update', title: 'Your account has been closed', greeting: fullName ? `Hi ${fullName},` : 'Hello,',
+      paragraphs: [
+        'An administrator closed your Ledger OnBoard account, so you can no longer sign in.',
+        `It will be permanently deleted on ${deleteOn}. Until then it can still be restored. If you think this is a mistake, contact ${contactEmail}.`,
+      ],
+      details: [['Reason', reason || 'Not specified'], ['Permanent deletion', deleteOn]],
+      note: 'When an account is deleted, your personal details are erased. Records such as bills and payments stay with the other party, shown as "Deleted user".',
+    });
+  }
+
+  /** Sent just before the personal details are erased (by the main admin, or when the 30 days end). */
+  sendAccountDeletedEmail(to, fullName, { contactEmail }) {
+    return this._sendMessage(to, 'Ledger OnBoard — Your account has been deleted', {
+      category: 'Account update', title: 'Your account has been deleted', greeting: fullName ? `Hi ${fullName},` : 'Hello,',
+      paragraphs: [
+        'Your Ledger OnBoard account and your personal details have now been permanently deleted. This cannot be undone.',
+        `You can create a new account with this email address at any time. Questions? Contact ${contactEmail}.`,
+      ],
+      action: { label: 'Create a new account', url: this._appLink('/register') },
     });
   }
 

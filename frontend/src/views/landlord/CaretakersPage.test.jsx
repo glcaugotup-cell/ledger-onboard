@@ -29,8 +29,8 @@ async function fillValidForm(user) {
   await user.selectOptions(screen.getByLabelText('Service barangay'), 'Bonuan Gueset');
 }
 
-// Phase 5 rule: invites return a one-time activation code (no email, no shared password); the submit
-// button reads 'Invite and get code' and pending caretakers get 'New activation code'.
+// The activation code is emailed to the caretaker and never shown to the landlord; the submit button
+// reads 'Send invitation' and pending caretakers get 'Send new code'.
 describe('CaretakersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -62,21 +62,21 @@ describe('CaretakersPage', () => {
     await user.type(screen.getByLabelText(/email/i), '#!()');
     expect(screen.getByLabelText(/email/i)).toHaveValue('');
     await user.type(screen.getByLabelText(/phone/i), '12345');
-    await user.click(screen.getByRole('button', { name: /invite and get code/i }));
+    await user.click(screen.getByRole('button', { name: /send invitation/i }));
 
     expect(CaretakerApi.create).not.toHaveBeenCalled();
     expect(await screen.findByText(/must be a valid @gmail\.com address/i)).toBeInTheDocument();
     expect(screen.getByText(/must be 09xxxxxxxxx/i)).toBeInTheDocument();
   });
 
-  it('submits a valid invite, shows a confirmation message and the activation code once', async () => {
-    CaretakerApi.create.mockResolvedValue({ caretaker: { _id: 'c9', fullName: 'Pedro Reyes', email: 'pedro.reyes@gmail.com' }, activationCode: 'ABCDE-FGHJK', expiresAt: '2026-10-15T04:30:00Z' });
+  it('submits a valid invite and says the invitation was sent, without showing any code', async () => {
+    CaretakerApi.create.mockResolvedValue({ caretaker: { _id: 'c9', fullName: 'Pedro Reyes', email: 'pedro.reyes@gmail.com' }, invitationSent: true, expiresAt: '2026-10-15T04:30:00Z' });
     const user = userEvent.setup();
     renderPage();
     await screen.findByText(/no caretakers yet/i);
 
     await fillValidForm(user);
-    await user.click(screen.getByRole('button', { name: /invite and get code/i }));
+    await user.click(screen.getByRole('button', { name: /send invitation/i }));
 
     await waitFor(() => {
       expect(CaretakerApi.create).toHaveBeenCalledWith({
@@ -87,12 +87,23 @@ describe('CaretakersPage', () => {
         serviceBarangay: 'Bonuan Gueset',
       });
     });
-    expect(await screen.findByText(/caretaker account created for pedro.reyes@gmail.com/i)).toBeInTheDocument();
-    // The landlord is shown the activation code returned by the API, in a dialog that closes for good.
-    expect(screen.getByTestId('activation-code')).toHaveTextContent('ABCDE-FGHJK');
-    expect(screen.queryByText(/temporary password/i)).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(await screen.findByText(/invitation has been sent to pedro.reyes@gmail.com\. wait for the caretaker to confirm it/i)).toBeInTheDocument();
+    expect(screen.getByText(/if they miss the deadline \(3 days\), send another code if needed/i)).toBeInTheDocument();
     expect(screen.queryByTestId('activation-code')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('tells the landlord when the invitation email could not be sent', async () => {
+    CaretakerApi.create.mockResolvedValue({ caretaker: { _id: 'c9', fullName: 'Pedro Reyes', email: 'pedro.reyes@gmail.com' }, invitationSent: false, activationCode: 'ABCDE-FGHJK' });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(/no caretakers yet/i);
+
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /send invitation/i }));
+
+    expect(await screen.findByText(/the invitation email couldn't be sent/i)).toBeInTheDocument();
+    expect(screen.queryByText('ABCDE-FGHJK')).not.toBeInTheDocument();
   });
 
   it('requires a service barangay and capitalizes names as they are typed (but not the email)', async () => {
@@ -105,7 +116,7 @@ describe('CaretakersPage', () => {
     await user.type(screen.getByLabelText(/email/i), 'pedro');
     expect(screen.getByLabelText(/email/i)).toHaveValue('pedro');
 
-    await user.click(screen.getByRole('button', { name: /invite and get code/i }));
+    await user.click(screen.getByRole('button', { name: /send invitation/i }));
     expect(CaretakerApi.create).not.toHaveBeenCalled();
     expect(screen.getByText('Select the barangay this caretaker works in')).toBeInTheDocument();
     // Submitting normalizes the name the same way the server does.
@@ -124,7 +135,7 @@ describe('CaretakersPage', () => {
     await user.type(screen.getByLabelText(/email/i), 'liam.oconnor');
     await user.type(screen.getByLabelText(/phone/i), '09171234567');
     await user.selectOptions(screen.getByLabelText('Service barangay'), 'Bonuan Gueset');
-    await user.click(screen.getByRole('button', { name: /invite and get code/i }));
+    await user.click(screen.getByRole('button', { name: /send invitation/i }));
 
     await waitFor(() => expect(CaretakerApi.create).toHaveBeenCalledWith({
       firstName: 'Liam', lastName: "O'Connor", email: 'liam.oconnor@gmail.com', phone: '09171234567', serviceBarangay: 'Bonuan Gueset',
@@ -159,13 +170,13 @@ describe('CaretakersPage', () => {
     await screen.findByText(/no caretakers yet/i);
 
     await fillValidForm(user);
-    await user.click(screen.getByRole('button', { name: /invite and get code/i }));
+    await user.click(screen.getByRole('button', { name: /send invitation/i }));
 
     expect(await screen.findByText('Validation failed')).toBeInTheDocument();
     expect(await screen.findByText('Email already in use')).toBeInTheDocument();
   });
 
-  it('gives a new activation code only for caretakers who have not activated yet, and shows it once', async () => {
+  it('emails a new activation code only for caretakers who have not activated yet, without showing it', async () => {
     CaretakerApi.list.mockResolvedValue({
       caretakers: [
         { _id: 'c1', fullName: 'Maria Santos', email: 'maria@gmail.com', accountStatus: 'active' },
@@ -173,7 +184,7 @@ describe('CaretakersPage', () => {
       ],
     });
     CaretakerApi.resendInvitation.mockResolvedValue({
-      activationCode: 'KMNPQ-RSTUV',
+      invitationSent: true,
       expiresAt: '2026-10-06T12:41:00Z',
       caretaker: { _id: 'c2', fullName: 'Pedro Reyes', email: 'pedro@gmail.com', accountStatus: 'pending_activation', createdAt: '2026-10-01T02:00:00Z', invitationResentAt: '2026-10-03T12:41:00Z' },
     });
@@ -181,18 +192,29 @@ describe('CaretakersPage', () => {
     renderPage();
 
     await screen.findByText('Pedro Reyes');
-    const buttons = screen.getAllByRole('button', { name: /new activation code/i });
+    const buttons = screen.getAllByRole('button', { name: /send new code/i });
     expect(buttons).toHaveLength(1);
     await user.click(buttons[0]);
 
     expect(CaretakerApi.resendInvitation).toHaveBeenCalledWith('c2');
-    expect(await screen.findByRole('dialog', { name: 'Activation code for Pedro Reyes' })).toBeInTheDocument();
-    expect(screen.getByTestId('activation-code')).toHaveTextContent('KMNPQ-RSTUV');
+    expect(await screen.findByText('A new activation code was emailed to pedro@gmail.com. The previous code no longer works.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText(/Invited Oct 1, 2026 · New code Oct 3, 2026/)).toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Done' }));
-    await user.click(screen.getByRole('button', { name: /new activation code/i }));
-    expect(CaretakerApi.resendInvitation).toHaveBeenCalledTimes(2);
+  it('shows an error next to the caretaker when the new code email could not be sent', async () => {
+    CaretakerApi.list.mockResolvedValue({
+      caretakers: [{ _id: 'c2', fullName: 'Pedro Reyes', email: 'pedro@gmail.com', accountStatus: 'pending_activation' }],
+    });
+    CaretakerApi.resendInvitation.mockResolvedValue({
+      invitationSent: false, activationCode: 'KMNPQ-RSTUV',
+      caretaker: { _id: 'c2', fullName: 'Pedro Reyes', email: 'pedro@gmail.com', accountStatus: 'pending_activation' },
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: /send new code/i }));
+    expect(await screen.findByText("The email couldn't be sent. Please try again in a moment.")).toBeInTheDocument();
+    expect(screen.queryByText('KMNPQ-RSTUV')).not.toBeInTheDocument();
   });
 
   it('shows when each caretaker joined, pending invitations first, then newest caretaker on top', async () => {
@@ -222,7 +244,7 @@ describe('CaretakersPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: /new activation code/i }));
+    await user.click(await screen.findByRole('button', { name: /send new code/i }));
     expect(await screen.findByText('Too many requests. Please try again later.')).toBeInTheDocument();
     expect(screen.queryByTestId('activation-code')).not.toBeInTheDocument();
   });

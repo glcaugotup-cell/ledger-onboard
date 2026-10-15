@@ -1,15 +1,15 @@
 /**
  * Email notification categories a user can tick on or off in Profile. Every category is on by
- * default (a missing value counts as on). Security notices and sign-in codes are not listed:
- * they always send. The frontend shows the same keys (EmailNotificationSettings).
+ * default (a missing value counts as on). Security notices, account notices (archived, closed or
+ * deleted) and sign-in codes are not listed: they always send. The frontend shows the same keys (EmailNotificationSettings).
  */
-const EMAIL_CATEGORIES = Object.freeze(['reservations', 'bills', 'payments', 'verification', 'assignments', 'account']);
+const EMAIL_CATEGORIES = Object.freeze(['reservations', 'bills', 'payments', 'verification', 'assignments']);
 
 /** Which categories each role can receive (others never apply to them). */
 const ROLE_EMAIL_CATEGORIES = Object.freeze({
-  tenant: ['reservations', 'bills', 'payments', 'account'],
-  landlord: ['reservations', 'payments', 'verification', 'account'],
-  caretaker: ['assignments', 'account'],
+  tenant: ['reservations', 'bills', 'payments'],
+  landlord: ['reservations', 'payments', 'verification'],
+  caretaker: ['assignments'],
   admin: [],
 });
 

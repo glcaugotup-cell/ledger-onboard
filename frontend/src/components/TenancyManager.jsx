@@ -260,7 +260,7 @@ export default function TenancyManager({ reservations, caretakers = [], onChange
       <ConfirmDialog
         open={dialog?.kind === 'moveIn'}
         title="Confirm move-in?"
-        message={`Confirm that ${d?.tenantId?.fullName || 'the tenant'} has moved in to Room ${d?.roomId?.roomNumber || ''}. Their bills and maintenance requests start now, and their other pending requests are cancelled automatically.`}
+        message={`Confirm that ${d?.tenantId?.fullName || 'the tenant'} has moved in to Room ${d?.roomId?.roomNumber || ''}. Their bills and issue reports start now, and their other pending requests are cancelled automatically.`}
         confirmLabel="Confirm move-in"
         loading={busyId === d?._id}
         error={dialogError}

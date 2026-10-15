@@ -1,28 +1,30 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from './AuthLayout.jsx';
 import AuthApi from '../../services/AuthApi.js';
 import { Field, TextInput } from '../../components/ui/Field.jsx';
 import Button from '../../components/ui/Button.jsx';
-import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
+import { ErrorBanner } from '../../components/ui/Feedback.jsx';
 import { describeApiError } from '../../utils/errors.js';
 
+/**
+ * Step 1 of a reset: email a one-time recovery code, then continue on the reset page with the
+ * email filled in. Authenticator, backup and administrator codes still work there as fallbacks.
+ */
 export default function ForgotPasswordPage() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const res = await AuthApi.forgotPassword({ email });
+      const res = await AuthApi.forgotPassword({ email: email.trim() });
       // Deliberately generic: never confirms or denies that the email exists.
-      setMessage(res.message);
-      setSubmitted(true);
+      navigate('/reset-password', { state: { email: email.trim(), notice: res.message } });
     } catch (err) {
       setError(describeApiError(err).message);
     } finally {
@@ -31,29 +33,23 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <AuthLayout title="Forgot your password?" subtitle="Request a reset code by email when available, or use a recovery code you already have.">
-      <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-gray-600" aria-label="Ways to reset your password">
-        <li>a 6-digit code from your authenticator app, if two-factor sign-in is on;</li>
-        <li>one of your backup codes; or</li>
-        <li>a reset code from an administrator, who will confirm who you are first.</li>
-      </ul>
+    <AuthLayout title="Reset your password" subtitle="Enter your Ledger OnBoard email and we'll send you a one-time recovery code.">
       <form onSubmit={onSubmit} className="space-y-4">
         <ErrorBanner message={error} />
-        <SuccessBanner message={message} />
-        <Field required label="Email">
-          <TextInput type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <Field required label="Email address">
+          <TextInput type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required />
         </Field>
         <Button type="submit" className="w-full" loading={loading}>
-          Continue
+          Send recovery code
         </Button>
       </form>
-      {submitted && (
-        <p className="mt-4 text-center text-sm">
-          <Link to="/reset-password" state={{ email }} className="font-medium text-brand-600 hover:underline">
-            I have a code — reset my password
-          </Link>
-        </p>
-      )}
+      <p className="mt-5 text-center text-xs leading-relaxed text-gray-500">
+        Didn&apos;t get the email? You can also reset with a code from your authenticator app, one of your backup codes, or a reset code from an
+        administrator.{' '}
+        <Link to="/reset-password" state={{ email: email.trim() }} className="font-medium text-brand-600 hover:underline">
+          I already have a code
+        </Link>
+      </p>
     </AuthLayout>
   );
 }

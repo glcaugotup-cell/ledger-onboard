@@ -550,8 +550,12 @@ describe('Objective 14 — server-side validation gaps closed', () => {
     expect(room.body.error.details.map((d) => d.message)).toEqual([
       'Room number is required (at most 20 characters)',
       'Capacity must be a whole number from 1 to 50',
-      'Rent must be from 0 to 1,000,000',
+      'Rent must be from 0 to 50,000 per month',
     ]);
+    // ₱50,000 is the most a slot can cost; one peso more is refused.
+    const over = await request(app).post(`/api/properties/${property._id}/rooms`).set(auth(token)).send({ roomNumber: 'R-Over', capacity: 2, monthlyBaseRent: 50001 });
+    expect(over.body.error.details.map((d) => d.message)).toEqual(['Rent must be from 0 to 50,000 per month']);
+    expect((await request(app).post(`/api/properties/${property._id}/rooms`).set(auth(token)).send({ roomNumber: 'R-Max', capacity: 2, monthlyBaseRent: 50000 })).status).toBe(201);
   });
 
   test('deleting a property with a pending request is refused until it is answered', async () => {

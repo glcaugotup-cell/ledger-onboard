@@ -18,8 +18,12 @@ import { describeApiError } from '../../utils/errors.js';
 import { capitalizeFirst } from '../../utils/textFormat.js';
 import { todayInputValue } from '../../utils/validators.js';
 
-const CATEGORIES = ['Plumbing', 'Electrical', 'Appliance', 'Structural', 'Pest control', 'Cleaning', 'Other'];
-const REMOVE_REASONS = ['Duplicate report', 'The issue does not exist', 'Not a maintenance issue', 'Already fixed before the report'];
+// Repairs and every other tenant concern; keep in sync with backend/services/MaintenanceIssueService.js.
+const CATEGORIES = [
+  'Plumbing', 'Electrical', 'Appliance', 'Structural', 'Pest control', 'Cleaning', 'Water or power supply',
+  'Noise or neighbors', 'Security and safety', 'Billing or payment concern', 'House rules or behavior', 'Other',
+];
+const REMOVE_REASONS = ['Duplicate report', 'The issue does not exist', 'Not something the landlord handles', 'Already fixed before the report'];
 const statusNames = { pending: 'Pending', in_progress: 'In Progress', awaiting_confirmation: 'Awaiting tenant confirmation', resolved: 'Resolved' };
 const statusStyles = { pending: 'bg-amber-100 text-amber-800', in_progress: 'bg-blue-100 text-blue-800', awaiting_confirmation: 'bg-purple-100 text-purple-800', resolved: 'bg-green-100 text-green-800' };
 const urgencyStyles = { low: 'bg-gray-100 text-gray-700', medium: 'bg-amber-100 text-amber-800', high: 'bg-red-100 text-red-800' };
@@ -90,7 +94,7 @@ export function MaintenanceIssuesContent({ embedded = false, highlightIssueId = 
       if (role === 'tenant') setReservations(relatedResponse.reservations.filter((item) => item.status === 'active'));
       if (role === 'landlord') setCaretakers(relatedResponse.caretakers.filter((item) => item.accountStatus === 'active'));
       setError('');
-    } catch { setError('Could not load maintenance issues.'); }
+    } catch { setError('Could not load reported issues.'); }
     finally { setLoading(false); }
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -213,7 +217,7 @@ export function MaintenanceIssuesContent({ embedded = false, highlightIssueId = 
 
   const confirmSolved = (issue) => act(() => MaintenanceIssueApi.confirm(issue._id, true), 'Thanks! The issue is now closed.').then((ok) => { if (ok && selected?._id === issue._id) setSelected(null); });
 
-  const title = role === 'tenant' ? 'Maintenance issues' : role === 'landlord' ? 'Issue management' : 'Assigned maintenance tasks';
+  const title = role === 'tenant' ? 'Your reported issues' : role === 'landlord' ? 'Reported issues' : 'Issues assigned to you';
   const description = role === 'tenant' ? 'Report a repair and follow its progress.' : role === 'landlord' ? 'Triage reports, assign caretakers, and follow repairs.' : 'Review your assigned repairs and record completed work.';
   const reportButton = role === 'tenant' && (
     <Button onClick={openReport} disabled={!reservations.length} title={reservations.length ? undefined : 'Available once your landlord confirms your move-in'}>Report an issue</Button>
@@ -284,7 +288,7 @@ export function MaintenanceIssuesContent({ embedded = false, highlightIssueId = 
       </div>
     )}
     <div className="mb-4 space-y-2"><ErrorBanner message={error} /><SuccessBanner message={message} /></div>
-    {loading && <LoadingState label="Loading maintenance issues…" />}
+    {loading && <LoadingState label="Loading reported issues…" />}
 
     {role === 'landlord' && !loading && <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
       {[['Total open', openIssues.length], ['Unassigned', issues.filter((i) => i.status === 'pending').length], ['In progress', issues.filter((i) => i.status === 'in_progress').length], ['Awaiting tenant', issues.filter((i) => i.status === 'awaiting_confirmation').length]].map(([label, value]) => <Card key={label}><p className="text-xs text-gray-500">{label}</p><p className="mt-1 text-2xl font-bold text-gray-900">{value}</p></Card>)}
@@ -296,16 +300,16 @@ export function MaintenanceIssuesContent({ embedded = false, highlightIssueId = 
       <Select aria-label="Filter by room" value={filters.room} onChange={(e) => setFilters({ ...filters, room: e.target.value })}><option value="">All room units</option>{[...new Map(issues.map((i) => [String(i.roomId?._id || i.roomId), i.roomId])).entries()].map(([id, room]) => <option key={id} value={id}>Room {room?.roomNumber || id.slice(-5)}</option>)}</Select>
     </div></Card>}
 
-    {!loading && !compact && (role === 'tenant' ? visibleIssues.length === 0 : issues.length === 0) && <EmptyState title="No maintenance issues" description={role === 'tenant' ? (hideStayIds.length ? 'Report a repair when something needs attention. Issues from past stays are on their cards below.' : 'Report a repair when something needs attention.') : role === 'landlord' ? 'New tenant reports will show here. Removed reports are in your Archive.' : 'Tasks assigned to you will show here. Archived tasks are in your Archive.'} />}
-    {compact && <h3 className="mb-2 mt-4 text-sm font-semibold text-gray-900">Maintenance issues from this stay</h3>}
+    {!loading && !compact && (role === 'tenant' ? visibleIssues.length === 0 : issues.length === 0) && <EmptyState title="No reported issues" description={role === 'tenant' ? (hideStayIds.length ? 'Report a repair or any other concern about your stay. Issues from past stays are on their cards below.' : 'Report a repair or any other concern about your stay.') : role === 'landlord' ? 'New tenant reports will show here. Removed reports are in your Archive.' : 'Tasks assigned to you will show here. Archived tasks are in your Archive.'} />}
+    {compact && <h3 className="mb-2 mt-4 text-sm font-semibold text-gray-900">Issues reported during this stay</h3>}
     {role === 'caretaker' && visibleIssues.length > 0 && <h2 className="mb-3 text-base font-semibold text-gray-900">Assigned jobs</h2>}
     <div className="space-y-3">{visibleIssues.map(issueCard)}</div>
 
-    {role === 'caretaker' && <Card title="Maintenance work log" description="Jobs you marked done and closed jobs, with your repair notes." className="mt-6">
-      {caretakerLog.length === 0 ? <p className="py-4 text-sm text-gray-500">Completed maintenance tasks will appear here.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[46rem] text-left text-sm"><thead className="border-b text-xs uppercase tracking-wide text-gray-500"><tr><th className="py-2 pr-4">Done</th><th className="py-2 pr-4">Issue / room</th><th className="py-2 pr-4">Status</th><th className="py-2 pr-4">Work summary</th><th className="py-2">Actions</th></tr></thead><tbody className="divide-y divide-gray-100">{caretakerLog.map((issue) => <tr key={issue._id} id={`issue-${issue._id}`}><td className="py-3 pr-4">{formatDate(issue.doneAt || issue.resolvedAt || issue.updatedAt)}</td><td className="py-3 pr-4 font-medium">{issue.category} · Room {issue.roomId?.roomNumber}</td><td className="py-3 pr-4"><Pill className={statusStyles[issue.status]}>{statusNames[issue.status]}</Pill></td><td className="max-w-xs truncate py-3 pr-4 text-gray-600">{issue.resolutionNotes || '—'}</td><td className="py-3"><Button variant="ghost" onClick={() => setSelected(issue)}>View</Button><Button variant="ghost" disabled={busy} onClick={() => { setDialogError(''); setArchiving(issue); }}>Archive</Button></td></tr>)}</tbody></table></div>}
+    {role === 'caretaker' && <Card title="Work log" description="Issues you marked done and closed issues, with your notes." className="mt-6">
+      {caretakerLog.length === 0 ? <p className="py-4 text-sm text-gray-500">Issues you complete will appear here.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[46rem] text-left text-sm"><thead className="border-b text-xs uppercase tracking-wide text-gray-500"><tr><th className="py-2 pr-4">Done</th><th className="py-2 pr-4">Issue / room</th><th className="py-2 pr-4">Status</th><th className="py-2 pr-4">Work summary</th><th className="py-2">Actions</th></tr></thead><tbody className="divide-y divide-gray-100">{caretakerLog.map((issue) => <tr key={issue._id} id={`issue-${issue._id}`}><td className="py-3 pr-4">{formatDate(issue.doneAt || issue.resolvedAt || issue.updatedAt)}</td><td className="py-3 pr-4 font-medium">{issue.category} · Room {issue.roomId?.roomNumber}</td><td className="py-3 pr-4"><Pill className={statusStyles[issue.status]}>{statusNames[issue.status]}</Pill></td><td className="max-w-xs truncate py-3 pr-4 text-gray-600">{issue.resolutionNotes || '—'}</td><td className="py-3"><Button variant="ghost" onClick={() => setSelected(issue)}>View</Button><Button variant="ghost" disabled={busy} onClick={() => { setDialogError(''); setArchiving(issue); }}>Archive</Button></td></tr>)}</tbody></table></div>}
     </Card>}
 
-    {formOpen && <Modal label="Report maintenance issue" wide><h2 className="mb-4 text-lg font-semibold">Report an issue</h2><form className="space-y-4" onSubmit={submitReport} noValidate>
+    {formOpen && <Modal label="Report an issue" wide><h2 className="mb-4 text-lg font-semibold">Report an issue</h2><form className="space-y-4" onSubmit={submitReport} noValidate>
       <ErrorBanner message={dialogError} />
       <Field required label="Apartment / room" error={reportErrors.reservationId}>
         <Select value={report.reservationId} onChange={(e) => setReport({ ...report, reservationId: e.target.value })} error={reportErrors.reservationId}>

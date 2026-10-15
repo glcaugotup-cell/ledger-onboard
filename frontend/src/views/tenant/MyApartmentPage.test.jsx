@@ -59,12 +59,12 @@ describe('MyApartmentPage', () => {
     expect(await screen.findByText('Balances to pay')).toBeInTheDocument();
   });
 
-  it('opens the Maintenance issues tab from the link', async () => {
+  it('opens the Report an issue tab from the link', async () => {
     ReservationApi.list.mockResolvedValue({ reservations: [stay] });
     renderPage('/tenant/apartment?tab=issues');
-    expect(await screen.findByRole('tab', { name: 'Maintenance issues' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: 'Report an issue' })).toHaveAttribute('aria-selected', 'true');
     // The button is drawn disabled until the tab's data loads; the empty state appears in the same update.
-    expect(await screen.findByText('No maintenance issues')).toBeInTheDocument();
+    expect(await screen.findByText('No reported issues')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Report an issue' })).toBeEnabled();
   });
 
@@ -96,7 +96,7 @@ describe('MyApartmentPage', () => {
     renderPage('/tenant/apartment?tab=issues');
     expect(await screen.findByText('No current stay')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Past stays' })).toBeInTheDocument();
-    expect(await screen.findByText('No maintenance issues')).toBeInTheDocument(); // the tab has loaded
+    expect(await screen.findByText('No reported issues')).toBeInTheDocument(); // the tab has loaded
     expect(screen.getByRole('button', { name: 'Report an issue' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /request to leave/i })).not.toBeInTheDocument();
   });
@@ -240,7 +240,7 @@ describe('MyApartmentPage', () => {
       renderPage('/tenant/apartment?tab=issues');
 
       const card = await pastCard();
-      expect(await within(card).findByText('Maintenance issues from this stay')).toBeInTheDocument();
+      expect(await within(card).findByText('Issues reported during this stay')).toBeInTheDocument();
       expect(within(card).getByText('barado po yung cr')).toBeInTheDocument();
       const panel = screen.getByRole('tabpanel');
       expect(await within(panel).findByText('no power')).toBeInTheDocument();

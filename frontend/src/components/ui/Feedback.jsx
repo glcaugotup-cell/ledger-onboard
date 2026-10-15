@@ -1,4 +1,4 @@
-import { CheckCircleIcon, ExclamationCircleIcon, InboxIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, InformationCircleIcon, ExclamationCircleIcon, InboxIcon } from '@heroicons/react/24/outline';
 import { formatStatus } from '../../utils/format.js';
 
 export function Spinner({ className = '' }) {
@@ -43,6 +43,17 @@ export function SuccessBanner({ message }) {
   return (
     <div className="flex items-start gap-2.5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800" role="status">
       <CheckCircleIcon className="mt-px h-5 w-5 shrink-0 text-green-600" aria-hidden="true" />
+      <span>{message}</span>
+    </div>
+  );
+}
+
+/** Neutral information, e.g. "we sent you a code". */
+export function InfoBanner({ message }) {
+  if (!message) return null;
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800" role="status">
+      <InformationCircleIcon className="mt-px h-5 w-5 shrink-0 text-blue-600" aria-hidden="true" />
       <span>{message}</span>
     </div>
   );

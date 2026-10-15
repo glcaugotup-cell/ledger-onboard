@@ -170,7 +170,8 @@ test('pending caretaker accounts cannot use forgot password to bypass activation
   await request(app).post('/api/auth/forgot-password').send({ email: u.email });
   expect(send).not.toHaveBeenCalled();
 });
-test('caretaker invitation emails the one-time activation code and deployed link, with no shared password', async () => {
+const emailedActivationCode = (mail) => mail.text.match(/Your activation code: ([A-Z0-9]{5}-[A-Z0-9]{5})/)?.[1];
+test('caretaker invitation emails the code to the caretaker only, links to the login page, and has no shared password', async () => {
   const landlord = await user({ role: 'landlord' });
   const email = `invited-${crypto.randomUUID()}@gmail.com`;
   const invite = await request(app).post('/api/landlord/caretakers').set('Authorization', `Bearer ${signAccessToken(landlord)}`)
@@ -179,23 +180,32 @@ test('caretaker invitation emails the one-time activation code and deployed link
   expect(send).toHaveBeenCalledTimes(1);
   const body = send.mock.calls[0][0];
   expect(body.to).toBe(email);
-  expect(body.text).toContain(invite.body.data.activationCode);
-  expect(body.html).toContain('https://ledger-onboard.vercel.app/activate-caretaker');
+  // The landlord is told it was sent and never sees the code.
+  expect(invite.body.data).toMatchObject({ invitationSent: true });
+  expect(invite.body.data.activationCode).toBeUndefined();
+  const code = emailedActivationCode(body);
+  expect(code).toMatch(/^[A-Z0-9]{5}-[A-Z0-9]{5}$/);
+  expect(body.html).toContain('href="https://ledger-onboard.vercel.app/login"');
+  expect(body.text).toContain('Activate a caretaker account');
   expect(body.text).not.toMatch(/temporary password|shared password|localhost/i);
-  const activation = await request(app).post('/api/auth/activate-caretaker').send({ email, code: invite.body.data.activationCode, password: newPassword });
+  const activation = await request(app).post('/api/auth/activate-caretaker').send({ email, code, password: newPassword });
   expect(activation.status).toBe(200);
 });
-test('invitation delivery failures preserve the landlord code and resend emails a fresh code', async () => {
+test('a failed invitation email is reported to the landlord, and resend emails a fresh code', async () => {
   const landlord = await user({ role: 'landlord' });
   send.mockRejectedValueOnce(new Error('synthetic provider outage'));
   const invite = await request(app).post('/api/landlord/caretakers').set('Authorization', `Bearer ${signAccessToken(landlord)}`)
     .send({ firstName: 'Care', lastName: 'Taker', email: `retry-${crypto.randomUUID()}@gmail.com`, phone: '09179998878', serviceBarangay: 'Poblacion Oeste' });
   expect(invite.status).toBe(201);
+  expect(invite.body.data.invitationSent).toBe(false);
   expect(send).toHaveBeenCalledTimes(1);
   const resent = await request(app).post(`/api/landlord/caretakers/${invite.body.data.caretaker._id}/resend-invitation`).set('Authorization', `Bearer ${signAccessToken(landlord)}`);
   expect(resent.status).toBe(200);
-  expect(send.mock.calls.at(-1)[0].text).toContain(resent.body.data.activationCode);
-  expect(resent.body.data.activationCode).not.toBe(invite.body.data.activationCode);
+  expect(resent.body.data).toMatchObject({ invitationSent: true });
+  expect(resent.body.data.activationCode).toBeUndefined();
+  const fresh = emailedActivationCode(send.mock.calls.at(-1)[0]);
+  expect(fresh).toMatch(/^[A-Z0-9]{5}-[A-Z0-9]{5}$/);
+  expect(fresh).not.toBe(invite.body.data.activationCode);
 });
 test('disabled email flows never weaken an already enrolled email sign-in', async () => {
   const u = await enrolled();

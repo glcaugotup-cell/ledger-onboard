@@ -1,10 +1,11 @@
 const { body } = require('express-validator');
+const { MAX_MONTHLY_RENT } = require('../utils/constants');
 
 const ROOM_NUMBER_MESSAGE = 'Room number is required (at most 20 characters)';
 const rentAmountChain = (field = 'monthlyBaseRent') =>
   body(field)
-    .isFloat({ min: 0, max: 1000000 })
-    .withMessage('Rent must be from 0 to 1,000,000')
+    .isFloat({ min: 0, max: MAX_MONTHLY_RENT })
+    .withMessage(`Rent must be from 0 to ${MAX_MONTHLY_RENT.toLocaleString('en-PH')} per month`)
     .bail()
     .custom((value) => /^\d+(\.\d{1,2})?$/.test(String(value)))
     .withMessage('Rent can have at most 2 decimal places')

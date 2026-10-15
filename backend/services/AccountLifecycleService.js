@@ -94,7 +94,7 @@ class AccountLifecycleService {
       archiveWarningSentAt: now,
       scheduledArchiveAt,
     });
-    const delivery = await EmailNotificationService.deliver(user, 'sendArchiveWarningEmail', [user.fullName, env.archiveDays - env.archiveWarningDays], { category: 'account' });
+    const delivery = await EmailNotificationService.deliver(user, 'sendArchiveWarningEmail', [user.fullName, env.archiveDays - env.archiveWarningDays], { accountNotice: true });
     await AuditLogRepository.record({
       action: 'ACCOUNT_ARCHIVE_WARNING_SENT',
       targetType: 'User',
@@ -113,7 +113,7 @@ class AccountLifecycleService {
     });
     let delivery = { skipped: true };
     try {
-      delivery = await EmailNotificationService.deliver(user, 'sendArchivedNoticeEmail', [user.fullName], { category: 'account' });
+      delivery = await EmailNotificationService.deliver(user, 'sendArchivedNoticeEmail', [user.fullName], { accountNotice: true });
     } catch {
       // The account is archived either way; recovery does not depend on this notice.
     }

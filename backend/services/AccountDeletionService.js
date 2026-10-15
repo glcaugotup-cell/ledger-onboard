@@ -5,11 +5,15 @@ const LandlordVerificationRepository = require('../repositories/LandlordVerifica
 const PropertyRepository = require('../repositories/PropertyRepository');
 const ReservationRepository = require('../repositories/ReservationRepository');
 const FileStorageService = require('./FileStorageService');
+const EmailNotificationService = require('./EmailNotificationService');
+const env = require('../config/env');
+const { APP_TIME_ZONE } = require('../utils/dates');
 const ApiError = require('../utils/ApiError');
 const { unusablePasswordHash } = require('../utils/password');
 const { ACCOUNT_STATUS, ACCOUNT_DELETION_GRACE_DAYS, RESERVATION_STATUS, ROLES } = require('../utils/constants');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const longDate = new Intl.DateTimeFormat('en-PH', { timeZone: APP_TIME_ZONE, month: 'long', day: 'numeric', year: 'numeric' });
 const OPEN_RESERVATIONS = [RESERVATION_STATUS.PENDING, RESERVATION_STATUS.APPROVED, RESERVATION_STATUS.ACTIVE];
 const CLOSED_STATUSES = [ACCOUNT_STATUS.PENDING_DELETION, ACCOUNT_STATUS.DELETED];
 
@@ -55,6 +59,10 @@ class AccountDeletionService {
       action: 'ACCOUNT_MOVED_TO_ARCHIVE', actorId, actorRole: ROLES.ADMIN, targetType: 'User', targetId: user._id,
       metadata: { reason: reason.trim(), scheduledFor },
     });
+    // Tell them why they can no longer sign in, and until when it can be undone.
+    await EmailNotificationService.accountNotice(user, 'sendAccountClosedEmail', [
+      user.firstName || user.fullName, { reason: reason.trim(), deleteOn: longDate.format(scheduledFor), contactEmail: env.mainAdminEmail },
+    ]);
     return updated;
   }
 
@@ -82,6 +90,8 @@ class AccountDeletionService {
     if (user.accountStatus !== ACCOUNT_STATUS.PENDING_DELETION) {
       throw ApiError.conflict('Only accounts in the archive can be deleted.', 'NOT_ARCHIVED');
     }
+    // Last message to the address before it is erased.
+    await EmailNotificationService.accountNotice(user, 'sendAccountDeletedEmail', [user.firstName || user.fullName, { contactEmail: env.mainAdminEmail }]);
     const verifications = await LandlordVerificationRepository.find({ landlordId: user._id });
     const files = [user.profilePhotoUrl, user.paymentQrUrl,
       ...verifications.flatMap((v) => [v.mayorBusinessPermitUrl, v.birForm2303Url])].filter(Boolean);

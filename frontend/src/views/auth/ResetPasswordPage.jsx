@@ -4,7 +4,7 @@ import AuthLayout from './AuthLayout.jsx';
 import AuthApi from '../../services/AuthApi.js';
 import { Field, TextInput } from '../../components/ui/Field.jsx';
 import Button from '../../components/ui/Button.jsx';
-import { ErrorBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
+import { ErrorBanner, InfoBanner, SuccessBanner } from '../../components/ui/Feedback.jsx';
 import PasswordInput from '../../components/ui/PasswordInput.jsx';
 import PasswordMatchHint from '../../components/ui/PasswordMatchHint.jsx';
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator.jsx';
@@ -54,16 +54,17 @@ export default function ResetPasswordPage() {
 
   return (
     <AuthLayout
-      title="Reset your password"
-      subtitle="Enter a code from your authenticator app, one of your backup codes, or a reset code from an administrator, then choose a new password."
+      title="Choose a new password"
+      subtitle="Enter the recovery code we emailed you, then choose a new password."
     >
       <form onSubmit={onSubmit} className="space-y-4">
+        {!success && <InfoBanner message={location.state?.notice ? `${location.state.notice} Check your inbox and spam folder.` : ''} />}
         <ErrorBanner message={error} />
         <SuccessBanner message={success} />
         <Field required label="Email">
           <TextInput type="email" maxLength={254} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         </Field>
-        <Field required label="Authenticator, backup or reset code" hint="An emailed reset code also works when email recovery is available. 123456, XXXXX-XXXXX or XXXX-XXXX">
+        <Field required label="Recovery code" hint="The 6-digit code from your email. A code from your authenticator app, a backup code (XXXXX-XXXXX) or an administrator's reset code (XXXX-XXXX) also works.">
           <TextInput
             value={form.code}
             onChange={(e) => setForm({ ...form, code: cleanMfaCode(e.target.value) })}

@@ -8,7 +8,11 @@ const ApiError = require('../utils/ApiError');
 const { appDateKey, inputDateKey } = require('../utils/dates');
 const { ROLES, RESERVATION_STATUS, MAINTENANCE_STATUS } = require('../utils/constants');
 
-const CATEGORIES = ['Plumbing', 'Electrical', 'Appliance', 'Structural', 'Pest control', 'Cleaning', 'Other'];
+// Repairs and every other tenant concern ("Report an issue"); keep in sync with MaintenanceIssuesPage.jsx.
+const CATEGORIES = [
+  'Plumbing', 'Electrical', 'Appliance', 'Structural', 'Pest control', 'Cleaning', 'Water or power supply',
+  'Noise or neighbors', 'Security and safety', 'Billing or payment concern', 'House rules or behavior', 'Other',
+];
 const OPEN_FOR_WORK = [MAINTENANCE_STATUS.PENDING, MAINTENANCE_STATUS.IN_PROGRESS];
 
 const issueLink = {
@@ -67,7 +71,7 @@ class MaintenanceIssueService {
         photos: urls,
         statusHistory: [historyEntry(MAINTENANCE_STATUS.PENDING, 'reported', { role: ROLES.TENANT, id: tenantId })],
       });
-      await NotificationService.notify({ userId: reservation.propertyId.landlordId, type: 'MAINTENANCE_ISSUE_CREATED', title: 'New maintenance issue', message: `${data.urgency} priority ${data.category} issue reported for ${reservation.propertyId.propertyName}, Room ${reservation.roomId.roomNumber}.`, relatedType: 'MaintenanceIssue', relatedId: issue._id, link: issueLink[ROLES.LANDLORD](issue._id) }).catch(() => {});
+      await NotificationService.notify({ userId: reservation.propertyId.landlordId, type: 'MAINTENANCE_ISSUE_CREATED', title: 'New reported issue', message: `${data.urgency} priority ${data.category} issue reported for ${reservation.propertyId.propertyName}, Room ${reservation.roomId.roomNumber}.`, relatedType: 'MaintenanceIssue', relatedId: issue._id, link: issueLink[ROLES.LANDLORD](issue._id) }).catch(() => {});
       return issue;
     } catch (err) {
       await FileStorageService.deleteByUrls(urls);
@@ -96,7 +100,7 @@ class MaintenanceIssueService {
     // A newly assigned caretaker should see the task even if the previous one archived it.
     if (String(issue.caretakerId || '') !== String(caretakerId)) updates.caretakerArchivedAt = null;
     const updated = await IssueRepository.updateById(issueId, updates);
-    await NotificationService.notify({ userId: caretakerId, type: 'MAINTENANCE_ISSUE_ASSIGNED', title: 'Maintenance task assigned', message: `A ${issue.urgency} priority ${issue.category} issue has been assigned to you.`, relatedType: 'MaintenanceIssue', relatedId: issue._id, link: issueLink[ROLES.CARETAKER](issue._id) });
+    await NotificationService.notify({ userId: caretakerId, type: 'MAINTENANCE_ISSUE_ASSIGNED', title: 'Issue assigned to you', message: `A ${issue.urgency} priority ${issue.category} issue has been assigned to you.`, relatedType: 'MaintenanceIssue', relatedId: issue._id, link: issueLink[ROLES.CARETAKER](issue._id) });
     await NotificationService.notify({ userId: issue.tenantId, type: 'MAINTENANCE_ISSUE_UPDATED', title: 'Caretaker assigned', message: landlordUpdate || `A caretaker was assigned to your ${issue.category} issue.`, relatedType: 'MaintenanceIssue', relatedId: issue._id, link: issueLink[ROLES.TENANT](issue._id) });
     return updated;
   }
@@ -111,7 +115,7 @@ class MaintenanceIssueService {
     const urls = await FileStorageService.saveUploads(files, 'issue-photos');
     try {
       const updated = await this._markDone(issue, { role: ROLES.CARETAKER, id: caretakerId }, summary, { proofPhotos: urls });
-      await NotificationService.notify({ userId: issue.landlordId, type: 'MAINTENANCE_ISSUE_DONE', title: 'Maintenance work done', message: `The caretaker finished the ${issue.category} issue. Waiting for the tenant to confirm.`, relatedType: 'MaintenanceIssue', relatedId: issue._id, link: issueLink[ROLES.LANDLORD](issue._id) });
+      await NotificationService.notify({ userId: issue.landlordId, type: 'MAINTENANCE_ISSUE_DONE', title: 'Issue work done', message: `The caretaker finished the ${issue.category} issue. Waiting for the tenant to confirm.`, relatedType: 'MaintenanceIssue', relatedId: issue._id, link: issueLink[ROLES.LANDLORD](issue._id) });
       return updated;
     } catch (err) { await FileStorageService.deleteByUrls(urls); throw err; }
   }
@@ -124,7 +128,7 @@ class MaintenanceIssueService {
     if (!OPEN_FOR_WORK.includes(issue.status)) throw ApiError.badRequest('This issue is already marked done.', 'ISSUE_ALREADY_RESOLVED');
     const summary = reasonOrThrow(workSummary, 'Add a summary of the work done (3 to 2000 characters).', 'WORK_SUMMARY_REQUIRED');
     const updated = await this._markDone(issue, { role: ROLES.LANDLORD, id: landlordId }, summary);
-    if (issue.caretakerId) await NotificationService.notify({ userId: issue.caretakerId, type: 'MAINTENANCE_ISSUE_DONE', title: 'Maintenance task marked done', message: `The landlord marked the ${issue.category} issue as done.`, relatedType: 'MaintenanceIssue', relatedId: issue._id, link: issueLink[ROLES.CARETAKER](issue._id) });
+    if (issue.caretakerId) await NotificationService.notify({ userId: issue.caretakerId, type: 'MAINTENANCE_ISSUE_DONE', title: 'Issue marked done', message: `The landlord marked the ${issue.category} issue as done.`, relatedType: 'MaintenanceIssue', relatedId: issue._id, link: issueLink[ROLES.CARETAKER](issue._id) });
     return updated;
   }
 
