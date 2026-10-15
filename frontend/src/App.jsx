@@ -9,6 +9,7 @@ import ServerWakeNotice from './components/ServerWakeNotice.jsx';
 import LandingPage from './views/public/LandingPage.jsx';
 import PropertyDetailPublicPage from './views/public/PropertyDetailPublicPage.jsx';
 import UnauthorizedPage from './views/public/UnauthorizedPage.jsx';
+import PrivacyPolicyPage from './views/public/PrivacyPolicyPage.jsx';
 import NotFoundPage from './views/public/NotFoundPage.jsx';
 
 import AuthSplitLayout from './views/auth/AuthSplitLayout.jsx';
@@ -78,6 +79,7 @@ export default function App() {
               <Route path="/activate-caretaker" element={<ActivateCaretakerPage />} />
               <Route path="/account-recovery" element={<AccountRecoveryPage />} />
               <Route path="/unauthorized" element={<UnauthorizedPage />} />
+              <Route path="/privacy" element={<PrivacyPolicyPage />} />
 
               {/* Tenant */}
               <Route element={<ProtectedRoute roles={['tenant']} />}>
