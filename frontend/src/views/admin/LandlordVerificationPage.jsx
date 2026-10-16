@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CalendarDaysIcon,
   CheckCircleIcon,
@@ -18,6 +19,7 @@ import LandlordVerificationApi from '../../services/LandlordVerificationApi.js';
 import Button from '../../components/ui/Button.jsx';
 import ReasonDialog from '../../components/ReasonDialog.jsx';
 import DocumentPreviewDialog from '../../components/DocumentPreviewDialog.jsx';
+import StudentVerificationReview from './StudentVerificationReview.jsx';
 import { Badge, EmptyState, ErrorBanner, LoadingState } from '../../components/ui/Feedback.jsx';
 import { formatDateTime } from '../../utils/format.js';
 
@@ -112,7 +114,20 @@ function SubmissionCard({ submission: s, busy, viewingKey, onView, onAct }) {
   );
 }
 
+const TABS = [
+  { key: 'landlords', label: 'Landlords' },
+  { key: 'students', label: 'Students' },
+];
+
+/**
+ * The admin Verifications page: landlord business documents and student school IDs, on two tabs
+ * (`?tab=students` opens the second, as the "Student ID needs review" notification does).
+ */
 export default function LandlordVerificationPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') === 'students' ? 'students' : 'landlords';
+  const [students, setStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(true);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -129,7 +144,24 @@ export default function LandlordVerificationPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  const loadStudents = () => {
+    setStudentsLoading(true);
+    AdminApi.listPendingStudentVerifications()
+      .then(({ submissions: list }) => setStudents(list))
+      .catch(() => setError('Could not load pending student IDs.'))
+      .finally(() => setStudentsLoading(false));
+  };
+
+  // Both lists load up front so each tab can show how many are waiting.
+  useEffect(() => {
+    load();
+    loadStudents();
+  }, []);
+
+  const showTab = (key) => {
+    setError('');
+    setSearchParams(key === 'students' ? { tab: 'students' } : {}, { replace: true });
+  };
 
   // Shown inside the page first (like the landlord's own preview), with a button to open it in a new tab.
   const viewDocument = async (id, docType, title) => {
@@ -177,19 +209,39 @@ export default function LandlordVerificationPage() {
             <ShieldCheckIcon className="h-6 w-6" />
           </span>
           <div>
-            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">Landlord Business Verification</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Review and verify landlord business documents before they can upload or publish boarding houses.</p>
+            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">Verifications</h1>
+            <p className="mt-0.5 text-sm text-gray-500">Landlords need verified business documents to publish boarding houses; students need a verified school ID to reserve.</p>
           </div>
+        </div>
+
+        <div role="tablist" aria-label="Verification lists" className="mb-4 flex flex-wrap gap-2">
+          {TABS.map(({ key, label }) => {
+            const count = key === 'students' ? (studentsLoading ? null : students.length) : (loading ? null : submissions.length);
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => showTab(key)}
+                className={`min-h-9 rounded-full px-3 text-sm font-semibold ${tab === key ? 'bg-brand-600 text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+              >
+                {label}{count === null ? '' : ` (${count})`}
+              </button>
+            );
+          })}
         </div>
 
         <div className={error ? 'mb-4' : undefined}>
           <ErrorBanner message={error} />
         </div>
 
-        {loading && <LoadingState />}
-        {!loading && submissions.length === 0 && <EmptyState title="Nothing pending review" />}
+        {tab === 'students' && <StudentVerificationReview submissions={students} loading={studentsLoading} onChanged={loadStudents} />}
 
-        {!loading && submissions.length > 0 && (
+        {tab === 'landlords' && loading && <LoadingState />}
+        {tab === 'landlords' && !loading && submissions.length === 0 && <EmptyState title="Nothing pending review" />}
+
+        {tab === 'landlords' && !loading && submissions.length > 0 && (
           <div className="space-y-5">
             {submissions.map((s) => (
               <SubmissionCard key={s._id} submission={s} busy={busyId === s._id} viewingKey={viewingKey} onView={viewDocument} onAct={(id, approve) => (approve ? act(id, true) : setRejecting(id))} />
@@ -197,7 +249,7 @@ export default function LandlordVerificationPage() {
           </div>
         )}
 
-        {!loading && submissions.length > 0 && (
+        {tab === 'landlords' && !loading && submissions.length > 0 && (
           <div className="mt-6 flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
               <LockClosedIcon className="h-5 w-5" />

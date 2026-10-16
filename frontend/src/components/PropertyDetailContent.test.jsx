@@ -1,11 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { ApiClientError } from '../services/apiClient.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PropertyDetailContent from './PropertyDetailContent.jsx';
 import PropertyApi from '../services/PropertyApi.js';
 import ReservationApi from '../services/ReservationApi.js';
-import { mockAuthValue } from '../test/mockContexts.js';
+import { mockAuthValue, VERIFIED_STUDENT_FIELDS } from '../test/mockContexts.js';
 import { todayInputValue } from '../utils/validators.js';
 
 const { useAuthMock, navigateMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), navigateMock: vi.fn() }));
@@ -115,7 +116,7 @@ describe('PropertyDetailContent', () => {
   });
 
   it('submits a reservation request for a signed-in tenant', async () => {
-    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated' }));
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant', ...VERIFIED_STUDENT_FIELDS }, status: 'authenticated' }));
     PropertyApi.getPublicDetail.mockResolvedValue(detail);
     ReservationApi.create.mockResolvedValue({});
     const user = userEvent.setup();
@@ -133,7 +134,7 @@ describe('PropertyDetailContent', () => {
   });
 
   it('R6: shows "Reservation sent" with a Cancel button instead of Reserve when the tenant already requested the room', async () => {
-    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated' }));
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant', ...VERIFIED_STUDENT_FIELDS }, status: 'authenticated' }));
     PropertyApi.getPublicDetail.mockResolvedValue(detail);
     ReservationApi.list.mockResolvedValue({ reservations: [{ _id: 'res1', status: 'pending', roomId: { _id: 'r1' } }] });
     ReservationApi.cancel.mockResolvedValue({});
@@ -163,7 +164,7 @@ describe('PropertyDetailContent', () => {
   });
 
   it('disables past days in the picker and rejects a typed past date', async () => {
-    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated' }));
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant', ...VERIFIED_STUDENT_FIELDS }, status: 'authenticated' }));
     PropertyApi.getPublicDetail.mockResolvedValue(detail);
     const user = userEvent.setup();
     renderContent();
@@ -180,7 +181,7 @@ describe('PropertyDetailContent', () => {
   });
 
   it('accepts today', async () => {
-    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated' }));
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant', ...VERIFIED_STUDENT_FIELDS }, status: 'authenticated' }));
     PropertyApi.getPublicDetail.mockResolvedValue(detail);
     ReservationApi.create.mockResolvedValue({});
     const user = userEvent.setup();
@@ -193,7 +194,7 @@ describe('PropertyDetailContent', () => {
   });
 
   it('shows the server’s move-in date error next to the field', async () => {
-    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated' }));
+    useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant', ...VERIFIED_STUDENT_FIELDS }, status: 'authenticated' }));
     PropertyApi.getPublicDetail.mockResolvedValue(detail);
     ReservationApi.create.mockRejectedValue(
       Object.assign(new Error('Validation failed'), { code: 'VALIDATION_ERROR', details: [{ field: 'moveInDate', message: 'Move-in date cannot be in the past.' }] })
@@ -205,5 +206,58 @@ describe('PropertyDetailContent', () => {
     await user.type(screen.getByLabelText(/preferred move-in date/i), todayInputValue());
     await user.click(screen.getByRole('button', { name: /submit request/i }));
     expect(await screen.findByText('Move-in date cannot be in the past.')).toBeInTheDocument();
+  });
+  // User rule (2026-10-16): only students with a current, admin-approved school ID can reserve.
+  describe('students without a verified school ID', () => {
+    const THIS_YEAR = new Date().getFullYear();
+
+    it('see why and a link to verify instead of Reserve, and the profile is refreshed in case an admin just approved', async () => {
+      const refreshProfile = vi.fn().mockResolvedValue(undefined);
+      useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant' }, status: 'authenticated', refreshProfile }));
+      PropertyApi.getPublicDetail.mockResolvedValue(detail);
+      renderContent();
+
+      expect(await screen.findByText('Verify your student ID before reserving a room.')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Verify student ID to reserve' })).toHaveAttribute('href', '/tenant/verification');
+      expect(screen.getByRole('link', { name: 'Go to Student ID' })).toHaveAttribute('href', '/tenant/verification');
+      expect(screen.queryByRole('button', { name: /reserve this room/i })).not.toBeInTheDocument();
+      expect(refreshProfile).toHaveBeenCalled();
+    });
+
+    it('while the ID is under review, see a disabled button and no link', async () => {
+      useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant', studentVerificationStatus: 'PENDING' }, status: 'authenticated' }));
+      PropertyApi.getPublicDetail.mockResolvedValue(detail);
+      renderContent();
+
+      expect(await screen.findByRole('button', { name: 'Student ID under review' })).toBeDisabled();
+      expect(screen.getByText('Your student ID is still being reviewed. You can reserve once an admin approves it.')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /verify student id/i })).not.toBeInTheDocument();
+    });
+
+    it('with an expired ID, are told until when it was valid', async () => {
+      useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant', ...VERIFIED_STUDENT_FIELDS, studentIdValidUntilYear: THIS_YEAR - 1 }, status: 'authenticated' }));
+      PropertyApi.getPublicDetail.mockResolvedValue(detail);
+      renderContent();
+
+      expect(await screen.findByText(`Your student ID was valid until May 31, ${THIS_YEAR - 1}. Upload your current school ID to reserve.`)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Verify student ID to reserve' })).toBeInTheDocument();
+    });
+
+    it("show the server's refusal and refresh the profile when the ID stopped counting after the page loaded", async () => {
+      const refreshProfile = vi.fn().mockResolvedValue(undefined);
+      useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 't1', role: 'tenant', ...VERIFIED_STUDENT_FIELDS }, status: 'authenticated', refreshProfile }));
+      PropertyApi.getPublicDetail.mockResolvedValue(detail);
+      ReservationApi.create.mockRejectedValue(new ApiClientError('Your student ID was not approved. Upload it again under Student verification to reserve.', 'STUDENT_NOT_VERIFIED', 403));
+      const user = userEvent.setup();
+      renderContent();
+      expect(refreshProfile).not.toHaveBeenCalled(); // verified: nothing to refresh on load
+
+      await user.click(await screen.findByRole('button', { name: /reserve this room/i }));
+      await user.type(screen.getByLabelText(/preferred move-in date/i), todayInputValue(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)));
+      await user.click(screen.getByRole('button', { name: /submit request/i }));
+
+      expect(await screen.findByText('Your student ID was not approved. Upload it again under Student verification to reserve.')).toBeInTheDocument();
+      expect(refreshProfile).toHaveBeenCalledTimes(1);
+    });
   });
 });

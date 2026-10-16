@@ -12,6 +12,7 @@ const paymentRoutes = require('./paymentRoutes');
 const reviewRoutes = require('./reviewRoutes');
 const adminRoutes = require('./adminRoutes');
 const maintenanceIssueRoutes = require('./maintenanceIssueRoutes');
+const studentVerificationRoutes = require('./studentVerificationRoutes');
 
 const router = express.Router();
 
@@ -34,6 +35,7 @@ router.use('/billing', billingRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/maintenance-issues', maintenanceIssueRoutes);
+router.use('/student-verification', studentVerificationRoutes);
 router.use('/admin', adminRoutes);
 
 module.exports = router;

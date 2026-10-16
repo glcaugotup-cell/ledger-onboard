@@ -54,6 +54,15 @@ class AdminApi extends BaseApiClient {
   reviewLandlordVerification(id, payload) {
     return this.patch(`/admin/landlord-verifications/${id}/review`, payload);
   }
+
+  listPendingStudentVerifications() {
+    return this.get('/admin/student-verifications/pending');
+  }
+
+  /** { approve, rejectionReason?, validUntilYear? } — the year corrects what the student typed. */
+  reviewStudentVerification(id, payload) {
+    return this.patch(`/admin/student-verifications/${id}/review`, payload);
+  }
 }
 
 export default new AdminApi();

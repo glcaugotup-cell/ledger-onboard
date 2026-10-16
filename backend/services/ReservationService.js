@@ -12,6 +12,7 @@ const env = require('../config/env');
 const ApiError = require('../utils/ApiError');
 const { roundMoney } = require('../utils/money');
 const { appDateKey, inputDateKey, addDaysToKey, formatDateKey } = require('../utils/dates');
+const { assertStudentCanReserve } = require('../utils/studentId');
 const { ACCOUNT_STATUS, ROLES, RESERVATION_STATUS, RESERVATION_TRANSITIONS, ROOM_STATUS, PAYMENT_STATUS, VERIFICATION_STATUS } = require('../utils/constants');
 
 // Section 2 recommendation: a landlord cannot confirm a move-in until tenants have a GCash QR to pay with.
@@ -33,6 +34,9 @@ const idOf = (value) => String(value?._id || value || '');
 class ReservationService {
   /** Tenant submits a reservation request for a room. */
   async create(tenantId, { roomId, moveInDate, moveOutDate }) {
+    // Only students with a current, admin-approved school ID may reserve (existing stays are unaffected).
+    assertStudentCanReserve(await UserRepository.findById(tenantId));
+
     const room = await RoomRepository.findById(roomId);
     if (!room) throw ApiError.notFound('Room not found', 'ROOM_NOT_FOUND');
 

@@ -2,6 +2,7 @@ const UserRepository = require('../repositories/UserRepository');
 const AuditLogRepository = require('../repositories/AuditLogRepository');
 const NotificationRepository = require('../repositories/NotificationRepository');
 const LandlordVerificationRepository = require('../repositories/LandlordVerificationRepository');
+const StudentVerificationRepository = require('../repositories/StudentVerificationRepository');
 const PropertyRepository = require('../repositories/PropertyRepository');
 const ReservationRepository = require('../repositories/ReservationRepository');
 const FileStorageService = require('./FileStorageService');
@@ -93,8 +94,10 @@ class AccountDeletionService {
     // Last message to the address before it is erased.
     await EmailNotificationService.accountNotice(user, 'sendAccountDeletedEmail', [user.firstName || user.fullName, { contactEmail: env.mainAdminEmail }]);
     const verifications = await LandlordVerificationRepository.find({ landlordId: user._id });
+    const studentIds = await StudentVerificationRepository.find({ tenantId: user._id });
     const files = [user.profilePhotoUrl, user.paymentQrUrl,
-      ...verifications.flatMap((v) => [v.mayorBusinessPermitUrl, v.birForm2303Url])].filter(Boolean);
+      ...verifications.flatMap((v) => [v.mayorBusinessPermitUrl, v.birForm2303Url]),
+      ...studentIds.flatMap((v) => [v.idFrontUrl, v.idBackUrl])].filter(Boolean);
 
     // Straight to the collection: the email is immutable in the model, and freeing it lets the
     // person register again. Only this account's personal and sign-in data is touched.
@@ -109,12 +112,13 @@ class AccountDeletionService {
       },
       $unset: {
         phone: '', profilePhotoUrl: '', paymentQrUrl: '', emergencyContact: '', otp: '', emailCodes: '',
-        mfaTotp: '', passwordReset: '', accountRecovery: '', privacyConsent: '', serviceBarangay: '',
+        mfaTotp: '', passwordReset: '', accountRecovery: '', privacyConsent: '', serviceBarangay: '', studentSchool: '', studentVerificationStatus: '', studentIdValidUntilYear: '',
       },
       $inc: { tokenVersion: 1 },
     });
     await NotificationRepository.model.deleteMany({ userId: user._id });
     await LandlordVerificationRepository.model.deleteMany({ landlordId: user._id });
+    await StudentVerificationRepository.model.deleteMany({ tenantId: user._id });
     // Earlier audit entries keep what happened but no longer the person's email address.
     await AuditLogRepository.model.updateMany({ targetId: user._id, 'metadata.email': { $exists: true } }, { $unset: { 'metadata.email': '' } });
     await FileStorageService.deleteByUrls(files); // logs and skips any file it cannot remove

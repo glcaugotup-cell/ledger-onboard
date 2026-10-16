@@ -1,5 +1,6 @@
 const request = require('supertest');
 const { startTestDb, stopTestDb } = require('../helpers/testDb');
+const { VERIFIED_STUDENT } = require('../helpers/students');
 const UserRepository = require('../../repositories/UserRepository');
 const PropertyRepository = require('../../repositories/PropertyRepository');
 const RoomRepository = require('../../repositories/RoomRepository');
@@ -32,6 +33,8 @@ async function makeUser(role) {
     firstName: 'Test', lastName: 'Reviewer', fullName: `Test Reviewer${seq}`, email,
     phone: `+63917${String(2000000 + seq).slice(-7)}`, passwordHash: await hashPassword(PASSWORD), role,
     ...(role === 'landlord' ? { businessVerificationStatus: 'VERIFIED', paymentQrUrl: '/uploads/payment-qr-codes/fake.png' } : {}),
+    // User rule (2026-10-16): only verified students reserve; see tests/helpers/students.js.
+    ...(role === 'tenant' ? VERIFIED_STUDENT : {}),
   });
   const login = await request(app).post('/api/auth/login').send({ email, password: PASSWORD });
   return { user, token: login.body.data.accessToken };

@@ -76,6 +76,26 @@ function issuePhotosUpload(req, res, next) {
   });
 }
 
+// Private, like landlord documents: photos of the front and back of a student's school ID.
+const studentIdMulter = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    if (!IMAGE_MIME_TYPES.has(file.mimetype)) return cb(ApiError.badRequest('Only JPG, PNG, or WEBP photos are allowed', 'INVALID_FILE_TYPE'));
+    cb(null, true);
+  },
+  limits: { fileSize: env.maxUploadMb * 1024 * 1024, files: 2 },
+});
+
+/** School ID photos (`idFront`, `idBack`, one each), with a clear message for a photo that is too large. */
+function studentIdUpload(req, res, next) {
+  studentIdMulter.fields([{ name: 'idFront', maxCount: 1 }, { name: 'idBack', maxCount: 1 }])(req, res, (err) => {
+    if (err?.name === 'MulterError' && err.code === 'LIMIT_FILE_SIZE') {
+      return next(ApiError.badRequest(`Each photo must be ${env.maxUploadMb}MB or smaller`, 'IMAGE_TOO_LARGE'));
+    }
+    return next(err);
+  });
+}
+
 /** Must run right after propertyMediaUpload.fields(...). */
 function assertMediaSizeLimits(req, res, next) {
   const images = req.files?.images || [];
@@ -93,6 +113,7 @@ function assertMediaSizeLimits(req, res, next) {
 module.exports = {
   paymentProofUpload,
   landlordVerificationUpload,
+  studentIdUpload,
   propertyMediaUpload,
   assertMediaSizeLimits,
   issuePhotosUpload,

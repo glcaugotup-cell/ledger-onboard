@@ -47,6 +47,7 @@ import UsersPage from './views/admin/UsersPage.jsx';
 import ReviewModerationPage from './views/admin/ReviewModerationPage.jsx';
 import AuditLogsPage from './views/admin/AuditLogsPage.jsx';
 import LandlordVerificationPage from './views/admin/LandlordVerificationPage.jsx';
+import StudentVerificationPage from './views/tenant/StudentVerificationPage.jsx';
 
 /** Old tenant routes now live inside My Apartment; keeps any ?bill= / ?issue= so old links still land on the item. */
 function ApartmentRedirect({ tab }) {
@@ -91,6 +92,7 @@ export default function App() {
                 <Route path="/tenant/issues" element={<ApartmentRedirect tab="issues" />} />
                 <Route path="/tenant/archive" element={<ArchivePage />} />
                 <Route path="/tenant/profile" element={<ProfilePage />} />
+                <Route path="/tenant/verification" element={<StudentVerificationPage />} />
                 {/* The page was called "Account" before every role got a Profile; keep old links working. */}
                 <Route path="/tenant/account" element={<Navigate to="/tenant/profile" replace />} />
               </Route>

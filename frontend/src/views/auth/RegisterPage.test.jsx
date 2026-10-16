@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -446,5 +446,19 @@ describe('RegisterPage when the backend does or does not require email verificat
 
     expect(await screen.findByText('Something went wrong')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /go to sign in/i })).not.toBeInTheDocument();
+  });
+
+  // User rule (2026-10-16): the app is for student tenants, who verify their school ID after signing up.
+  it('offers Student (not Tenant) and says the school ID comes after sign-up, before reserving', async () => {
+    useAuthMock.mockReturnValue({ register: vi.fn() });
+    const user = userEvent.setup();
+    renderRegisterPage();
+
+    const role = screen.getByLabelText(/i am a/i);
+    expect(within(role).getByRole('option', { name: 'Student' })).toHaveValue('tenant');
+    expect(within(role).queryByRole('option', { name: 'Tenant' })).not.toBeInTheDocument();
+    expect(screen.getByText('Students verify their school ID after signing up, before reserving a room.')).toBeInTheDocument();
+    await user.selectOptions(role, 'landlord');
+    expect(screen.queryByText(/verify their school ID/)).not.toBeInTheDocument();
   });
 });

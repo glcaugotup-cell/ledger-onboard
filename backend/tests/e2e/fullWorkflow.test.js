@@ -2,6 +2,7 @@
 process.env.EMAIL_VERIFICATION_REQUIRED = 'true';
 const request = require('supertest');
 const { startTestDb, stopTestDb } = require('../helpers/testDb');
+const { markVerifiedStudent } = require('../helpers/students');
 const EmailService = require('../../services/EmailService');
 const UserRepository = require('../../repositories/UserRepository');
 const { VERIFICATION_STATUS } = require('../../utils/constants');
@@ -87,6 +88,9 @@ describe('Ledger OnBoard — full vertical-slice smoke test', () => {
     const login = await request(app).post('/api/auth/login').send({ email: 'maria.tenant@gmail.com', password: 'Str0ng!Pass' });
     tenantToken = login.body.data.accessToken;
     expect(tenantToken).toBeTruthy();
+    // Student ID verification is a separate gate (tested end-to-end in studentVerification.test.js);
+    // approve it directly here so this file's reservation steps keep working.
+    await markVerifiedStudent(tenantId);
   });
 
   test('rejects invalid registration payload with 400', async () => {

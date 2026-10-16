@@ -412,9 +412,9 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <Field required label="I am a...">
+        <Field required label="I am a..." hint={form.role === 'tenant' ? 'Students verify their school ID after signing up, before reserving a room.' : undefined}>
           <Select value={form.role} onChange={(e) => updateField('role', e.target.value)}>
-            <option value="tenant">Tenant</option>
+            <option value="tenant">Student</option>
             <option value="landlord">Landlord</option>
           </Select>
         </Field>

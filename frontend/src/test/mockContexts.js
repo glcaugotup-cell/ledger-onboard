@@ -17,6 +17,14 @@ export function mockAuthValue(overrides = {}) {
   };
 }
 
+// User rule (2026-10-16): only students with a current, admin-approved school ID can reserve.
+// Spread into a tenant user in tests that are about something else.
+export const VERIFIED_STUDENT_FIELDS = Object.freeze({
+  studentVerificationStatus: 'VERIFIED',
+  studentSchool: 'PHINMA University of Pangasinan',
+  studentIdValidUntilYear: new Date().getFullYear() + 2,
+});
+
 /** Default shape for a mocked useNotifications() return value; override per test. */
 export function mockNotificationsValue(overrides = {}) {
   return {

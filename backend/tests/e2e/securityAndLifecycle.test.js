@@ -2,6 +2,7 @@
 process.env.EMAIL_VERIFICATION_REQUIRED = 'true';
 const request = require('supertest');
 const { startTestDb, stopTestDb } = require('../helpers/testDb');
+const { markVerifiedStudent } = require('../helpers/students');
 
 // This file makes far more than 10 /api/auth/* calls across its functional
 // tests (register/login/MFA/etc. all share one authRateLimiter instance on
@@ -187,6 +188,7 @@ describe('Account inactivity lifecycle (Section 7)', () => {
       privacyConsent: true, emergencyContact: { name: 'Cara Tenant', phone: '09171234596' },
     });
     const tenantId = tenantReg.body.data.user._id;
+    await markVerifiedStudent(tenantId); // User rule (2026-10-16): only verified students reserve.
     const tenantLogin = await request(app).post('/api/auth/login').send({ email: 'archive.tenant@gmail.com', password: 'Str0ng!Pass' });
     const tenantToken = tenantLogin.body.data.accessToken;
 

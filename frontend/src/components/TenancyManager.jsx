@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDaysIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { AcademicCapIcon, CalendarDaysIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import ReservationApi from '../services/ReservationApi.js';
 import Card from './ui/Card.jsx';
 import Button from './ui/Button.jsx';
@@ -11,6 +11,24 @@ import { Badge, EmptyState, ErrorBanner, SuccessBanner } from './ui/Feedback.jsx
 import { formatDate, formatPeso, initials } from '../utils/format.js';
 import { describeApiError } from '../utils/errors.js';
 import { RESERVATION_TONE, reservationLabel } from '../utils/reservationStatus.js';
+import { lastValidDay, studentIdState } from '../utils/studentId.js';
+
+/** The tenant's student ID as the landlord sees it: school and validity only, never the photos. */
+function StudentIdLine({ tenant }) {
+  if (!tenant || typeof tenant !== 'object' || tenant.accountStatus === 'deleted') return null;
+  const state = studentIdState(tenant);
+  const [tone, text] = state === 'VERIFIED'
+    ? ['text-green-700', `Verified student · ${tenant.studentSchool} · valid until ${lastValidDay(tenant.studentIdValidUntilYear)}`]
+    : state === 'EXPIRED'
+      ? ['text-amber-700', `Student ID expired ${lastValidDay(tenant.studentIdValidUntilYear)}${tenant.studentSchool ? ` · ${tenant.studentSchool}` : ''}`]
+      : ['text-gray-500', 'Student ID not verified'];
+  return (
+    <p className={`mt-0.5 flex items-center gap-1 text-xs font-medium ${tone}`}>
+      <AcademicCapIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      {text}
+    </p>
+  );
+}
 
 const DECLINE_LEAVE_REASONS = ['Outstanding balance must be settled first', 'Notice period has not been met', 'Contract period has not ended'];
 
@@ -97,6 +115,7 @@ export default function TenancyManager({ reservations, caretakers = [], onChange
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-800 ring-1 ring-brand-100">{initials(r.tenantId?.fullName || 'Tenant')}</span>
       <div className="min-w-0">
         <p className="font-semibold text-gray-900">{r.tenantId?.fullName || 'Tenant'}</p>
+        <StudentIdLine tenant={r.tenantId} />
         <p className="mt-0.5 text-sm text-gray-600">{r.propertyId?.propertyName ? `${r.propertyId.propertyName} · ` : ''}Room {r.roomId?.roomNumber}</p>
         <p className="mt-1 text-xs text-gray-500">
           {r.status === 'active' ? `Moved in ${formatDate(r.movedInAt || r.moveInDate)}` : `Move-in ${formatDate(r.moveInDate)}`}

@@ -2,6 +2,7 @@
 process.env.EMAIL_VERIFICATION_REQUIRED = 'true';
 const request = require('supertest');
 const { startTestDb, stopTestDb } = require('../helpers/testDb');
+const { VERIFIED_STUDENT } = require('../helpers/students');
 
 // Many /api/auth/* calls below are deliberately rejected (400s count toward the shared
 // IP limiter), so raise the ceiling for this file only.
@@ -54,6 +55,8 @@ async function makeUser(role, email, extra = {}) {
     passwordHash: await hashPassword(PASSWORD),
     role,
     ...(role === 'landlord' ? { businessVerificationStatus: 'VERIFIED' } : {}),
+    // User rule (2026-10-16): only verified students reserve; see tests/helpers/students.js.
+    ...(role === 'tenant' ? VERIFIED_STUDENT : {}),
     ...extra,
   });
   const login = await request(app).post('/api/auth/login').send({ email, password: PASSWORD });

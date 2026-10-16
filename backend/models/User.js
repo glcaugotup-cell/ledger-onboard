@@ -143,6 +143,15 @@ const userSchema = new Schema(
       enum: Object.values(VERIFICATION_STATUS),
       default: null,
     },
+    // Tenants (students) only: mirrors the latest StudentVerification (null if none yet). The school
+    // and the ID's last valid year are copied on approval; reserving needs a current approval.
+    studentVerificationStatus: {
+      type: String,
+      enum: Object.values(VERIFICATION_STATUS),
+      default: null,
+    },
+    studentSchool: { type: String, trim: true, maxlength: 120, default: null },
+    studentIdValidUntilYear: { type: Number, min: 2000, max: 2100, default: null },
     // One-time-code slot: registration email verification, admin password-reset codes and
     // caretaker activation codes (login_mfa is the retired email two-factor).
     otp: {

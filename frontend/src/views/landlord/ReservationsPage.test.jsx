@@ -168,4 +168,20 @@ describe('ReservationsPage', () => {
     renderPage({ _id: 'l1', fullName: 'Landlord Cruz', role: 'landlord', hasPaymentQr: false });
     expect(await screen.findByText(/before confirming a move-in/i)).toBeInTheDocument();
   });
+
+  // User rule (2026-10-16): landlords see each tenant's school and until when their student ID counts, never the photos.
+  it("shows each tenant's student ID: verified with school and last day, expired, or not verified", async () => {
+    const year = new Date().getFullYear();
+    ReservationApi.list.mockResolvedValue({
+      reservations: [
+        { ...pendingReservation, tenantId: { ...pendingReservation.tenantId, studentVerificationStatus: 'VERIFIED', studentSchool: 'University of Luzon', studentIdValidUntilYear: year + 2 } },
+        { ...reserved, tenantId: { fullName: 'Ana Reyes', studentVerificationStatus: 'VERIFIED', studentSchool: 'Universidad de Dagupan', studentIdValidUntilYear: year - 1 } },
+        { ...current, tenantId: { fullName: 'Old Tenant' } },
+      ],
+    });
+    renderPage();
+    expect(await screen.findByText(`Verified student · University of Luzon · valid until May 31, ${year + 2}`)).toBeInTheDocument();
+    expect(screen.getByText(`Student ID expired May 31, ${year - 1} · Universidad de Dagupan`)).toBeInTheDocument();
+    expect(screen.getByText('Student ID not verified')).toBeInTheDocument();
+  });
 });

@@ -2,6 +2,7 @@ const express = require('express');
 const AdminController = require('../controllers/admin/AdminController');
 const PropertyController = require('../controllers/shared/PropertyController');
 const LandlordVerificationController = require('../controllers/landlord/LandlordVerificationController');
+const StudentVerificationController = require('../controllers/shared/StudentVerificationController');
 const { authenticate } = require('../middleware/auth');
 const { requireRole } = require('../middleware/rbac');
 const validate = require('../middleware/validate');
@@ -9,6 +10,7 @@ const { objectIdParam } = require('../validators/commonValidators');
 const { listUsersValidators, setUserStatusValidators, deactivateInactiveValidators, archiveUserValidators } = require('../validators/adminValidators');
 const { moderatePropertyValidators } = require('../validators/propertyValidators');
 const { reviewLandlordVerificationValidators } = require('../validators/landlordVerificationValidators');
+const { reviewStudentVerificationValidators } = require('../validators/studentVerificationValidators');
 const { createAdminValidators } = require('../validators/authValidators');
 const { ROLES } = require('../utils/constants');
 
@@ -46,6 +48,16 @@ router.patch(
   reviewLandlordVerificationValidators,
   validate,
   LandlordVerificationController.review
+);
+
+// Student ID review, on the same admin Verifications page (Students tab).
+router.get('/student-verifications/pending', StudentVerificationController.listPending);
+router.patch(
+  '/student-verifications/:id/review',
+  objectIdParam('id'),
+  reviewStudentVerificationValidators,
+  validate,
+  StudentVerificationController.review
 );
 
 module.exports = router;

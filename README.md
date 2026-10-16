@@ -9,10 +9,10 @@ The project has two parts:
 
 ## Main features
 
-- **Tenants** — browse and filter approved boarding houses on a card grid and a Leaflet map, view property details, reserve a room, view statements of account, and pay (cash or GCash proof upload).
+- **Student tenants** — browse and filter approved boarding houses on a card grid and a Leaflet map, view property details, verify their school ID, reserve a room, view statements of account, and pay (cash or GCash proof upload). Reserving needs an admin-approved school ID (front and back photos, the school, and the years printed on it); an ID printed "2024–2028" counts until May 31, 2028 (Manila time), after which the student uploads their current ID before reserving again. Current stays are not affected. The photos are private to the student and admins; landlords see only the school and until when the ID counts.
 - **Landlords** — submit business verification documents (Mayor's/Business Permit, BIR Form 2303), publish properties with photos and an optional video once verified, manage rooms and reservations, invite caretakers, verify payments, and view analytics (occupancy, collection rate, outstanding balances).
 - **Caretakers** — activate their account with a one-time code from their landlord (no email or shared password), view assigned rooms, log utility readings, and record cash payments.
-- **Admins** — review landlord business verification, manage user accounts, moderate reviews, and view audit logs.
+- **Admins** — review landlord business documents and student school IDs (one Verifications page, two tabs), manage user accounts, moderate reviews, and view audit logs.
 - **Accounts & security** — no email needed for any account flow: optional authenticator-app two-factor sign-in with backup codes, password reset with an authenticator, backup or admin-issued code, caretaker activation codes, password strength indicator, role-based access control, rate limiting, and automatic archiving of accounts inactive for 30 days with self-service recovery (see [How accounts work](#how-accounts-work-no-email)).
 
 ## Tech stack

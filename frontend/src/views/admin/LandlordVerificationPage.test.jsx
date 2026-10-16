@@ -10,7 +10,8 @@ import { mockAuthValue, mockNotificationsValue } from '../../test/mockContexts.j
 const { useAuthMock, useNotificationsMock } = vi.hoisted(() => ({ useAuthMock: vi.fn(), useNotificationsMock: vi.fn() }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: useAuthMock }));
 vi.mock('../../context/NotificationContext.jsx', () => ({ useNotifications: useNotificationsMock }));
-vi.mock('../../services/AdminApi.js', () => ({ default: { listPendingLandlordVerifications: vi.fn(), reviewLandlordVerification: vi.fn() } }));
+// The page also loads student IDs (Students tab, user rule 2026-10-16); those have their own tests.
+vi.mock('../../services/AdminApi.js', () => ({ default: { listPendingLandlordVerifications: vi.fn(), reviewLandlordVerification: vi.fn(), listPendingStudentVerifications: vi.fn(), reviewStudentVerification: vi.fn() } }));
 vi.mock('../../services/LandlordVerificationApi.js', () => ({ default: { fetchDocument: vi.fn() } }));
 
 const submission = {
@@ -35,6 +36,7 @@ describe('LandlordVerificationPage document preview', () => {
     useAuthMock.mockReturnValue(mockAuthValue({ user: { _id: 'a1', fullName: 'Admin', role: 'admin' } }));
     useNotificationsMock.mockReturnValue(mockNotificationsValue());
     AdminApi.listPendingLandlordVerifications.mockResolvedValue({ submissions: [submission] });
+    AdminApi.listPendingStudentVerifications.mockResolvedValue({ submissions: [] });
     revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     open = vi.spyOn(window, 'open').mockImplementation(() => null);
   });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
+  AcademicCapIcon,
   ArchiveBoxIcon,
   ArrowRightOnRectangleIcon,
   Bars3Icon,
@@ -39,7 +40,8 @@ import PropertyApi from '../../services/PropertyApi.js';
 import ReservationApi from '../../services/ReservationApi.js';
 import BackToTopButton from '../BackToTopButton.jsx';
 
-const roleLabel = (user) => (user?.isMainAdmin ? 'System Administrator' : formatStatus(user?.role));
+// Tenants are students (the app is for student renters).
+const roleLabel = (user) => (user?.isMainAdmin ? 'System Administrator' : user?.role === 'tenant' ? 'Student' : formatStatus(user?.role));
 
 const NAV_BY_ROLE = {
   tenant: [
@@ -47,6 +49,7 @@ const NAV_BY_ROLE = {
     { to: '/tenant/reservations', label: 'My Reservations', icon: CalendarDaysIcon },
     // Billing and Maintenance issues live inside My Apartment.
     { to: '/tenant/apartment', label: 'My Apartment', icon: HomeIcon },
+    { to: '/tenant/verification', label: 'Student ID', icon: AcademicCapIcon },
   ],
   landlord: [
     { to: '/landlord/dashboard', label: 'Dashboard', icon: ChartBarIcon },
@@ -67,7 +70,8 @@ const NAV_BY_ROLE = {
   admin: [
     { to: '/admin/users', label: 'Users', icon: UsersIcon },
     { to: '/admin/reviews', label: 'Review Moderation', icon: StarIcon },
-    { to: '/admin/landlord-verifications', label: 'Landlord Verification', icon: ShieldCheckIcon },
+    // Landlord business documents and student school IDs, on two tabs.
+    { to: '/admin/landlord-verifications', label: 'Verifications', icon: ShieldCheckIcon },
     { to: '/admin/logs', label: 'Audit Logs', icon: ClipboardDocumentListIcon },
   ],
 };

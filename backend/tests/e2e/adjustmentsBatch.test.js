@@ -5,6 +5,7 @@ process.env.PAYMENT_RATE_LIMIT_MAX = '1000';
 const mongoose = require('mongoose');
 const request = require('supertest');
 const { startTestDb, stopTestDb } = require('../helpers/testDb');
+const { VERIFIED_STUDENT } = require('../helpers/students');
 const EmailService = require('../../services/EmailService');
 const UserRepository = require('../../repositories/UserRepository');
 const PropertyRepository = require('../../repositories/PropertyRepository');
@@ -48,6 +49,8 @@ async function makeUser(role, extra = {}) {
     firstName: 'Test', lastName: `User${String.fromCharCode(65 + (seq % 26))}`, fullName: `Test User${seq}`, email,
     phone: `+63918${String(1000000 + seq).slice(-7)}`, passwordHash: await hashPassword(PASSWORD), role,
     ...(role === 'landlord' ? { businessVerificationStatus: 'VERIFIED', paymentQrUrl: '/uploads/payment-qr-codes/fake.png' } : {}),
+    // User rule (2026-10-16): only verified students reserve; see tests/helpers/students.js.
+    ...(role === 'tenant' ? VERIFIED_STUDENT : {}),
     ...extra,
   });
   const login = await request(app).post('/api/auth/login').send({ email, password: PASSWORD });

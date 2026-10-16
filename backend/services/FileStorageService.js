@@ -6,6 +6,7 @@ const FILE_CATEGORIES = Object.freeze({
   PROPERTIES: 'properties',
   PAYMENT_PROOFS: 'payment-proofs',
   LANDLORD_VERIFICATION: 'landlord-verification',
+  STUDENT_VERIFICATION: 'student-verification',
 });
 
 const URL_PATTERN = /^\/?uploads\/([a-z-]+)\/([^/]+)$/;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowRightOnRectangleIcon, CheckBadgeIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, MapPinIcon, VideoCameraIcon, WifiIcon } from '@heroicons/react/24/outline';
 import PropertyApi from '../services/PropertyApi.js';
 import ReservationApi from '../services/ReservationApi.js';
@@ -14,6 +14,7 @@ import { Badge, ErrorBanner, LoadingState, StatusBadge, SuccessBanner } from './
 import { formatDate, formatPeso } from '../utils/format.js';
 import { describeApiError } from '../utils/errors.js';
 import { todayInputValue, validateMoveInDate } from '../utils/validators.js';
+import { reserveBlockedReason, studentIdState } from '../utils/studentId.js';
 
 function Stars({ rating }) {
   return (
@@ -87,7 +88,7 @@ function Gallery({ images, propertyName }) {
 
 export default function PropertyDetailContent() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const [data, setData] = useState(null);
@@ -105,6 +106,9 @@ export default function PropertyDetailContent() {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const isTenant = user?.role === 'tenant';
+  // Only students with a current, admin-approved school ID can reserve (the backend enforces it too).
+  const reserveBlocked = isTenant ? reserveBlockedReason(user) : '';
+  const idUnderReview = isTenant && studentIdState(user) === 'PENDING';
 
   const loadMyRequests = () => {
     if (!isTenant) return Promise.resolve();
@@ -120,6 +124,12 @@ export default function PropertyDetailContent() {
       .catch(() => setError('This property could not be found.'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // The admin may have approved the ID since this session loaded the profile.
+  useEffect(() => {
+    if (reserveBlocked) Promise.resolve(refreshProfile?.()).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTenant]);
 
   useEffect(() => {
     loadMyRequests();
@@ -175,7 +185,11 @@ export default function PropertyDetailContent() {
         // Already requested (e.g. in another tab): show the "Reservation sent" state instead of an error.
         setSelectedRoom(null);
         await loadMyRequests();
-      } else setReserveError(message || 'Could not submit reservation.');
+      } else {
+        // The ID may have expired or been rejected since the page loaded: refresh so the notice shows.
+        if (code === 'STUDENT_NOT_VERIFIED') Promise.resolve(refreshProfile?.()).catch(() => {});
+        setReserveError(message || 'Could not submit reservation.');
+      }
     } finally {
       setReserving(false);
     }
@@ -322,6 +336,12 @@ export default function PropertyDetailContent() {
         <div className="lg:sticky lg:top-24">
           <Card title="Available rooms">
             <SuccessBanner message={reserveMessage} />
+            {reserveBlocked && (
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800" role="note">
+                <p>{reserveBlocked}</p>
+                {!idUnderReview && <Link to="/tenant/verification" className="mt-1 inline-block font-semibold text-brand-700 hover:underline">Go to Student ID</Link>}
+              </div>
+            )}
             <div className="space-y-3">
               {rooms.map((room) => {
                 const isAvailable = room.status === 'available' && room.currentOccupancy < room.capacity;
@@ -350,9 +370,21 @@ export default function PropertyDetailContent() {
                       </div>
                     ) : isAvailable &&
                       (user ? (
-                        <Button variant="secondary" className="mt-3 w-full" onClick={() => onReserveClick(room)}>
-                          Reserve this room
-                        </Button>
+                        reserveBlocked ? (
+                          idUnderReview ? (
+                            <Button variant="secondary" className="mt-3 w-full" disabled>
+                              Student ID under review
+                            </Button>
+                          ) : (
+                            <Link to="/tenant/verification" className="mt-3 flex min-h-[2.5rem] w-full items-center justify-center rounded-lg border border-brand-300 bg-white px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50">
+                              Verify student ID to reserve
+                            </Link>
+                          )
+                        ) : (
+                          <Button variant="secondary" className="mt-3 w-full" onClick={() => onReserveClick(room)}>
+                            Reserve this room
+                          </Button>
+                        )
                       ) : (
                         <>
                           <Button variant="primary" className="mt-3 w-full gap-1.5" onClick={() => onReserveClick(room)}>

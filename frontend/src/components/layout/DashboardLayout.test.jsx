@@ -73,7 +73,8 @@ describe('DashboardLayout', () => {
     renderLayout();
     const sidebar = screen.getAllByRole('navigation', { name: 'Main' })[0];
     const labels = within(sidebar).getAllByRole('link').map((link) => link.textContent);
-    expect(labels).toEqual(['Discover', 'My Reservations', 'My Apartment']);
+    // User rule (2026-10-16): students verify their school ID on the Student ID page.
+    expect(labels).toEqual(['Discover', 'My Reservations', 'My Apartment', 'Student ID']);
   });
 
   it.each(['tenant', 'landlord', 'caretaker'])('M9: the %s account menu has Account, Archive and Log out (no Billing)', async (role) => {

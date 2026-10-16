@@ -808,11 +808,11 @@ function HeroRegisterForm({ onSwitch, onRegistered }) {
                 onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
                 className="w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50/60 px-2.5 py-2.5 text-sm text-gray-900 focus:border-transparent focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
-                <option value="tenant">Renter / Tenant</option>
+                <option value="tenant">Student</option>
                 <option value="landlord">Landlord</option>
               </select>
             </Field>
-            <div className="flex items-center px-1 text-[10px] text-gray-400">Choose your role</div>
+            <div className="flex items-center px-1 text-[10px] text-gray-400">{form.role === 'tenant' ? 'You verify your school ID after signing up, before reserving.' : 'Choose your role'}</div>
           </div>
 
           {form.role === 'tenant' && (
