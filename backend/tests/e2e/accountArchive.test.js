@@ -4,6 +4,9 @@
 process.env.AUTH_RATE_LIMIT_MAX = '1000';
 process.env.LOGIN_RATE_LIMIT_MAX = '1000';
 process.env.SENSITIVE_AUTH_RATE_LIMIT_MAX = '1000';
+// Email links must use the public deployment, whatever the local backend/.env says.
+const previousEmailAppUrl = process.env.EMAIL_APP_URL;
+process.env.EMAIL_APP_URL = 'https://ledger-onboard.vercel.app/';
 
 const request = require('supertest');
 const mongoose = require('mongoose');
@@ -26,6 +29,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await stopTestDb();
+  if (previousEmailAppUrl === undefined) delete process.env.EMAIL_APP_URL;
+  else process.env.EMAIL_APP_URL = previousEmailAppUrl;
 });
 
 const PASSWORD = 'Str0ng!Pass';
